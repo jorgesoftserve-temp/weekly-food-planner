@@ -18,6 +18,19 @@ const nextConfig = {
       },
     ],
   },
+  // The workspace packages use NodeNext-style `.js` import suffixes on TS
+  // sources (`export * from './module/workspaces.js'`). tsc + vitest strip
+  // the `.js` via tsconfig's `moduleResolution: "bundler"`, but webpack
+  // needs `extensionAlias` to do the same — without it every API route
+  // that imports from @weekly-food-planner/supabase fails at request time
+  // with "Module not found: Can't resolve './module/...js'".
+  webpack: (config) => {
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js', '.jsx'],
+      '.mjs': ['.mts', '.mjs'],
+    }
+    return config
+  },
 }
 
 export default nextConfig

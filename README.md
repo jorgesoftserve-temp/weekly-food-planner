@@ -1,8 +1,6 @@
 # Weekly Food Planner
 
-[![CI](https://github.com/example-org/weekly-food-planner/actions/workflows/ci.yml/badge.svg)](https://github.com/example-org/weekly-food-planner/actions/workflows/ci.yml)
-
-> Badge URL uses placeholder org `example-org` — swap to the real GitHub owner/org when one exists.
+[![CI](https://github.com/jorgesoftserve-temp/weekly-food-planner/actions/workflows/ci.yml/badge.svg)](https://github.com/jorgesoftserve-temp/weekly-food-planner/actions/workflows/ci.yml)
 
 Constraint-based weekly menu planner with reproducible, deterministic generation.
 

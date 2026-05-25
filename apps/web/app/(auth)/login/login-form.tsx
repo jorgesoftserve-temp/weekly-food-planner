@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 import { supabaseClient } from '@/utils/supabase/client'
 
@@ -11,8 +11,18 @@ type FormState = {
 
 const initialState: FormState = { email: '', password: '' }
 
+// Only honour same-origin relative paths from `?next=` to avoid open-redirect
+// vectors (an attacker linking /login?next=https://evil.example would bounce
+// authenticated sessions off-site).
+const sanitizeNext = (raw: string | null): string => {
+  if (!raw) return '/dashboard'
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/dashboard'
+  return raw
+}
+
 export const LoginForm = () => {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [form, setForm] = useState<FormState>(initialState)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -31,7 +41,7 @@ export const LoginForm = () => {
       setError(signInError.message)
       return
     }
-    router.push('/')
+    router.push(sanitizeNext(searchParams.get('next')))
     router.refresh()
   }
 

@@ -246,3 +246,93 @@ export const softDeleteRecipe = async ({
     .eq('workspace_id', workspaceId)
   if (error) throw new Error(error.message)
 }
+
+// Replace-the-whole-array helpers for recipe sub-resources. Each performs a
+// delete + insert; the parent recipe row stays untouched so updated_at on
+// `recipes` isn't bumped by a no-op array swap. Caller is responsible for
+// validating that the recipe belongs to the workspace (the route handler
+// does this via getRecipe before calling).
+
+export const replaceRecipeIngredients = async ({
+  supabase,
+  recipeId,
+  ingredients,
+}: {
+  supabase: SupabaseClient
+  recipeId: string
+  ingredients: RecipeIngredientInput[]
+}): Promise<void> => {
+  const { error: delErr } = await supabase
+    .from('recipe_ingredients')
+    .delete()
+    .eq('recipe_id', recipeId)
+  if (delErr) throw new Error(delErr.message)
+  if (ingredients.length === 0) return
+  const { error: insErr } = await supabase.from('recipe_ingredients').insert(
+    ingredients.map((ing) => ({
+      recipe_id: recipeId,
+      ingredient_id: ing.ingredient_id,
+      quantity: ing.quantity,
+      unit: ing.unit,
+      substitutions: ing.substitutions ?? [],
+      is_perishable_override: ing.is_perishable_override ?? null,
+    })),
+  )
+  if (insErr) throw new Error(insErr.message)
+}
+
+export const replaceRecipeInstructions = async ({
+  supabase,
+  recipeId,
+  instructions,
+}: {
+  supabase: SupabaseClient
+  recipeId: string
+  instructions: RecipeInstructionInput[]
+}): Promise<void> => {
+  const { error: delErr } = await supabase
+    .from('recipe_instructions')
+    .delete()
+    .eq('recipe_id', recipeId)
+  if (delErr) throw new Error(delErr.message)
+  if (instructions.length === 0) return
+  const { error: insErr } = await supabase.from('recipe_instructions').insert(
+    instructions.map((step) => ({
+      recipe_id: recipeId,
+      step_order: step.step_order,
+      description: step.description,
+      notes: step.notes ?? null,
+      duration_minutes: step.duration_minutes ?? null,
+    })),
+  )
+  if (insErr) throw new Error(insErr.message)
+}
+
+export const replaceRecipeDietaryTags = async ({
+  supabase,
+  recipeId,
+  tags,
+}: {
+  supabase: SupabaseClient
+  recipeId: string
+  tags: string[]
+}): Promise<void> => {
+  // Each tag funnels through sys_save_label so user-typed extensions are
+  // persisted to enum_metadata. Mirrors the create path in createRecipe.
+  for (const tag of tags) {
+    await supabase.rpc('sys_save_label', {
+      p_enum_type: 'dietary_tag',
+      p_value: tag,
+    })
+  }
+  const { error: delErr } = await supabase
+    .from('recipe_dietary_tags')
+    .delete()
+    .eq('recipe_id', recipeId)
+  if (delErr) throw new Error(delErr.message)
+  if (tags.length === 0) return
+  const { error: insErr } = await supabase
+    .from('recipe_dietary_tags')
+    .insert(tags.map((tag) => ({ recipe_id: recipeId, tag })))
+  if (insErr) throw new Error(insErr.message)
+}

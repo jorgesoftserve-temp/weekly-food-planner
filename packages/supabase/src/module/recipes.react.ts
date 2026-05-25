@@ -11,9 +11,14 @@ import {
   getRecipe,
   listRecipes,
   recipeKeys,
+  replaceRecipeDietaryTags,
+  replaceRecipeIngredients,
+  replaceRecipeInstructions,
   softDeleteRecipe,
   updateRecipe,
   type CreateRecipePayload,
+  type RecipeIngredientInput,
+  type RecipeInstructionInput,
   type RecipeRecord,
   type UpdateRecipePatch,
 } from './recipes.js'
@@ -115,6 +120,85 @@ export const useSoftDeleteRecipe = ({
       })
       void queryClient.invalidateQueries({
         queryKey: recipeKeys.detail(workspaceId, variables.recipeId),
+      })
+    },
+  })
+}
+
+// Array-replace mutations. Each invalidates both list + detail so the form
+// re-hydrates with the post-save state if it stays mounted.
+
+export const useReplaceRecipeIngredients = ({
+  supabase,
+  workspaceId,
+  recipeId,
+}: {
+  supabase: SupabaseClient
+  workspaceId: string
+  recipeId: string
+}): UseMutationResult<void, Error, { ingredients: RecipeIngredientInput[] }> => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ingredients }) =>
+      replaceRecipeIngredients({ supabase, recipeId, ingredients }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: recipeKeys.list(workspaceId),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: recipeKeys.detail(workspaceId, recipeId),
+      })
+    },
+  })
+}
+
+export const useReplaceRecipeInstructions = ({
+  supabase,
+  workspaceId,
+  recipeId,
+}: {
+  supabase: SupabaseClient
+  workspaceId: string
+  recipeId: string
+}): UseMutationResult<
+  void,
+  Error,
+  { instructions: RecipeInstructionInput[] }
+> => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ instructions }) =>
+      replaceRecipeInstructions({ supabase, recipeId, instructions }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: recipeKeys.list(workspaceId),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: recipeKeys.detail(workspaceId, recipeId),
+      })
+    },
+  })
+}
+
+export const useReplaceRecipeDietaryTags = ({
+  supabase,
+  workspaceId,
+  recipeId,
+}: {
+  supabase: SupabaseClient
+  workspaceId: string
+  recipeId: string
+}): UseMutationResult<void, Error, { tags: string[] }> => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tags }) =>
+      replaceRecipeDietaryTags({ supabase, recipeId, tags }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: recipeKeys.list(workspaceId),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: recipeKeys.detail(workspaceId, recipeId),
       })
     },
   })

@@ -7,10 +7,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
   useCreateRecipe,
+  useReplaceRecipeDietaryTags,
+  useReplaceRecipeIngredients,
+  useReplaceRecipeInstructions,
   useUpdateRecipe,
 } from '@weekly-food-planner/supabase/react'
 import type {
   CreateRecipePayload,
+  RecipeIngredientInput,
+  RecipeInstructionInput,
   RecipeRecord,
 } from '@weekly-food-planner/supabase'
 import { Button } from '@/components/ui/button'
@@ -193,12 +198,31 @@ export type RecipeFormProps =
   | {
       workspaceId: string
       mode: 'create'
+      onClose?: () => void
     }
   | {
       workspaceId: string
       mode: 'edit'
       recipe: RecipeRecord
+      onClose?: () => void
     }
+
+const valuesToIngredientInputs = (
+  values: RecipeFormValues,
+): RecipeIngredientInput[] =>
+  values.ingredients.map((ing) => ({
+    ingredient_id: ing.ingredient_id,
+    quantity: Number.parseFloat(ing.quantity),
+    unit: ing.unit,
+  }))
+
+const valuesToInstructionInputs = (
+  values: RecipeFormValues,
+): RecipeInstructionInput[] =>
+  values.instructions.map((step, index) => ({
+    step_order: index + 1,
+    description: step.description,
+  }))
 
 export const RecipeForm = (props: RecipeFormProps) => {
   const router = useRouter()
@@ -219,6 +243,8 @@ export const RecipeForm = (props: RecipeFormProps) => {
     name: 'instructions',
   })
 
+  const recipeIdForEdit = props.mode === 'edit' ? props.recipe.id : ''
+
   const createMutation = useCreateRecipe({
     supabase,
     workspaceId: props.workspaceId,
@@ -226,20 +252,54 @@ export const RecipeForm = (props: RecipeFormProps) => {
   const updateMutation = useUpdateRecipe({
     supabase,
     workspaceId: props.workspaceId,
-    recipeId: props.mode === 'edit' ? props.recipe.id : '',
+    recipeId: recipeIdForEdit,
+  })
+  const replaceIngredients = useReplaceRecipeIngredients({
+    supabase,
+    workspaceId: props.workspaceId,
+    recipeId: recipeIdForEdit,
+  })
+  const replaceInstructions = useReplaceRecipeInstructions({
+    supabase,
+    workspaceId: props.workspaceId,
+    recipeId: recipeIdForEdit,
+  })
+  const replaceDietaryTags = useReplaceRecipeDietaryTags({
+    supabase,
+    workspaceId: props.workspaceId,
+    recipeId: recipeIdForEdit,
   })
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending
+  const isSubmitting =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    replaceIngredients.isPending ||
+    replaceInstructions.isPending ||
+    replaceDietaryTags.isPending
+
+  // Default the cancel/post-save navigation to /recipes when used as a
+  // standalone page; the drawer host overrides this with onClose to close
+  // the sheet and stay on the list.
+  const dismiss = () => {
+    if (props.onClose) {
+      props.onClose()
+    } else {
+      router.push('/recipes')
+      router.refresh()
+    }
+  }
 
   const handleSubmit: SubmitHandler<RecipeFormValues> = async (values) => {
     try {
       if (props.mode === 'create') {
         await createMutation.mutateAsync(toCreatePayload(values))
         notifySuccess('Recipe created', values.name)
-        router.push('/recipes')
-        router.refresh()
+        dismiss()
         return
       }
+      // Edit mode: scalars first so a downstream array failure doesn't leave
+      // the recipe row referencing a missing FK; then the three arrays in
+      // parallel since they touch different tables.
       await updateMutation.mutateAsync({
         name: values.name,
         description: optionalTrim(values.description) ?? null,
@@ -250,9 +310,17 @@ export const RecipeForm = (props: RecipeFormProps) => {
         prep_time_minutes: optionalInt(values.prep_time_minutes) ?? null,
         cook_time_minutes: optionalInt(values.cook_time_minutes) ?? null,
       })
+      await Promise.all([
+        replaceIngredients.mutateAsync({
+          ingredients: valuesToIngredientInputs(values),
+        }),
+        replaceInstructions.mutateAsync({
+          instructions: valuesToInstructionInputs(values),
+        }),
+        replaceDietaryTags.mutateAsync({ tags: values.dietary_tags }),
+      ])
       notifySuccess('Recipe updated', values.name)
-      router.push('/recipes')
-      router.refresh()
+      dismiss()
     } catch (err) {
       const message =
         err instanceof Error
@@ -622,19 +690,11 @@ export const RecipeForm = (props: RecipeFormProps) => {
           </div>
         </section>
 
-        {props.mode === 'edit' ? (
-          <div className="rounded-md border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-            Edit mode currently saves recipe details (name, description, meal,
-            timing, etc). To change ingredients or steps, delete the recipe
-            and recreate it — full edit-with-arrays is on the follow-up list.
-          </div>
-        ) : null}
-
         <div className="flex items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.push('/recipes')}
+            onClick={dismiss}
             disabled={isSubmitting}
           >
             Cancel

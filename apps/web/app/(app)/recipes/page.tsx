@@ -26,6 +26,7 @@ import { PageHeader } from '@/components/page-header'
 import { useActiveWorkspace } from '@/components/workspace-provider'
 import { useSupabase } from '@/lib/hooks/use-supabase'
 import { DeleteRecipeDialog } from './_components/delete-recipe-dialog'
+import { EditRecipeDrawer } from './_components/edit-recipe-drawer'
 
 const RecipesPage = () => {
   const supabase = useSupabase()
@@ -37,6 +38,7 @@ const RecipesPage = () => {
   })
 
   const [pendingDelete, setPendingDelete] = useState<RecipeRecord | null>(null)
+  const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null)
 
   const isLoading = workspaceLoading || recipesQuery.isLoading
   const recipes = recipesQuery.data ?? []
@@ -103,12 +105,13 @@ const RecipesPage = () => {
               {recipes.map((recipe) => (
                 <TableRow key={recipe.id}>
                   <TableCell className="font-medium">
-                    <Link
-                      href={`/recipes/${recipe.id}/edit`}
-                      className="hover:underline underline-offset-4"
+                    <button
+                      type="button"
+                      onClick={() => setEditingRecipeId(recipe.id)}
+                      className="text-left hover:underline underline-offset-4"
                     >
                       {recipe.name}
-                    </Link>
+                    </button>
                   </TableCell>
                   <TableCell className="hidden capitalize text-muted-foreground sm:table-cell">
                     {recipe.meal_type}
@@ -134,11 +137,14 @@ const RecipesPage = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/recipes/${recipe.id}/edit`}>
-                            <Pencil className="mr-2 size-4" />
-                            Edit
-                          </Link>
+                        <DropdownMenuItem
+                          onSelect={(event) => {
+                            event.preventDefault()
+                            setEditingRecipeId(recipe.id)
+                          }}
+                        >
+                          <Pencil className="mr-2 size-4" />
+                          Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive focus:bg-destructive/10 focus:text-destructive"
@@ -168,6 +174,17 @@ const RecipesPage = () => {
           open={!!pendingDelete}
           onOpenChange={(open) => {
             if (!open) setPendingDelete(null)
+          }}
+        />
+      ) : null}
+
+      {workspace ? (
+        <EditRecipeDrawer
+          workspaceId={workspace.id}
+          recipeId={editingRecipeId}
+          open={!!editingRecipeId}
+          onOpenChange={(open) => {
+            if (!open) setEditingRecipeId(null)
           }}
         />
       ) : null}

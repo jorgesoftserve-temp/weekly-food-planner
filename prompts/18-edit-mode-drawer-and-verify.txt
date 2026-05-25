@@ -1,0 +1,5 @@
+Lets do the following updates
+1. Edit mode should save scalar fields (add required endpoints for this)
+2. Edit mode should open a right drawer instead of a full page navigation, this to allow users easier navigation among pages
+
+lets work on phase 6 once these updates are completed

@@ -1,0 +1,37 @@
+{
+  "name": "@weekly-food-planner/test-utils",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./factories": {
+      "types": "./src/factories/index.ts",
+      "default": "./src/factories/index.ts"
+    },
+    "./supabase": {
+      "types": "./src/supabase/index.ts",
+      "default": "./src/supabase/index.ts"
+    },
+    "./integration": {
+      "types": "./src/integration/index.ts",
+      "default": "./src/integration/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@weekly-food-planner/constraint-engine": "workspace:*",
+    "@supabase/supabase-js": "^2.46.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

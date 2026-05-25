@@ -1,0 +1,624 @@
+{
+  "info": {
+    "_postman_id": "wfp-collection-2026-05-23",
+    "name": "Weekly Food Planner",
+    "description": "End-to-end API test flow for the Weekly Food Planner. Run the requests in order under each folder; collection variables are populated automatically as you go. Requires the local stack running per docs/LOCAL_DEV.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:3000", "type": "string" },
+    { "key": "supabase_url", "value": "http://127.0.0.1:54321", "type": "string" },
+    { "key": "supabase_anon_key", "value": "", "type": "string" },
+    { "key": "admin_key", "value": "change-me-please", "type": "string" },
+    { "key": "test_email", "value": "test@example.com", "type": "string" },
+    { "key": "test_password", "value": "test-password-1234", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "workspace_id", "value": "", "type": "string" },
+    { "key": "oats_ingredient_id", "value": "", "type": "string" },
+    { "key": "recipe_id", "value": "", "type": "string" },
+    { "key": "menu_id", "value": "", "type": "string" },
+    { "key": "member_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Setup",
+      "item": [
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{supabase_anon_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{supabase_url}}/auth/v1/signup",
+              "host": ["{{supabase_url}}"],
+              "path": ["auth", "v1", "signup"]
+            },
+            "description": "Creates a new user. With local Supabase, the email is sent to Inbucket at http://127.0.0.1:54324 — but it's faster to call `Admin: Confirm user` next to bypass verification."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('signup ok or already exists', function () {",
+                  "  pm.expect([200, 422]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Confirm user (bypass email verification)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-admin-key", "value": "{{admin_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/confirm-user",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "confirm-user"]
+            },
+            "description": "Local-dev only. Marks the user's email_confirmed_at via service_role so login works without clicking the inbucket link."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('confirmed', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (stores access_token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{supabase_anon_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+              "host": ["{{supabase_url}}"],
+              "path": ["auth", "v1", "token"],
+              "query": [{ "key": "grant_type", "value": "password" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('login ok', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.access_token) {",
+                  "  bru.setVar('access_token', data.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Workspace & catalog",
+      "item": [
+        {
+          "name": "GET /api/me (stores workspace_id)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "me"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 ok', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "const individual = (data.workspaces || []).find(function (w) { return w.type === 'individual'; });",
+                  "if (individual) bru.setVar('workspace_id', individual.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH workspace (set shared meal frequency)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shared_meal_frequency\": [\n    { \"key\": \"breakfast\", \"title\": \"Breakfast\", \"mealType\": \"breakfast\", \"defaultHour\": 7 },\n    { \"key\": \"lunch\", \"title\": \"Lunch\", \"mealType\": \"lunch\", \"defaultHour\": 12 },\n    { \"key\": \"dinner\", \"title\": \"Dinner\", \"mealType\": \"dinner\", \"defaultHour\": 19 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Admin: Seed ingredients catalog",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "x-admin-key", "value": "{{admin_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/seed-ingredients",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "seed-ingredients"]
+            },
+            "description": "Idempotent. Populates ~30 common ingredients with their allergen tags."
+          }
+        },
+        {
+          "name": "GET /api/ingredients (stores oats_ingredient_id)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/ingredients",
+              "host": ["{{base_url}}"],
+              "path": ["api", "ingredients"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "const oats = (data.ingredients || []).find(function (i) { return i.name === 'Oats'; });",
+                  "if (oats) bru.setVar('oats_ingredient_id', oats.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Seed recipes (6 starter recipes)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-admin-key", "value": "{{admin_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workspaceId\": \"{{workspace_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/seed-recipes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "seed-recipes"]
+            },
+            "description": "Inserts six starter recipes covering breakfast/lunch/dinner × two cuisines. Idempotent only in the sense that re-running creates duplicates — call once per fresh workspace."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Recipes",
+      "item": [
+        {
+          "name": "Create recipe (single, custom)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Custom oatmeal\",\n  \"meal_type\": \"breakfast\",\n  \"difficulty\": \"easy\",\n  \"servings\": 1,\n  \"calories_per_serving\": 300,\n  \"cuisine\": \"american\",\n  \"dietary_tags\": [\"vegetarian\"],\n  \"ingredients\": [\n    {\n      \"ingredient_id\": \"{{oats_ingredient_id}}\",\n      \"quantity\": 0.5,\n      \"unit\": \"cup\"\n    }\n  ],\n  \"instructions\": [\n    { \"step_order\": 1, \"description\": \"Cook oats with water for 5 minutes.\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/recipes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "recipes"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data && data.id) bru.setVar('recipe_id', data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List recipes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/recipes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "recipes"]
+            }
+          }
+        },
+        {
+          "name": "Get recipe",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/recipes/{{recipe_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "recipes", "{{recipe_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update recipe",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Custom oatmeal (updated)\",\n  \"calories_per_serving\": 330\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/recipes/{{recipe_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "recipes", "{{recipe_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete recipe (soft delete)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/recipes/{{recipe_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "recipes", "{{recipe_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Menus & grocery",
+      "item": [
+        {
+          "name": "Generate menu (deterministic, seed=42)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"weekStartDate\": \"2026-06-01\",\n  \"seed\": 42,\n  \"options\": {\n    \"additionalDietaryRestrictions\": [\"vegetarian\"]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/menus",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "menus"]
+            },
+            "description": "Generates a menu. Re-running with the same seed produces an identical menu. Re-running with a different seed produces a different menu and soft-deletes the previous one."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('menu generated', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data && data.menuId) bru.setVar('menu_id', data.menuId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get active menu",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/menus/active?week_start_date=2026-06-01",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "menus", "active"],
+              "query": [{ "key": "week_start_date", "value": "2026-06-01" }]
+            }
+          }
+        },
+        {
+          "name": "Get grocery list",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/grocery?week_start_date=2026-06-01",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "grocery"],
+              "query": [{ "key": "week_start_date", "value": "2026-06-01" }]
+            }
+          }
+        },
+        {
+          "name": "Export menu + grocery (markdown)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/export?format=markdown&week_start_date=2026-06-01",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "export"],
+              "query": [
+                { "key": "format", "value": "markdown" },
+                { "key": "week_start_date", "value": "2026-06-01" }
+              ]
+            },
+            "description": "Returns a markdown document containing the menu table and the grocery list. The response is served with content-disposition=attachment so browsers offer a download."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 ok', function () { pm.response.to.have.status(200); });",
+                  "pm.test('is markdown', function () {",
+                  "  pm.expect(pm.response.headers.get('content-type')).to.include('text/markdown');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Labels",
+      "item": [
+        {
+          "name": "Search dietary_tag labels",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/labels/search?enum_type=dietary_tag&q=ve",
+              "host": ["{{base_url}}"],
+              "path": ["api", "labels", "search"],
+              "query": [
+                { "key": "enum_type", "value": "dietary_tag" },
+                { "key": "q", "value": "ve" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search cuisine_type labels",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/labels/search?enum_type=cuisine_type&q=",
+              "host": ["{{base_url}}"],
+              "path": ["api", "labels", "search"],
+              "query": [
+                { "key": "enum_type", "value": "cuisine_type" },
+                { "key": "q", "value": "" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Members",
+      "item": [
+        {
+          "name": "List members (stores member_id of the creator)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "members"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 ok', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "const creator = (data.members || []).find(function (m) { return m.role === 'creator'; });",
+                  "if (creator) bru.setVar('member_id', creator.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create member (recipient, no auth user)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Kid Bob\",\n  \"role\": \"member\",\n  \"age_category\": \"child\",\n  \"daily_calorie_target\": 1600,\n  \"dietary_restrictions\": [\"vegetarian\"],\n  \"allergies\": [\"peanut\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "members"]
+            },
+            "description": "Creates a recipient-only member (no user_id). Allergies and dietary restrictions are seeded on creation."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data && data.id) bru.setVar('member_id', data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get member",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members/{{member_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "members", "{{member_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update member core fields",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Kid Bob (renamed)\",\n  \"daily_calorie_target\": 1700\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members/{{member_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "members", "{{member_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Set dietary restrictions (replace set)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": [\"vegetarian\", \"low_sodium\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members/{{member_id}}/dietary-restrictions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "members", "{{member_id}}", "dietary-restrictions"]
+            },
+            "description": "Replaces the member's full set of dietary restrictions. Any value not in the official enum_metadata is auto-suggested via sys_save_label."
+          }
+        },
+        {
+          "name": "Set allergies (replace set)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": [\"peanut\", \"tree_nut\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members/{{member_id}}/allergies",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "members", "{{member_id}}", "allergies"]
+            }
+          }
+        },
+        {
+          "name": "Set ingredient dislikes (replace set)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ingredient_ids\": [\"{{oats_ingredient_id}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members/{{member_id}}/ingredient-dislikes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "members", "{{member_id}}", "ingredient-dislikes"]
+            }
+          }
+        },
+        {
+          "name": "Delete member (soft delete)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members/{{member_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "workspaces", "{{workspace_id}}", "members", "{{member_id}}"]
+            },
+            "description": "Soft-deletes the member. Returns 400 if you try this on the creator member."
+          }
+        }
+      ]
+    }
+  ]
+}

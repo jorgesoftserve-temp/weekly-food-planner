@@ -1,0 +1,1 @@
+lets have the Silent dedup (accept and quietly drop duplicates). rule added to our docs

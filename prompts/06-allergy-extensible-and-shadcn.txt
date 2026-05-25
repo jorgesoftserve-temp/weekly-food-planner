@@ -1,0 +1,2 @@
+1. lets have the food_allergy use the same structure as the other enums in the system so that we can use the enum_metadata table for them
+2. lets add shadcn ui to our project and be aware of the shadcn changes that we added to the @.cursor/rules/global-rules.md

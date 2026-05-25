@@ -1,0 +1,2 @@
+lets begin the project generation, take in consideration the rules folder and the docs we generated
+@.cursor/rules/  @docs/PRD/

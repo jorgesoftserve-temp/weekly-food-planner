@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(pnpm --filter @weekly-food-planner/web typecheck)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm --filter @weekly-food-planner/constraint-engine test)",
+      "Bash(pnpm --filter @weekly-food-planner/test-utils typecheck)"
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+for the remaining questions
+
+1. engine algorithim lets start for this mvp with the greedy+local search approach
+2. for the constraing engine  lets do ts-only domain + json-serializable dto
+3. for the enum suggestions we should show the suggestion  on debounced user inputs but dont change the user content, since they might want to add a new item that is not part of the suggestion even if they do a typo, they can correct this before saving. and they should also be able to delete those typos afterwards if they saved them

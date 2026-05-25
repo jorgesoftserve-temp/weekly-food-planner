@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Test outputs
+coverage/
+.vitest-cache/
+
+# Local environment
+.env
+.env.local
+.env*.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.log
+*.log.*
+
+# Supabase
+supabase/.branches/
+supabase/.temp/

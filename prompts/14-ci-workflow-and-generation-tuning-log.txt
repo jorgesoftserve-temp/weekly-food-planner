@@ -1,0 +1,6 @@
+Lets work on this
+
+1. Add a CI workflow (.github/workflows/ci.yml) that runs pnpm test + typecheck, then drop the badge into README.md.
+2. Add a "generation tuning" log to agent-log/ with the prompts used to adjust rules (or split this out of the existing 09–13 entries).
+
+And re review that we have all pending tasks (except for the video one) completed after

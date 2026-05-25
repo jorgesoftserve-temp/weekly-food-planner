@@ -1,0 +1,9 @@
+Update the files with the information planned just some changes
+
+1. for ennumerations that are not defined, like cuisine_type lets add common values for that
+2. for the meal frequency, we will add the jsonb pattern for multiple food hours, with their title and default hour, for example a child can have breakfast at 6 and snack at 9 and lunch at 12
+3. we will use nextjs for this version to match with the cursor doc
+4. we will add role logic for the users like, creator, admin, member
+5. the dietary restrictions are an enum by default, but we can add a dietary_restrictions table to persist the options so that next users would have an easier time searching for their restrictions same with the other enums, we can have a enum_common_props or sometable that allows us to store enum properties to allow user suggestions
+
+Lets add that info to the related documents (you can edit all docs now) and once we are ready, analyze the documents to check if there are some missing gaps before we start code and project generation

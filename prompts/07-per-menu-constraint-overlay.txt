@@ -1,0 +1,3 @@
+Lets add one more scenario to our documentation before generating the project
+
+1. when generating a menu we can add additional nutrition constraints (dietary, allergy, etc.) with a restriction to avoid duplication with the ones from the members.

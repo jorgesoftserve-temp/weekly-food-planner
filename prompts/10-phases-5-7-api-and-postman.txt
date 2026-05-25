@@ -1,0 +1,3 @@
+lets continue with phase 5,6,7 so that we can have the complete application
+
+For now lets have the whole project usable without ui  (so that we can start testing the api and the engine) lets have a a postman collection too that we can add to start testing, and show me the commands i need to run to have that db + api testing scenario running locally,

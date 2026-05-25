@@ -1,0 +1,1 @@
+Lets not forget to update our agent-log and prompts folders with our latest prompts and log info before continuing with the rest of the implementation

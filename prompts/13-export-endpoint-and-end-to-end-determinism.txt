@@ -1,0 +1,4 @@
+Lets add the following
+
+1. Build a final-export endpoint (CSV or Markdown for menu + grocery list).
+2. Write an integration test that runs recipe creation → menu generation → grocery list → export, asserting determinism end-to-end.

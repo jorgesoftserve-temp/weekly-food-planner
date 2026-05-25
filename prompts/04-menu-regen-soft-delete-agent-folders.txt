@@ -1,0 +1,6 @@
+Lets add the following enhancements
+1. Menu regeneration (For this mvp we will replace menu on update)
+2. timezone storage for the meal frequency will not be added as the hour 7,10,23 represents the local user hour the meal is supposed to be given, this params are informative to represent that one member can have multiple meals at a day and to link the meals of the day with their recipes (this last part in a future MVP)
+3. Soft delete will be added for this initial version with a isDelete flag on the database rows which will let us know soft deletion is enabled for the element
+
+@.cursor/rules/agentic-rules.md  Also after you are done with this prompt read the rules from this fiile and generate the missing /prompts and /agent-logs folders with the contents of this conversation except th first claude init prompt

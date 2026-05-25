@@ -1,0 +1,6 @@
+Lets work on these changes now
+
+1. No member CRUD endpoints — the signup trigger creates the creator member; you can edit it in Studio for now. API endpoints for member management are a follow-up.
+2. API has no integration tests yet — engine has unit tests; routes are typechecked but not yet exercised in CI. The Postman flow is the end-to-end check for now.
+3. packages/test-utils is still empty — fixtures stayed inline in engine tests. Worth filling in when the integration test suite arrives.
+4. No CRUD-layer modules per query-patterns.md — route handlers query Supabase directly. Refactoring to per-table packages/supabase/src/module/*.ts is a future cleanup that'll let server-prefetch + hydration patterns work cleanly when the UI lands.

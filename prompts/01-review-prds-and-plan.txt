@@ -1,0 +1,7 @@
+@file:PRODUCT_PRD.md @file:TECHNICAL_PRD.md @file:OVERVIEW_PRD.md  @docs/ARQUITECTURE_PRD.md  @docs/DATABASE_PRD.md
+
+Lets review the Product, Arquitecture, Technical PRD files and generate the arquitecture and database PRD for our project.
+
+Read those files (no editing) and show me the planned changes for the arquitecture/database prds
+
+Do not generate code or init the project yet

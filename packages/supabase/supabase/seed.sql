@@ -1,0 +1,3 @@
+-- Seed data loaded after `supabase db reset`. Real seed rows are inserted by
+-- the migration files themselves (e.g. enum_metadata official rows). This file
+-- is reserved for fixture data that should be present in local dev only.

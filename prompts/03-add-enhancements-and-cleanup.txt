@@ -1,0 +1,19 @@
+Lets make the following enhancements
+
+1. Add calories_per_serving to recipes.
+2. Add auth flow compleness with a email verification for now
+3. add image fields on recipes and ingredients
+4. Add Allergies support for yes (enum of allergies) or no
+5. For empty UX the user will only see a create recipe button and the create menu would be blocked
+6. Lets use Vitest for testing scenarios to match with cursor rules
+
+Additional enhancements
+1. Lets add Zustand usage for state management
+2. Menu/Grocery List export is out of this MVP but we need to add a pdf export for next mvp
+2.1 Users should have a nice looking page where they can check their menu and grocery lists even without export for now (in the future the goal would be that the pdf will keep this same format)
+3. Recipe scope is group shared, not with all user groups
+4. for the ui lets useplain  talwind for now (we can enhance later)
+
+Doc changs
+1. keep the arquitecture english name not spanish
+2. fix typos in the docs

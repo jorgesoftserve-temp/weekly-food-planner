@@ -1,0 +1,8 @@
+Lets start working on the UI, when we reach those decisions i will input what would be added to each scenario.
+
+Consider the current state of the constraint-engine and the api that we built before
+
+regarding this question
+3. MVP scope cuts — are tasks #17 (overlay UI), member-management screens, password reset, and multi-workspace switcher in or out of this round? My recommendation: defer all four — the engine already supports them, and the basic flow works without any of them.
+
+Lets ignore them. while we work on the basic flow setup  (remember prompt logging for both this one and the last one)

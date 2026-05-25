@@ -1,0 +1,10 @@
+Now that we have all the APi's and tests generated for the system we need to work on the UI layout and initial pages to generate the basic ui for the common usage flow
+
+Flow:
+1. Register/Login user
+2. recipe CRUD
+3. menu CRUD
+4. grocery-list Listing
+5. export logic
+
+Show me an outline of the required tasks we need to do to achieve this before coding

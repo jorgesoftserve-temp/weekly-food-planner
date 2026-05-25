@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { QueryProvider } from '@/lib/react-query/provider'
+import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -13,7 +14,10 @@ const RootLayout = ({ children }: { children: ReactNode }) => {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background text-foreground antialiased">
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          {children}
+          <Toaster richColors closeButton position="top-right" />
+        </QueryProvider>
       </body>
     </html>
   )

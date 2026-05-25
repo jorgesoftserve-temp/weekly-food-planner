@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   type ExportInput,
+  renderMenuExportCsv,
   renderMenuExportMarkdown,
 } from '../menu-export'
 
@@ -160,5 +161,133 @@ describe('renderMenuExportMarkdown', () => {
     expect(sharedIdx).toBeGreaterThan(-1)
     expect(perMemberIdx).toBeGreaterThan(-1)
     expect(sharedIdx).toBeLessThan(perMemberIdx)
+  })
+})
+
+describe('renderMenuExportCsv', () => {
+  it('emits the document header as comment rows carrying workspace metadata', () => {
+    const csv = renderMenuExportCsv(baseInput)
+    expect(csv).toContain('# Weekly Menu — Home')
+    expect(csv).toContain('# Workspace,Home')
+    expect(csv).toContain('# Week starting,2026-06-01')
+    expect(csv).toContain('# Seed,42')
+    expect(csv).toContain(
+      '# Inputs hash,deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+    )
+  })
+
+  it('emits the menu section header + sorted rows', () => {
+    const csv = renderMenuExportCsv(baseInput)
+    const menuStart = csv.indexOf('## Menu')
+    const grocStart = csv.indexOf('## Grocery list')
+    const block = csv.slice(menuStart, grocStart)
+    expect(block).toContain('Day,Meal,Recipe,Target')
+    expect(block).toContain('Monday,breakfast,Oatmeal,Alice')
+    expect(block).toContain('Monday,dinner,Tomato pasta,Alice')
+    const breakfastIdx = block.indexOf('Monday,breakfast,')
+    const dinnerIdx = block.indexOf('Monday,dinner,')
+    expect(breakfastIdx).toBeLessThan(dinnerIdx)
+  })
+
+  it('uses a single Section column for grocery rows and sorts items alphabetically by ingredient name', () => {
+    const csv = renderMenuExportCsv(baseInput)
+    const grocSection = csv.slice(csv.indexOf('## Grocery list'))
+    expect(grocSection).toContain('Section,Ingredient,Quantity,Unit,Scheduled day')
+    const oatsIdx = grocSection.indexOf('Shared,Oats,')
+    const tomatoIdx = grocSection.indexOf('Shared,Tomato,')
+    expect(oatsIdx).toBeGreaterThan(-1)
+    expect(tomatoIdx).toBeGreaterThan(-1)
+    expect(oatsIdx).toBeLessThan(tomatoIdx)
+  })
+
+  it('emits an empty cell for null scheduled_purchase_day and a capitalised day when present', () => {
+    const csv = renderMenuExportCsv(baseInput)
+    expect(csv).toContain('Shared,Tomato,4,piece,\n')
+    expect(csv).toContain('Shared,Oats,3.5,cup,Monday')
+  })
+
+  it('is deterministic — identical input produces identical output', () => {
+    expect(renderMenuExportCsv(baseInput)).toBe(renderMenuExportCsv(baseInput))
+  })
+
+  it('is stable under slot input reordering (sort-driven, not insertion-driven)', () => {
+    const shuffled: ExportInput = {
+      ...baseInput,
+      menu: {
+        ...baseInput.menu,
+        slots: [...baseInput.menu.slots].reverse(),
+      },
+      groceryLists: baseInput.groceryLists.map((l) => ({
+        ...l,
+        items: [...l.items].reverse(),
+      })),
+    }
+    expect(renderMenuExportCsv(shuffled)).toBe(renderMenuExportCsv(baseInput))
+  })
+
+  it('falls back to [unknown:id] when a name is missing', () => {
+    const csv = renderMenuExportCsv({ ...baseInput, recipes: {} })
+    expect(csv).toContain('[unknown:r-oats]')
+  })
+
+  it('emits only the grocery header row when no grocery lists exist', () => {
+    const csv = renderMenuExportCsv({ ...baseInput, groceryLists: [] })
+    const grocSection = csv.slice(csv.indexOf('## Grocery list'))
+    expect(grocSection).toContain('Section,Ingredient,Quantity,Unit,Scheduled day')
+    expect(grocSection).not.toMatch(/^Shared,/m)
+    expect(grocSection).not.toMatch(/^Per member:/m)
+  })
+
+  it('lists shared rows before per-member rows', () => {
+    const csv = renderMenuExportCsv({
+      ...baseInput,
+      groceryLists: [
+        {
+          targetMemberId: 'm-alice',
+          items: [
+            {
+              ingredientId: 'i-oats',
+              quantity: 1,
+              unit: 'cup',
+              scheduledPurchaseDay: null,
+            },
+          ],
+        },
+        ...baseInput.groceryLists,
+      ],
+    })
+    const sharedIdx = csv.indexOf('Shared,')
+    const perMemberIdx = csv.indexOf('Per member: Alice,')
+    expect(sharedIdx).toBeGreaterThan(-1)
+    expect(perMemberIdx).toBeGreaterThan(-1)
+    expect(sharedIdx).toBeLessThan(perMemberIdx)
+  })
+
+  it('escapes commas, double-quotes, and newlines per RFC 4180', () => {
+    const csv = renderMenuExportCsv({
+      ...baseInput,
+      workspace: { name: 'House, "Beach"', type: 'individual' },
+      recipes: {
+        'r-oats': { name: 'Oatmeal, "deluxe"' },
+        'r-pasta': { name: 'Tomato\npasta' },
+      },
+      ingredients: {
+        'i-oats': { name: 'Oats, rolled' },
+        'i-tomato': { name: 'Tomato "fresh"' },
+      },
+    })
+    expect(csv).toContain('# Workspace,"House, ""Beach"""')
+    expect(csv).toContain('Monday,breakfast,"Oatmeal, ""deluxe""",Alice')
+    expect(csv).toContain('Monday,dinner,"Tomato\npasta",Alice')
+    expect(csv).toContain('Shared,"Oats, rolled",3.5,cup,Monday')
+    expect(csv).toContain('Shared,"Tomato ""fresh""",4,piece,')
+  })
+
+  it('declines to render an # Inputs hash line containing a comma without quoting', () => {
+    const csv = renderMenuExportCsv({
+      ...baseInput,
+      menu: { ...baseInput.menu, inputsHash: 'a,b' },
+    })
+    expect(csv).toContain('# Inputs hash,"a,b"')
   })
 })

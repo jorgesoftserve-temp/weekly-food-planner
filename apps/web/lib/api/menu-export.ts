@@ -187,3 +187,132 @@ export const renderMenuExportMarkdown = (input: ExportInput): string => {
     }),
   ].join('\n')
 }
+
+// CSV (RFC 4180): quote any field containing comma, double-quote, CR, or LF;
+// escape inner double-quotes by doubling them. Comment-style `#` rows carry
+// the document header so a single download stays self-describing.
+const csvField = (value: string): string =>
+  /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+
+const csvRow = (fields: ReadonlyArray<string>): string =>
+  fields.map(csvField).join(',')
+
+const renderCsvHeader = ({
+  workspace,
+  menu,
+}: {
+  workspace: ExportInput['workspace']
+  menu: ExportMenu
+}): string => {
+  return [
+    `# Weekly Menu — ${workspace.name}`,
+    csvRow(['# Workspace', workspace.name]),
+    csvRow(['# Week starting', menu.weekStartDate]),
+    csvRow(['# Generated', menu.generatedAt]),
+    csvRow(['# Seed', menu.seed.toString()]),
+    csvRow(['# Inputs hash', menu.inputsHash]),
+    '',
+  ].join('\n')
+}
+
+const renderCsvMenuSection = ({
+  menu,
+  recipes,
+  members,
+}: {
+  menu: ExportMenu
+  recipes: Record<string, { name: string }>
+  members: Record<string, { name: string }>
+}): string => {
+  const sorted = [...menu.slots].sort((a, b) => {
+    const da = DAY_ORDER[a.dayOfWeek] ?? 99
+    const db = DAY_ORDER[b.dayOfWeek] ?? 99
+    if (da !== db) return da - db
+    if (a.mealKey !== b.mealKey) return a.mealKey.localeCompare(b.mealKey)
+    const ta = a.targetMemberId ?? ''
+    const tb = b.targetMemberId ?? ''
+    return ta.localeCompare(tb)
+  })
+  const lines = ['## Menu', csvRow(['Day', 'Meal', 'Recipe', 'Target'])]
+  for (const slot of sorted) {
+    const recipeName = recipes[slot.recipeId]?.name ?? `[unknown:${slot.recipeId}]`
+    const memberName = slot.targetMemberId
+      ? members[slot.targetMemberId]?.name ?? `[unknown:${slot.targetMemberId}]`
+      : 'shared'
+    lines.push(csvRow([capitalize(slot.dayOfWeek), slot.mealKey, recipeName, memberName]))
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+const groceryListLabel = ({
+  list,
+  members,
+}: {
+  list: ExportGroceryList
+  members: Record<string, { name: string }>
+}): string => {
+  if (list.targetMemberId === null) return 'Shared'
+  const memberName =
+    members[list.targetMemberId]?.name ?? `[unknown:${list.targetMemberId}]`
+  return `Per member: ${memberName}`
+}
+
+const renderCsvGrocerySection = ({
+  groceryLists,
+  ingredients,
+  members,
+}: {
+  groceryLists: ExportGroceryList[]
+  ingredients: Record<string, { name: string }>
+  members: Record<string, { name: string }>
+}): string => {
+  const lines = [
+    '## Grocery list',
+    csvRow(['Section', 'Ingredient', 'Quantity', 'Unit', 'Scheduled day']),
+  ]
+  if (groceryLists.length === 0) {
+    lines.push('')
+    return lines.join('\n')
+  }
+  const ordered = [...groceryLists].sort((a, b) => {
+    if (a.targetMemberId === null && b.targetMemberId !== null) return -1
+    if (a.targetMemberId !== null && b.targetMemberId === null) return 1
+    const na = a.targetMemberId ? members[a.targetMemberId]?.name ?? '' : ''
+    const nb = b.targetMemberId ? members[b.targetMemberId]?.name ?? '' : ''
+    return na.localeCompare(nb)
+  })
+  for (const list of ordered) {
+    const section = groceryListLabel({ list, members })
+    const sortedItems = [...list.items].sort((a, b) => {
+      const na = ingredients[a.ingredientId]?.name ?? a.ingredientId
+      const nb = ingredients[b.ingredientId]?.name ?? b.ingredientId
+      return na.localeCompare(nb)
+    })
+    for (const item of sortedItems) {
+      const name = ingredients[item.ingredientId]?.name ?? `[unknown:${item.ingredientId}]`
+      const day = item.scheduledPurchaseDay ? capitalize(item.scheduledPurchaseDay) : ''
+      lines.push(
+        csvRow([section, name, formatQuantity(item.quantity), item.unit, day]),
+      )
+    }
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+export const renderMenuExportCsv = (input: ExportInput): string => {
+  return [
+    renderCsvHeader({ workspace: input.workspace, menu: input.menu }),
+    renderCsvMenuSection({
+      menu: input.menu,
+      recipes: input.recipes,
+      members: input.members,
+    }),
+    renderCsvGrocerySection({
+      groceryLists: input.groceryLists,
+      ingredients: input.ingredients,
+      members: input.members,
+    }),
+  ].join('\n')
+}

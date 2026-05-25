@@ -13,11 +13,24 @@ import {
 } from '@/lib/api/responses'
 import { runWithErrorHandler } from '@/lib/api/route-helpers'
 import { loadMenuExport } from '@/lib/api/menu-export-loader'
-import { renderMenuExportMarkdown } from '@/lib/api/menu-export'
+import {
+  renderMenuExportCsv,
+  renderMenuExportMarkdown,
+} from '@/lib/api/menu-export'
 
 type RouteParams = { id: string }
 
-const SUPPORTED_FORMATS = new Set(['markdown'])
+type ExportFormat = 'markdown' | 'csv'
+
+const FORMAT_CONFIG: Record<ExportFormat, { contentType: string; extension: string }> = {
+  markdown: { contentType: 'text/markdown; charset=utf-8', extension: 'md' },
+  csv: { contentType: 'text/csv; charset=utf-8', extension: 'csv' },
+}
+
+const SUPPORTED_FORMATS = new Set<ExportFormat>(['markdown', 'csv'])
+
+const isSupportedFormat = (value: string): value is ExportFormat =>
+  (SUPPORTED_FORMATS as Set<string>).has(value)
 
 export const GET = async (
   request: NextRequest,
@@ -34,12 +47,13 @@ export const GET = async (
   if (!role) return forbidden()
 
   const { searchParams } = new URL(request.url)
-  const format = searchParams.get('format') ?? 'markdown'
+  const formatParam = searchParams.get('format') ?? 'markdown'
   const weekStartDate = searchParams.get('week_start_date') ?? undefined
 
-  if (!SUPPORTED_FORMATS.has(format)) {
+  if (!isSupportedFormat(formatParam)) {
     return badRequest(`format must be one of: ${Array.from(SUPPORTED_FORMATS).join(', ')}`)
   }
+  const format: ExportFormat = formatParam
 
   return runWithErrorHandler(async () => {
     const loaded = await loadMenuExport({
@@ -59,12 +73,16 @@ export const GET = async (
       return serverError(loaded.detail ?? 'failed to load export')
     }
 
-    const body = renderMenuExportMarkdown(loaded.export)
-    const fileName = `menu-${loaded.export.menu.weekStartDate}.md`
+    const body =
+      format === 'csv'
+        ? renderMenuExportCsv(loaded.export)
+        : renderMenuExportMarkdown(loaded.export)
+    const { contentType, extension } = FORMAT_CONFIG[format]
+    const fileName = `menu-${loaded.export.menu.weekStartDate}.${extension}`
     return new Response(body, {
       status: 200,
       headers: {
-        'content-type': 'text/markdown; charset=utf-8',
+        'content-type': contentType,
         'content-disposition': `attachment; filename="${fileName}"`,
       },
     })

@@ -1,0 +1,102 @@
+# Constraints living at three different layers:
+#   1. Per-member hard constraint: the child has a peanut allergy.
+#      `Peanut butter toast` MUST be excluded from any slot the child eats from
+#      (the engine treats allergies as hard constraints — see
+#      packages/constraint-engine/src/filter.ts).
+#   2. Overlay-level hard constraint: a vegetarian guest at dinner, expressed
+#      via `additionalDietaryRestrictions`. This applies on top of every
+#      member's profile for THIS generation only.
+#   3. Soft preference: `preferredCuisines: [italian]` — engine should bias
+#      toward italian but is allowed to fall back.
+#
+# Failure mode this catches: if the skill forgets to wire the overlay through,
+# `Beef stew` (non-vegetarian) will land in dinner slots and the
+# `excludedRecipeNames` assertion fires. If it forgets the member allergy,
+# `Peanut butter toast` shows up and the grocery list contains peanut butter.
+
+scenario: peanut-allergy-mixed-household
+weekStartDate: 2026-06-08
+
+members:
+  - name: Parent
+    role: creator
+    ageCategory: adult
+    dailyCalorieTarget: 2000
+    dietaryRestrictions: []
+    allergies: []
+    ingredientDislikes: []
+
+  - name: Kiddo
+    role: member
+    ageCategory: child
+    dailyCalorieTarget: 1500
+    dietaryRestrictions: []
+    allergies: [peanut]
+    ingredientDislikes: []
+
+mealFrequency:
+  - { key: breakfast, title: Breakfast, mealType: breakfast, defaultHour: 8 }
+  - { key: dinner,    title: Dinner,    mealType: dinner,    defaultHour: 18 }
+
+recipes:
+  - name: Oatmeal
+    mealType: breakfast
+    difficulty: easy
+    servings: 2
+    ingredients:
+      - { name: oats, quantity: 1, unit: cup }
+      - { name: milk, quantity: 2, unit: cup }
+    dietaryTags: [vegetarian]
+
+  - name: Peanut butter toast
+    mealType: breakfast
+    difficulty: easy
+    servings: 1
+    ingredients:
+      - { name: bread,         quantity: 2,   unit: slice }
+      - { name: peanut_butter, quantity: 2,   unit: tbsp }
+
+  - name: Tomato pasta
+    mealType: dinner
+    difficulty: easy
+    servings: 4
+    cuisine: italian
+    ingredients:
+      - { name: pasta,  quantity: 400, unit: g }
+      - { name: tomato, quantity: 6,   unit: piece }
+    dietaryTags: [vegetarian]
+
+  - name: Beef stew
+    mealType: dinner
+    difficulty: medium
+    servings: 4
+    cuisine: french
+    ingredients:
+      - { name: beef,   quantity: 500, unit: g }
+      - { name: carrot, quantity: 4,   unit: piece }
+
+overlay:
+  additionalDietaryRestrictions: [vegetarian]
+  preferredCuisines: [italian]
+
+expectations:
+  slotCount: 14
+  excludedRecipeNames:
+    - "Peanut butter toast"            # peanut allergy on Kiddo
+    - "Beef stew"                      # overlay vegetarian restriction
+  includedRecipeNames:
+    - "Oatmeal"
+    - "Tomato pasta"
+  groceryShouldContain:
+    - "tomato"
+    - "pasta"
+  groceryShouldNotContain:
+    - "peanut_butter"                  # never assigned, so never aggregated
+    - "beef"
+  exportMarkdownContains:
+    - "## Menu"
+    - "## Grocery list"
+    - "Tomato pasta"                   # the renderer prints recipe names
+  exportCsvContains:
+    - "## Menu"
+    - "## Grocery list"

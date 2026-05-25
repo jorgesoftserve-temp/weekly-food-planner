@@ -1,0 +1,60 @@
+# Minimal happy-path scenario. Mirrors the scope of scripts/verify-flow.mjs:
+# one adult, two meals/day, three recipes spanning the configured meal types,
+# no dietary constraints, no overlay. If the skill emits something that can't
+# satisfy this spec, something is broken at the engine-snapshot or
+# data-marshalling layer.
+
+scenario: basic-flow
+weekStartDate: 2026-06-01   # a Monday
+
+members:
+  - name: Adult One
+    role: creator
+    ageCategory: adult
+    dailyCalorieTarget: 2000
+    dietaryRestrictions: []
+    allergies: []
+    ingredientDislikes: []
+
+mealFrequency:
+  - { key: breakfast, title: Breakfast, mealType: breakfast, defaultHour: 8 }
+  - { key: dinner,    title: Dinner,    mealType: dinner,    defaultHour: 18 }
+
+recipes:
+  - name: Oatmeal
+    mealType: breakfast
+    difficulty: easy
+    servings: 1
+    ingredients:
+      - { name: oats, quantity: 0.5, unit: cup }
+      - { name: milk, quantity: 1,   unit: cup }
+    dietaryTags: [vegetarian]
+
+  - name: Buttered toast
+    mealType: breakfast
+    difficulty: easy
+    servings: 1
+    ingredients:
+      - { name: milk, quantity: 0.25, unit: cup }
+
+  - name: Tomato pasta
+    mealType: dinner
+    difficulty: easy
+    servings: 2
+    cuisine: italian
+    ingredients:
+      - { name: tomato, quantity: 3, unit: piece }
+    instructions:
+      - { stepOrder: 1, description: Boil pasta }
+      - { stepOrder: 2, description: Add tomato sauce }
+
+# No overlay block — defaults apply.
+
+expectations:
+  slotCount: 14                        # 7 days × 2 meals
+  exportMarkdownContains:
+    - "## Menu"
+    - "## Grocery list"
+  exportCsvContains:
+    - "## Menu"
+    - "## Grocery list"

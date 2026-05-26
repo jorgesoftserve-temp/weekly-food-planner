@@ -8,12 +8,18 @@ export type PersistResult =
   | { ok: true; menuId: string | null; generationRunId: string }
   | { ok: false; detail: string }
 
-// Replace-on-regenerate per DATABASE_PRD §6.17:
-// 1. Soft-delete any existing active menu for the (workspace, week).
-// 2. If the engine succeeded, insert the new menu + slots + grocery list + items
-//    and a success generation_run.
-// 3. If the engine failed, insert a failed generation_run only — the prior
-//    soft-deleted menu is NOT restored (regenerate replaces unconditionally).
+// Step 29 — Drafts coexist with accepted menus.
+// On a successful generation:
+//   1. Soft-delete any prior DRAFT for the same (workspace, week). The
+//      accepted menu (if any) is left untouched.
+//   2. Insert the new menu as a draft (accepted_at = NULL).
+//   3. Insert slots + grocery list + items + a success generation_run.
+//
+// On a failed generation the prior draft is NOT replaced — the user keeps
+// whatever they were last reviewing.
+//
+// Acceptance (promoting a draft to active) is a separate code path —
+// `lib/api/menu-accept.ts`.
 export const persistGeneratedMenu = async ({
   admin,
   workspaceId,
@@ -27,14 +33,6 @@ export const persistGeneratedMenu = async ({
   input: GenerateMenuInput
   result: GenerateMenuResult
 }): Promise<PersistResult> => {
-  const { error: softDelErr } = await admin
-    .from('menus')
-    .update({ is_deleted: true })
-    .eq('workspace_id', workspaceId)
-    .eq('week_start_date', weekStartDate)
-    .eq('is_deleted', false)
-  if (softDelErr) return { ok: false, detail: softDelErr.message }
-
   if (!result.ok) {
     const { data: runRow, error: runErr } = await admin
       .from('generation_runs')
@@ -54,6 +52,18 @@ export const persistGeneratedMenu = async ({
     return { ok: true, menuId: null, generationRunId: (runRow as { id: string }).id }
   }
 
+  // Replace any outstanding draft for this (workspace, week). The partial
+  // unique index on (workspace, week) WHERE accepted_at IS NULL would
+  // otherwise reject the insert.
+  const { error: softDelErr } = await admin
+    .from('menus')
+    .update({ is_deleted: true })
+    .eq('workspace_id', workspaceId)
+    .eq('week_start_date', weekStartDate)
+    .eq('is_deleted', false)
+    .is('accepted_at', null)
+  if (softDelErr) return { ok: false, detail: softDelErr.message }
+
   const { data: menuRow, error: menuErr } = await admin
     .from('menus')
     .insert({
@@ -62,6 +72,7 @@ export const persistGeneratedMenu = async ({
       seed: input.seed,
       inputs_hash: result.inputsHash,
       generation_options: input.options ?? null,
+      // accepted_at + accepted_seed stay NULL until the user accepts.
     })
     .select('id')
     .single()
@@ -79,6 +90,8 @@ export const persistGeneratedMenu = async ({
         meal_type: slot.mealType,
         recipe_id: slot.recipeId,
         target_member_id: slot.targetMemberId,
+        // is_overridden defaults to false; original_recipe_id stays NULL
+        // until/unless the user replaces this slot during draft review.
       })),
     )
     if (slotErr) return { ok: false, detail: slotErr.message }

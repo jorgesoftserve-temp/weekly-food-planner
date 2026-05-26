@@ -58,12 +58,13 @@ Stopping the local stack: `pnpm --filter @weekly-food-planner/supabase db:stop`.
 
 The Next.js app is organized into two route groups under [`apps/web/app/`](./apps/web/app/):
 
-- `(auth)/` — public auth pages. [`login`](./apps/web/app/(auth)/login/page.tsx), [`signup`](./apps/web/app/(auth)/signup/page.tsx), [`verify-email`](./apps/web/app/(auth)/verify-email/page.tsx).
-- `(app)/` — authenticated app, wrapped by [`layout.tsx`](./apps/web/app/(app)/layout.tsx) which provides the sidebar + header shell.
-  - [`/dashboard`](./apps/web/app/(app)/dashboard/page.tsx) — landing after login.
-  - [`/recipes`](./apps/web/app/(app)/recipes/page.tsx) — list with create + edit. Edit opens a **right-side drawer** (see [`edit-recipe-drawer.tsx`](./apps/web/app/(app)/recipes/_components/edit-recipe-drawer.tsx)) and saves scalars + ingredients + instructions + dietary tags in one go. New-recipe creation is a full-page route at [`/recipes/new`](./apps/web/app/(app)/recipes/new/page.tsx).
-  - [`/menu`](./apps/web/app/(app)/menu/page.tsx) — active menu view, generation trigger.
-  - [`/grocery`](./apps/web/app/(app)/grocery/page.tsx) — grocery list aggregated from the active menu, with markdown + CSV export.
+- `(auth)/` — public auth pages. [`login`](./apps/web/app/(auth)/login/page.tsx), [`signup`](./apps/web/app/(auth)/signup/page.tsx), [`verify-email`](./apps/web/app/(auth)/verify-email/page.tsx) (with one-click resend), [`verify-success`](./apps/web/app/(auth)/verify-success/page.tsx), [`forgot-password`](./apps/web/app/(auth)/forgot-password/page.tsx), [`reset-password`](./apps/web/app/(auth)/reset-password/page.tsx).
+- `(app)/` — authenticated app, wrapped by [`layout.tsx`](./apps/web/app/(app)/layout.tsx) which provides the sidebar + header shell. The sidebar collapses to icons on desktop and slides in as a Sheet drawer below the `md:` breakpoint (≤768 px); a viewport export in [`apps/web/app/layout.tsx`](./apps/web/app/layout.tsx) wires the meta tag.
+  - [`/dashboard`](./apps/web/app/(app)/dashboard/page.tsx) — landing after login. Includes a household members card.
+  - [`/recipes`](./apps/web/app/(app)/recipes/page.tsx) — list with create + edit. Editing the recipe opens a **right-side drawer** ([`edit-recipe-drawer.tsx`](./apps/web/app/(app)/recipes/_components/edit-recipe-drawer.tsx)); clicking the per-column View buttons (Dietary / Ingredients / Instructions, visible at `lg:` and up) opens a read-only [`recipe-detail-dialog.tsx`](./apps/web/app/(app)/recipes/_components/recipe-detail-dialog.tsx). New-recipe creation is a full-page route at [`/recipes/new`](./apps/web/app/(app)/recipes/new/page.tsx).
+  - [`/menu`](./apps/web/app/(app)/menu/page.tsx) — generation creates a **draft** that must be reviewed and accepted before it becomes the workspace's active menu. The draft review banner lets you replace any slot ([`replace-slot-dialog.tsx`](./apps/web/app/(app)/menu/_components/replace-slot-dialog.tsx)), discard the draft, or accept it. Acceptance assigns a deterministic `accepted_seed` to the final menu state and supersedes the previously accepted menu (which moves to history).
+  - [`/menu/history`](./apps/web/app/(app)/menu/history/page.tsx) — list of accepted menus with engine seed, inputs hash, and accepted seed; flags whether the user modified any slots before acceptance.
+  - [`/grocery`](./apps/web/app/(app)/grocery/page.tsx) — grocery list aggregated from the active menu, with markdown + CSV export from the page header and an [`ingredient-detail-dialog.tsx`](./apps/web/app/(app)/grocery/_components/ingredient-detail-dialog.tsx) that surfaces freshness rules, allergens, and which recipes use the ingredient this week.
 
 Route protection lives in [`apps/web/middleware.ts`](./apps/web/middleware.ts). Protected prefixes (`/dashboard`, `/recipes`, `/menu`, `/grocery`) redirect to `/login?next=…` when the Supabase session cookie is missing; `next` is sanitized against open-redirect attacks.
 
@@ -83,8 +84,13 @@ All routes are typed Next.js Route Handlers under [`apps/web/app/api/`](./apps/w
 | [`/api/workspaces/[id]/recipes`](./apps/web/app/api/workspaces/[id]/recipes/route.ts) | GET, POST | List or create recipes |
 | [`/api/workspaces/[id]/recipes/[recipeId]`](./apps/web/app/api/workspaces/[id]/recipes/[recipeId]/route.ts) | GET, PATCH, DELETE | Read, update scalars, or soft-delete |
 | [`/api/workspaces/[id]/recipes/[recipeId]/{ingredients,instructions,dietary-tags}`](./apps/web/app/api/workspaces/[id]/recipes/[recipeId]/) | PUT | Replace the array fields atomically (delete-then-insert) |
-| [`/api/workspaces/[id]/menus`](./apps/web/app/api/workspaces/[id]/menus/route.ts) | POST | Generate + persist a menu (`weekStartDate`, optional `seed`, optional overlay) |
-| [`/api/workspaces/[id]/menus/active`](./apps/web/app/api/workspaces/[id]/menus/active/route.ts) | GET | Active menu with slots |
+| [`/api/workspaces/[id]/menus`](./apps/web/app/api/workspaces/[id]/menus/route.ts) | POST | Generate + persist a menu as a DRAFT (`weekStartDate`, optional `seed`, optional overlay). One draft per (workspace, week); generating again replaces the prior draft. |
+| [`/api/workspaces/[id]/menus/active`](./apps/web/app/api/workspaces/[id]/menus/active/route.ts) | GET | The accepted (active) menu for the workspace |
+| [`/api/workspaces/[id]/menus/draft`](./apps/web/app/api/workspaces/[id]/menus/draft/route.ts) | GET | The current draft menu, if any |
+| [`/api/workspaces/[id]/menus/history`](./apps/web/app/api/workspaces/[id]/menus/history/route.ts) | GET | Accepted menus in reverse-chronological order, with `is_modified` flag |
+| [`/api/workspaces/[id]/menus/[menuId]`](./apps/web/app/api/workspaces/[id]/menus/[menuId]/route.ts) | DELETE | Discard a draft (rejects accepted menus) |
+| [`/api/workspaces/[id]/menus/[menuId]/accept`](./apps/web/app/api/workspaces/[id]/menus/[menuId]/accept/route.ts) | POST | Promote a draft to active. Computes a deterministic `accepted_seed` from inputs + slot recipes |
+| [`/api/workspaces/[id]/menus/[menuId]/slots/[slotId]`](./apps/web/app/api/workspaces/[id]/menus/[menuId]/slots/[slotId]/route.ts) | PATCH | Replace a draft slot's recipe (server re-runs the engine's hard-constraint filter) |
 | [`/api/workspaces/[id]/grocery`](./apps/web/app/api/workspaces/[id]/grocery/route.ts) | GET | Grocery lists aggregated from the active menu |
 | [`/api/workspaces/[id]/export`](./apps/web/app/api/workspaces/[id]/export/route.ts) | GET | `?format=markdown` or `?format=csv`; same single-rectangle layout in both |
 | [`/api/admin/{confirm-user,seed-ingredients,seed-recipes}`](./apps/web/app/api/admin/) | POST | Local/dev convenience — require `x-admin-key` header |

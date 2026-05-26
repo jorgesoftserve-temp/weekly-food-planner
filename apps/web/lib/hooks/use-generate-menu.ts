@@ -101,6 +101,9 @@ export const useGenerateMenu = ({
           queryKey: menuKeys.active(workspaceId),
         })
         void queryClient.invalidateQueries({
+          queryKey: menuKeys.draft(workspaceId),
+        })
+        void queryClient.invalidateQueries({
           queryKey: groceryKeys.active(workspaceId),
         })
       }

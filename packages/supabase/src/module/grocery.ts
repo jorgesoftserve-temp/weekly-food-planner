@@ -45,11 +45,15 @@ export const getActiveGroceryLists = async ({
   workspaceId: string
   weekStartDate?: string
 }): Promise<ActiveGroceryResult | null> => {
+  // Grocery list always tracks the ACCEPTED menu for the week. Drafts have
+  // no grocery list of their own — they only become a shopping list once
+  // accepted (DATABASE_PRD §6.13 + step-29 draft/accept lifecycle).
   let menuQuery = supabase
     .from('menus')
     .select('id, week_start_date')
     .eq('workspace_id', workspaceId)
     .eq('is_deleted', false)
+    .not('accepted_at', 'is', null)
     .order('week_start_date', { ascending: false })
     .limit(1)
   if (weekStartDate) menuQuery = menuQuery.eq('week_start_date', weekStartDate)

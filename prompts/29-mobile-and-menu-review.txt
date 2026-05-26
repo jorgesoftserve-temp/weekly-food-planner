@@ -1,0 +1,4 @@
+Lets work on the changes for the mobile pass and menu review together, after all changes are done, review unit tests, readme, and if all tests pass lets proceed with prompt updates and git updates
+
+Design clarification (in response to my pin/replace question):
+Menu generation should return the same deterministic outputs by default, but users should be able to edit daily menu elements or reorder the elements, causing the original seed to persist, but alowing users to lock a custom menu with a new deterministic seed, meaning users should be able to check their previous menus (new feature) and review their seeds (only review seeds that were accepted, either after or without modifications), this way the menu generation allows us to generate temp menus for the user to review, and then they can select those ones as the one to use for the week groceries shopping

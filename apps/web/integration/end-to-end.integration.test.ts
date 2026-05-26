@@ -13,6 +13,7 @@ import {
   type GenerateMenuInput,
 } from '@weekly-food-planner/constraint-engine'
 import { loadEngineSnapshot } from '@/lib/api/menu-loader'
+import { acceptDraftMenu } from '@/lib/api/menu-accept'
 import { persistGeneratedMenu } from '@/lib/api/menu-persistence'
 import { loadMenuExport } from '@/lib/api/menu-export-loader'
 import { renderMenuExportMarkdown } from '@/lib/api/menu-export'
@@ -69,6 +70,20 @@ const runPipeline = async ({
     result,
   })
   if (!persisted.ok) throw new Error(`persist failed: ${persisted.detail}`)
+  // Step 29 — generation now produces a DRAFT. Accept it so the export
+  // loader (which filters by accepted_at IS NOT NULL) can see it. This
+  // mirrors what the menu page does on the user's behalf after they click
+  // "Accept menu".
+  if (persisted.menuId) {
+    const accepted = await acceptDraftMenu({
+      admin: fixture.supabase,
+      workspaceId: fixture.workspaceId,
+      menuId: persisted.menuId,
+    })
+    if (!accepted.ok) {
+      throw new Error(`acceptDraftMenu failed: ${accepted.detail}`)
+    }
+  }
   const exported = await loadMenuExport({
     supabase: fixture.supabase,
     workspaceId: fixture.workspaceId,

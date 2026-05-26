@@ -2,7 +2,6 @@ import { type NextRequest } from 'next/server'
 import {
   getMember,
   softDeleteMember,
-  type UpdateMemberPatch,
   updateMember,
 } from '@weekly-food-planner/supabase'
 import {
@@ -10,6 +9,10 @@ import {
   getWorkspaceRole,
   hasAdminRole,
 } from '@/lib/api/auth-helpers'
+import {
+  formatZodError,
+  updateMemberBodySchema,
+} from '@/lib/api/members'
 import {
   badRequest,
   forbidden,
@@ -55,28 +58,30 @@ export const PATCH = async (
   })
   if (!role) return forbidden()
 
-  const body = (await request.json().catch(() => null)) as UpdateMemberPatch | null
-  if (!body) return badRequest('invalid JSON body')
-  if (body.role === 'creator') {
-    return badRequest('cannot promote a member to "creator"')
-  }
+  const raw = await request.json().catch(() => null)
+  const parsed = updateMemberBodySchema.safeParse(raw)
+  if (!parsed.success) return badRequest(formatZodError(parsed.error))
+  const patch = parsed.data
 
   return runWithErrorHandler(async () => {
     const target = await getMember({ supabase: user.supabase, workspaceId, memberId })
     if (!target) return notFound()
     const isSelf = target.user_id === user.id
-    const editingRole = body.role !== undefined && body.role !== target.role
+    const editingRole = patch.role !== undefined && patch.role !== target.role
     if (editingRole && !hasAdminRole(role)) {
       return forbidden()
     }
     if (!isSelf && !hasAdminRole(role)) {
       return forbidden()
     }
+    if (target.role === 'creator' && patch.role !== undefined) {
+      return badRequest('cannot change the creator role')
+    }
     await updateMember({
       supabase: user.supabase,
       workspaceId,
       memberId,
-      patch: body,
+      patch,
     })
     return jsonOk({ updated: true })
   })

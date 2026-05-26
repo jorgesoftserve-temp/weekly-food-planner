@@ -1,0 +1,26 @@
+Review the system
+@.cursor/rules/ @docs/PRD/ARCHITECTURE_PRD.md  @docs/PRD/DATABASE_PRD.md @docs/PRD/OVERVIEW_PRD.md @docs/PRD/PRODUCT_PRD.md @docs/PRD/TECHNICAL_PRD.md
+
+Lets work on the members CRUD logic and menu/grocery generation for the members of a household when shopping
+
+1. we should be able to shop for one or more members of the house hold, meaning if a recipe is for one serving we should update the shopping list for all the members
+2. we should see the grocery-list for all the house hold or per member, maybe some members have specific recipes related to their dietary/allergy restrictions that we need to fit
+3. we should be able to edit the menus for all the members of the household, maybe a child can have a special menu that only shares breakfasts but not the rest, or an adult can have a specific diet with some special breakfast or dinner needs
+
+Lets also plan a new feature to our menu generation where a user can select what meal frequency they want for a specific menu maybe that week they have an event or something that requires an additional or one less meal
+
+Lets plan both features to wrap our MVP 1.5 before adding code and contemplate related changes to our docs, prompts logs and unit tests
+
+[follow-up clarifications agreed]
+- household = all active workspace_members (no grocer-shopper role for 1.5)
+- the menu may be created for a subset of the household (fits Phase 2)
+- starting with Phase 1: members CRUD UI
+
+Phase 1 scope: round out the existing members CRUD (DB, module, route handlers,
+unit + integration tests already exist) with the missing UI surface — a
+/members page, member create/edit drawer, delete dialog — plus React Query
+mutation hooks and Zod request-body validation in the route handlers. Also
+wire the dashboard members-card to the new page and add the route to the
+sidebar nav. Build a reusable `MealFrequencyFields` editor under
+components/forms/ so Phase 2 (per-menu meal-frequency override) can drop it
+straight into the generate-menu form.

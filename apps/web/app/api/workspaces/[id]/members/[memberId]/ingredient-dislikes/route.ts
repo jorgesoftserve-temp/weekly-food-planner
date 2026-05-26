@@ -9,6 +9,10 @@ import {
   hasAdminRole,
 } from '@/lib/api/auth-helpers'
 import {
+  formatZodError,
+  ingredientIdsBodySchema,
+} from '@/lib/api/members'
+import {
   badRequest,
   forbidden,
   jsonOk,
@@ -18,8 +22,6 @@ import {
 import { runWithErrorHandler } from '@/lib/api/route-helpers'
 
 type RouteParams = { id: string; memberId: string }
-
-type PutBody = { ingredient_ids: string[] }
 
 export const PUT = async (
   request: NextRequest,
@@ -35,10 +37,9 @@ export const PUT = async (
   })
   if (!role) return forbidden()
 
-  const body = (await request.json().catch(() => null)) as PutBody | null
-  if (!body || !Array.isArray(body.ingredient_ids)) {
-    return badRequest('body must be { ingredient_ids: string[] }')
-  }
+  const raw = await request.json().catch(() => null)
+  const parsed = ingredientIdsBodySchema.safeParse(raw)
+  if (!parsed.success) return badRequest(formatZodError(parsed.error))
 
   return runWithErrorHandler(async () => {
     const target = await getMember({ supabase: user.supabase, workspaceId, memberId })
@@ -49,8 +50,8 @@ export const PUT = async (
     await setMemberIngredientDislikes({
       supabase: user.supabase,
       memberId,
-      ingredientIds: body.ingredient_ids,
+      ingredientIds: parsed.data.ingredient_ids,
     })
-    return jsonOk({ ingredient_ids: body.ingredient_ids })
+    return jsonOk({ ingredient_ids: parsed.data.ingredient_ids })
   })
 }

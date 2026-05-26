@@ -3,6 +3,7 @@
 // don't pull in React or React Query.
 
 export * from './module/workspaces.react.js'
+export * from './module/members.react.js'
 export * from './module/recipes.react.js'
 export * from './module/ingredients.react.js'
 export * from './module/labels.react.js'

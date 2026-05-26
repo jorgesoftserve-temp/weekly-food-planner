@@ -1,14 +1,14 @@
 import { type NextRequest } from 'next/server'
-import {
-  type CreateMemberPayload,
-  createMember,
-  listMembers,
-} from '@weekly-food-planner/supabase'
+import { createMember, listMembers } from '@weekly-food-planner/supabase'
 import {
   getAuthenticatedUser,
   getWorkspaceRole,
   hasAdminRole,
 } from '@/lib/api/auth-helpers'
+import {
+  createMemberBodySchema,
+  formatZodError,
+} from '@/lib/api/members'
 import {
   badRequest,
   forbidden,
@@ -52,21 +52,15 @@ export const POST = async (
   })
   if (!hasAdminRole(role)) return forbidden()
 
-  const body = (await request.json().catch(() => null)) as CreateMemberPayload | null
-  if (!body || !body.name || !body.role || !body.age_category) {
-    return badRequest('name, role, and age_category are required')
-  }
-  if (body.role === 'creator') {
-    return badRequest(
-      'role "creator" is assigned by the signup trigger and cannot be set via API',
-    )
-  }
+  const raw = await request.json().catch(() => null)
+  const parsed = createMemberBodySchema.safeParse(raw)
+  if (!parsed.success) return badRequest(formatZodError(parsed.error))
 
   return runWithErrorHandler(async () => {
     const created = await createMember({
       supabase: user.supabase,
       workspaceId,
-      payload: body,
+      payload: parsed.data,
     })
     return jsonOk(created, { status: 201 })
   })

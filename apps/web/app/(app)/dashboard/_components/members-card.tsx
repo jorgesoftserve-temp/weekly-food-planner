@@ -1,6 +1,7 @@
 'use client'
 
-import { Plus, UserPlus, Users } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowRight, Plus, UserPlus, Users } from 'lucide-react'
 import { useWorkspaceWithMembers } from '@weekly-food-planner/supabase/react'
 import { Button } from '@/components/ui/button'
 import {
@@ -11,12 +12,6 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { useActiveWorkspace } from '@/components/workspace-provider'
 import { useSupabase } from '@/lib/hooks/use-supabase'
 
@@ -68,29 +63,22 @@ export const MembersCard = () => {
             </CardDescription>
           </div>
         </div>
-        {canManage ? (
-          <TooltipProvider delayDuration={150}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span tabIndex={0}>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled
-                    aria-disabled
-                  >
-                    <Plus className="size-4" />
-                    New member
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                Coming soon — member management lands in the next iteration.
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : null}
+        <div className="flex items-center gap-2">
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/members">
+              Manage
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+          {canManage ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href="/members">
+                <Plus className="size-4" />
+                New member
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (

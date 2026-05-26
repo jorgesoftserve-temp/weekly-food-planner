@@ -1,7 +1,6 @@
 import { type NextRequest } from 'next/server'
 import {
   getMember,
-  saveLabel,
   setMemberDietaryRestrictions,
 } from '@weekly-food-planner/supabase'
 import {
@@ -9,6 +8,7 @@ import {
   getWorkspaceRole,
   hasAdminRole,
 } from '@/lib/api/auth-helpers'
+import { formatZodError, valuesBodySchema } from '@/lib/api/members'
 import {
   badRequest,
   forbidden,
@@ -19,8 +19,6 @@ import {
 import { runWithErrorHandler } from '@/lib/api/route-helpers'
 
 type RouteParams = { id: string; memberId: string }
-
-type PutBody = { values: string[] }
 
 export const PUT = async (
   request: NextRequest,
@@ -36,10 +34,9 @@ export const PUT = async (
   })
   if (!role) return forbidden()
 
-  const body = (await request.json().catch(() => null)) as PutBody | null
-  if (!body || !Array.isArray(body.values)) {
-    return badRequest('body must be { values: string[] }')
-  }
+  const raw = await request.json().catch(() => null)
+  const parsed = valuesBodySchema.safeParse(raw)
+  if (!parsed.success) return badRequest(formatZodError(parsed.error))
 
   return runWithErrorHandler(async () => {
     const target = await getMember({ supabase: user.supabase, workspaceId, memberId })
@@ -47,18 +44,11 @@ export const PUT = async (
     const isSelf = target.user_id === user.id
     if (!isSelf && !hasAdminRole(role)) return forbidden()
 
-    for (const value of body.values) {
-      await saveLabel({
-        supabase: user.supabase,
-        enumType: 'dietary_restriction',
-        value,
-      })
-    }
     await setMemberDietaryRestrictions({
       supabase: user.supabase,
       memberId,
-      values: body.values,
+      values: parsed.data.values,
     })
-    return jsonOk({ values: body.values })
+    return jsonOk({ values: parsed.data.values })
   })
 }

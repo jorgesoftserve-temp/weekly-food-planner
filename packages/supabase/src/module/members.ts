@@ -181,6 +181,14 @@ export const setMemberDietaryRestrictions = async ({
   memberId: string
   values: string[]
 }): Promise<void> => {
+  // Funnel each label through sys_save_label so user-typed values land in
+  // enum_metadata. Matches replaceRecipeDietaryTags in recipes.ts.
+  for (const value of values) {
+    await supabase.rpc('sys_save_label', {
+      p_enum_type: 'dietary_restriction',
+      p_value: value,
+    })
+  }
   const { error: delErr } = await supabase
     .from('member_dietary_restrictions')
     .delete()
@@ -202,6 +210,12 @@ export const setMemberAllergies = async ({
   memberId: string
   values: string[]
 }): Promise<void> => {
+  for (const value of values) {
+    await supabase.rpc('sys_save_label', {
+      p_enum_type: 'food_allergy',
+      p_value: value,
+    })
+  }
   const { error: delErr } = await supabase
     .from('member_allergies')
     .delete()

@@ -98,6 +98,20 @@ export const recomputeGroceryListsForMenu = async ({
     durationDays: menu.duration_days,
   })
 
+  // participantCount drives the eaters denominator for custom-mode NULL-target
+  // (shared) slots. Engine-produced menus only emit per-member slots, so the
+  // count doesn't change their math — every per-member slot contributes 1
+  // eater. We still load the count to handle custom menus correctly.
+  // Falls back to 1 if the menu somehow has no participants (legacy rows
+  // before the backfill, or RLS quirks) so we avoid divide-by-zero math and
+  // bad data surfaces as raw quantities rather than NaN.
+  const { count: participantCount, error: partErr } = await admin
+    .from('menu_participants')
+    .select('member_id', { count: 'exact', head: true })
+    .eq('menu_id', menuId)
+  if (partErr) return { ok: false, detail: partErr.message }
+  const eatersForSharedSlot = Math.max(1, participantCount ?? 1)
+
   const { data: slotRows, error: slotsErr } = await admin
     .from('menu_slots')
     .select('recipe_id, target_member_id, day_of_week')
@@ -137,6 +151,22 @@ export const recomputeGroceryListsForMenu = async ({
       list.push(row)
       recipeIngsByRecipe.set(row.recipe_id, list)
       ingredientIds.add(row.ingredient_id)
+    }
+  }
+
+  // Recipe servings drive the cook-once scaling factor (PRODUCT_PRD §7).
+  // The DB enforces CHECK (servings > 0) at the recipes table, but we guard
+  // against 0/missing here too — a fallback of 1 yields raw quantities,
+  // which is the right "do no harm" behaviour for bad data.
+  const servingsByRecipe = new Map<string, number>()
+  if (recipeIds.length > 0) {
+    const { data: recipeRows, error: recipeErr } = await admin
+      .from('recipes')
+      .select('id, servings')
+      .in('id', recipeIds)
+    if (recipeErr) return { ok: false, detail: recipeErr.message }
+    for (const row of (recipeRows ?? []) as Array<{ id: string; servings: number }>) {
+      servingsByRecipe.set(row.id, row.servings > 0 ? row.servings : 1)
     }
   }
 
@@ -205,27 +235,41 @@ export const recomputeGroceryListsForMenu = async ({
   for (const slot of slots) {
     const dayIdx = dayOrder.get(slot.day_of_week) ?? 99
     const recipeIngs = recipeIngsByRecipe.get(slot.recipe_id) ?? []
+    const servings = servingsByRecipe.get(slot.recipe_id) ?? 1
+    // Cook-once scaling (PRODUCT_PRD §7). Each slot contributes
+    // (recipe_ingredient.quantity * eaters / recipe.servings) — i.e. cook
+    // enough of the recipe to feed the slot's eaters.
+    //   - per-member slot (target_member_id IS NOT NULL): eaters = 1.
+    //   - shared slot (target_member_id IS NULL, custom mode only): eaters
+    //     = participantCount, because the cook event feeds the household.
+    // The shared bucket sums every slot's contribution → total to buy.
+    // The per-member bucket only sees member-targeted slots → that person's
+    // individual allocation; NULL-target slots don't belong to any one
+    // person's bucket.
+    const eatersForShared = slot.target_member_id
+      ? 1
+      : eatersForSharedSlot
+    const scaleForShared = eatersForShared / servings
+    const scaleForMember = 1 / servings
     for (const ri of recipeIngs) {
       const qty =
         typeof ri.quantity === 'string'
           ? Number.parseFloat(ri.quantity)
           : ri.quantity
       if (!Number.isFinite(qty)) continue
-      // Shared bucket: always contributes (the master list).
       addToBucket({
         bucketKey: 'shared',
         ingredientId: ri.ingredient_id,
         unit: ri.unit,
-        quantity: qty,
+        quantity: qty * scaleForShared,
         dayIdx,
       })
-      // Per-member bucket: only when the slot is targeted at a member.
       if (slot.target_member_id) {
         addToBucket({
           bucketKey: `m:${slot.target_member_id}`,
           ingredientId: ri.ingredient_id,
           unit: ri.unit,
-          quantity: qty,
+          quantity: qty * scaleForMember,
           dayIdx,
         })
       }

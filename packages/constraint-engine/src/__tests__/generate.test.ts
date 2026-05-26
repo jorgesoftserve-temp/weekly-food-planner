@@ -80,13 +80,14 @@ describe('generateMenu', () => {
     expect(result.inputsHash).toMatch(/^[0-9a-f]{64}$/)
   })
 
-  it('aggregates grocery items across all assigned recipes', async () => {
+  it('aggregates grocery items across all assigned recipes, scaled by recipe.servings', async () => {
     const result = await generateMenu({
       ...baseInput,
       recipes: [
         makeRecipe({
           id: 'r-bf-1',
           mealType: 'breakfast',
+          servings: 2,
           ingredients: [
             makeRecipeIngredient({ ingredientId: 'i-oats', quantity: 0.5 }),
           ],
@@ -94,6 +95,7 @@ describe('generateMenu', () => {
         makeRecipe({
           id: 'r-dn-1',
           mealType: 'dinner',
+          servings: 2,
           ingredients: [
             makeRecipeIngredient({ ingredientId: 'i-oats', quantity: 1 }),
           ],
@@ -105,7 +107,13 @@ describe('generateMenu', () => {
     const item = result.groceryLists.shared.items[0]
     if (!item) throw new Error('Expected one shared item')
     expect(item.ingredientId).toBe('i-oats')
-    // 7 breakfasts × 0.5 + 7 dinners × 1 = 10.5
-    expect(item.quantity).toBe(10.5)
+    // Engine emits 1 slot per member per meal × 7 days. Default fixture has
+    // a single member so 14 slots total. Each contribution is scaled by
+    // (1 / recipe.servings) = 1/2.
+    //   7 breakfasts × (0.5 / 2) + 7 dinners × (1 / 2)
+    //   = 7 × 0.25 + 7 × 0.5
+    //   = 1.75 + 3.5
+    //   = 5.25
+    expect(item.quantity).toBeCloseTo(5.25, 6)
   })
 })

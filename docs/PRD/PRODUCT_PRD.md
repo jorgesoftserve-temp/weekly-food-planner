@@ -327,6 +327,17 @@ Example:
 
 # 7. Grocery List Generation
 
+## Servings-aware scaling
+
+Every ingredient contribution to the grocery list is scaled by `eaters / recipe.servings` — the cook-once model. A 4-serving recipe used for 2 eaters needs half its ingredients.
+
+- **Per-member slot** (engine output; `target_member_id` is set): `eaters = 1`. The slot is cooked for one person.
+- **Shared slot** (custom mode only; `target_member_id` is null): `eaters = participantCount`. The slot represents one cook event that feeds the menu's whole participant set.
+- **Shared bucket** sums every slot's scaled contribution. For an engine-only menu (every slot per-member), that naturally totals to `participantCount × per-person`.
+- **Per-member bucket** only counts member-targeted slots; null-target shared slots don't belong to any one person's per-member breakdown.
+
+Combined with the shop-for-subset filter (§7.1): the shared bucket scales further by `selectedCount / participantCount` at view time. The two transforms compose: the persisted shared bucket is the full household total, and the picker rescales it to whatever subset the user is shopping for right now.
+
 ## Shared Grocery List
 Aggregated ingredients shared across the workspace's meals.
 

@@ -1,0 +1,35 @@
+Lets implement phase 4 too to wrap 1.5
+
+[Phase 4 — servings-aware grocery scaling. The deferred phase from the
+MVP 1.5 plan, picked back up after Phase 3 + 5 shipped.]
+
+Decision locked earlier in the conversation: cook-once, scale by people
+eating. Each ingredient contribution is multiplied by
+(eaters / recipe.servings):
+
+- Per-member slot (engine output; target_member_id is set): eaters = 1.
+- Shared slot (custom mode only; target_member_id is null): eaters =
+  participantCount derived from menu_participants.
+
+The engine ends up with a simpler implementation because every assignment
+it emits is per-member with 1 eater — `aggregateGroceryLists` divides by
+recipe.servings per contribution, sums into shared + per-member buckets,
+and the math composes naturally:
+  - shared bucket = total household need
+  - per-member bucket = each member's individual allocation
+
+Engine boundary: no new field on WorkspaceSnapshot. The earlier plan
+called for `participantCount` on the snapshot but it isn't needed since
+the engine doesn't emit null-target slots — the count is implicit in slot
+count × per-eater quantity. Less API surface, same math.
+
+Server recompute (apps/web/lib/api/menu-grocery.ts) needs both pieces:
+loads recipe.servings alongside the menu_slots join, and
+COUNT(menu_participants) for the menu, then applies the explicit eaters
+formula per bucket so custom-mode null-target slots scale correctly.
+
+Compose with Phase 5: the shop-for-subset filter rescales the persisted
+shared bucket by selectedCount / participantCount at view time. Phase 4
+sets the baseline so the picker's "halve the shared list when shopping
+for half the household" yields correct absolute quantities (not just a
+proportional view over raw numbers).

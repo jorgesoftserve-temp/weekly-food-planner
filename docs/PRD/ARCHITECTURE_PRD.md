@@ -228,8 +228,9 @@ Greedy + local search is fast, deterministic, and easy to reason about. It does 
 
 # 7. Grocery list & freshness pipeline
 
-- **Shared list**: union of ingredients across all shared recipes in the menu.
-- **Member lists**: ingredients unique to a member-specific slot (engine picked a different recipe for that member due to constraint divergence) plus substitutions required by that member's restrictions.
+- **Cook-once servings scaling**: every ingredient contribution is multiplied by `eaters / recipe.servings`. Per-member slots use `eaters = 1`; null-target shared slots (custom mode) use `eaters = participantCount` derived from `menu_participants`. The engine emits per-member slots only, so its `aggregateGroceryLists` simply divides every contribution by `recipe.servings` — summing across all members yields the household total naturally. The server recompute path mirrors the formula but reads `recipe.servings` and `COUNT(menu_participants)` from the DB. See [PRODUCT_PRD.md §7](./PRODUCT_PRD.md).
+- **Shared list**: union of ingredients across all shared recipes in the menu, scaled per the rule above.
+- **Member lists**: ingredients unique to a member-specific slot (engine picked a different recipe for that member due to constraint divergence) plus substitutions required by that member's restrictions, scaled per the rule above.
 - **Scheduling**: each `grocery_item` carries a `scheduled_purchase_day`. The engine assigns days based on:
   - `ingredients.max_storage_days` (purchase no earlier than `meal_day - max_storage_days`)
   - `ingredients.requires_fresh` (forces a same-week purchase)

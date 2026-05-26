@@ -1,0 +1,11 @@
+Lets fix this issue that we have on the menu view
+Couldn't load the menu
+column menu_slots_1.is_overridden does not exist
+
+same issue on the menu-history
+Couldn't load menu history
+column menu_slots_1.is_overridden does not exist
+
+And this ones
+1. Per-member grocery list recompute (current pass only updates the shared list).
+2. Freshness scheduling (scheduled_purchase_day) is NULL after recompute — needs the engine path reused server-side.

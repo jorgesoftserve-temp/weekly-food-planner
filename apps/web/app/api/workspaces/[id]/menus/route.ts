@@ -76,6 +76,11 @@ export const POST = async (
     weekStartDate: body.weekStartDate,
     seed,
     options: effectiveOverlay,
+    // Threading server-time into the engine lets it skip meals whose
+    // defaultHour has already passed for the current week. Engine-internal
+    // determinism is preserved because the same (now, seed, inputs) tuple
+    // always yields the same menu — only across-second regenerations differ.
+    now: new Date().toISOString(),
   }
 
   const result = await generateMenu(input)

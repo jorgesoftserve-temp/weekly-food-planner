@@ -122,6 +122,13 @@ export type GenerateMenuInput = {
   weekStartDate: string
   seed: number
   options?: GenerateMenuOptions
+  // ISO timestamp ("now"). When provided, buildSlots filters out any meal slot
+  // whose (day, defaultHour) is before this moment. Required for the ongoing-week
+  // UX: if today is Wed 2pm, the engine should not try to fill Mon/Tue or
+  // Wed breakfast. Omit in unit tests to keep the deterministic 14-slot shape.
+  // Including `now` in the hashed input means same-second regenerations remain
+  // deterministic; later regenerations correctly produce different menus.
+  now?: string
 }
 
 export type GeneratedSlot = {
@@ -168,6 +175,10 @@ export type GenerationError = {
   failedConstraint: GenerationFailedConstraint
   scope: GenerationErrorScope
   affectedMemberId?: string
+  // Set whenever affectedMemberId is set AND the engine has the member snapshot
+  // in hand (i.e. not the MEMBER_NOT_FOUND case). Lets the UI render a name
+  // instead of a UUID without re-querying.
+  affectedMemberName?: string
   affectedMeal?: { day: DayOfWeek; mealKey: string }
   reasonCode: string
   humanMessage: string

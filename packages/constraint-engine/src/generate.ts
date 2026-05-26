@@ -15,6 +15,25 @@ export const generateMenu = async (
   const slots = buildSlots({ input })
 
   if (slots.length === 0) {
+    // Distinguish "frequency never configured" from "everything got filtered as
+    // past meals". Re-running buildSlots without `now` tells us which case we
+    // hit: a non-zero unfiltered count means filtering ate every slot.
+    const unfilteredCount =
+      input.now === undefined
+        ? 0
+        : buildSlots({ input: { ...input, now: undefined } }).length
+    if (unfilteredCount > 0) {
+      return {
+        ok: false,
+        error: {
+          failedConstraint: 'internal_error',
+          scope: 'input',
+          reasonCode: 'ALL_MEALS_PASSED',
+          humanMessage:
+            'Every meal in this week is already in the past. Pick a later week-start date.',
+        },
+      }
+    }
     return {
       ok: false,
       error: {

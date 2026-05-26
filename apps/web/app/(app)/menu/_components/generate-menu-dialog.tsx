@@ -36,13 +36,17 @@ const nextMonday = (from: Date): string => {
   return formatYmd(date)
 }
 
+// Engine reasonCodes are UPPERCASE_SNAKE. Map the common ones to short labels;
+// the full explanation comes from humanMessage rendered below.
 const reasonLabel = (reasonCode: string): string => {
   switch (reasonCode) {
-    case 'no_valid_recipe':
+    case 'NO_CANDIDATES':
       return 'No recipe satisfies one of the slots'
-    case 'no_slots':
+    case 'NO_SLOTS':
       return 'This workspace has no meal frequency'
-    case 'empty_workspace':
+    case 'ALL_MEALS_PASSED':
+      return 'Every meal in this week is already in the past'
+    case 'EMPTY_WORKSPACE':
       return 'No recipes yet'
     default:
       return 'Generation failed'
@@ -140,9 +144,9 @@ export const GenerateMenuDialog = ({
                 <p className="font-medium text-destructive">
                   {reasonLabel(failure.error.reasonCode)}
                 </p>
-                {failure.error.message ? (
+                {failure.error.humanMessage ? (
                   <p className="text-muted-foreground">
-                    {failure.error.message}
+                    {failure.error.humanMessage}
                   </p>
                 ) : null}
                 {failure.error.affectedMeal || failure.error.affectedMemberId ? (
@@ -150,11 +154,12 @@ export const GenerateMenuDialog = ({
                     Slot{' '}
                     {failure.error.affectedMeal ? (
                       <code className="rounded bg-muted px-1 py-0.5">
-                        {failure.error.affectedMeal}
+                        {failure.error.affectedMeal.day}/
+                        {failure.error.affectedMeal.mealKey}
                       </code>
                     ) : null}
                     {failure.error.affectedMemberId
-                      ? ` for member ${failure.error.affectedMemberId}`
+                      ? ` for ${failure.error.affectedMemberName ?? failure.error.affectedMemberId}`
                       : ''}
                   </p>
                 ) : null}

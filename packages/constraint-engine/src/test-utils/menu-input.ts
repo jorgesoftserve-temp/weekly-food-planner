@@ -16,6 +16,7 @@ export const makeGenerateMenuInput = ({
   weekStartDate = '2026-06-01',
   seed = 42,
   options,
+  now,
 }: Partial<GenerateMenuInput> = {}): GenerateMenuInput => ({
   workspace,
   members,
@@ -24,4 +25,5 @@ export const makeGenerateMenuInput = ({
   weekStartDate,
   seed,
   ...(options !== undefined ? { options } : {}),
+  ...(now !== undefined ? { now } : {}),
 })

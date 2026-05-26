@@ -36,15 +36,15 @@ export type GenerateMenuSuccess = {
 export type GenerateMenuFailure = {
   ok: false
   error: {
-    reasonCode:
-      | 'no_valid_recipe'
-      | 'no_slots'
-      | 'empty_workspace'
-      | 'unknown'
-    message?: string
+    // Engine reasonCodes are UPPERCASE_SNAKE (NO_SLOTS, NO_CANDIDATES,
+    // ALL_MEALS_PASSED, etc.); the typed alternation here is for IntelliSense,
+    // the wire is open string.
+    reasonCode: string
+    humanMessage?: string
     failedConstraint?: string
     affectedMemberId?: string | null
-    affectedMeal?: string | null
+    affectedMemberName?: string | null
+    affectedMeal?: { day: string; mealKey: string } | null
   }
   generationRunId?: string
 }

@@ -52,6 +52,28 @@ describe('generateMenu', () => {
     expect(result.error.reasonCode).toBe('NO_SLOTS')
   })
 
+  it('returns ALL_MEALS_PASSED when frequency exists but every slot is in the past', async () => {
+    const result = await generateMenu({
+      ...baseInput,
+      now: '2026-06-15T00:00:00', // week is 2026-06-01..06-07
+    })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.reasonCode).toBe('ALL_MEALS_PASSED')
+  })
+
+  it('populates affectedMemberName alongside affectedMemberId on no_valid_recipe', async () => {
+    const result = await generateMenu({
+      ...baseInput,
+      recipes: [makeRecipe({ id: 'r-snack', mealType: 'snack' })],
+    })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.failedConstraint).toBe('no_valid_recipe')
+    expect(result.error.affectedMemberId).toBeTruthy()
+    expect(result.error.affectedMemberName).toBeTruthy()
+  })
+
   it('inputsHash is a 64-char hex digest', async () => {
     const result = await generateMenu(baseInput)
     if (!result.ok) throw new Error('Expected ok')

@@ -1,6 +1,7 @@
 import type {
   DayOfWeek,
   GenerateMenuInput,
+  MealFrequencyEntry,
   MealType,
   MemberSnapshot,
   WorkspaceSnapshot,
@@ -46,15 +47,66 @@ const resolveFrequency = ({
   return workspace.sharedMealFrequency ?? []
 }
 
+// Compute the wall-clock moment a slot starts, interpreted in the server's
+// local timezone. The engine is naive about timezones — it assumes the user
+// generating the menu lives in the same zone as the server, which holds for
+// the single-tenant MVP. Multi-zone support would require carrying a tz on the
+// workspace or member.
+const slotStart = ({
+  weekStartDate,
+  dayOfWeek,
+  defaultHour,
+}: {
+  weekStartDate: string
+  dayOfWeek: DayOfWeek
+  defaultHour: number
+}): number => {
+  const [y, m, d] = weekStartDate.split('-').map((part) => Number.parseInt(part, 10))
+  if (!y || !m || !d) return Number.POSITIVE_INFINITY
+  const dayOffset = DAY_ORDER[dayOfWeek]
+  return new Date(y, m - 1, d + dayOffset, defaultHour, 0, 0, 0).getTime()
+}
+
+const isSlotPast = ({
+  weekStartDate,
+  dayOfWeek,
+  entry,
+  nowMs,
+}: {
+  weekStartDate: string
+  dayOfWeek: DayOfWeek
+  entry: MealFrequencyEntry
+  nowMs: number
+}): boolean => {
+  const start = slotStart({
+    weekStartDate,
+    dayOfWeek,
+    defaultHour: entry.defaultHour,
+  })
+  return start < nowMs
+}
+
 // MVP simplification: every slot is per-member. A future iteration can detect
 // when multiple members get the same recipe for the same (day, mealKey) and
 // collapse those into a shared slot in the output.
 export const buildSlots = ({ input }: { input: GenerateMenuInput }): SlotSpec[] => {
+  const nowMs = input.now ? new Date(input.now).getTime() : null
   const slots: SlotSpec[] = []
   for (const member of input.members) {
     const frequency = resolveFrequency({ member, workspace: input.workspace })
     for (const day of DAYS_OF_WEEK) {
       for (const entry of frequency) {
+        if (
+          nowMs !== null &&
+          isSlotPast({
+            weekStartDate: input.weekStartDate,
+            dayOfWeek: day,
+            entry,
+            nowMs,
+          })
+        ) {
+          continue
+        }
         slots.push({
           dayOfWeek: day,
           mealKey: entry.key,

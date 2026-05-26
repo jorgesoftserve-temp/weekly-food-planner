@@ -1,13 +1,22 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo } from 'react'
-import { CalendarRange, ShoppingCart } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import {
+  AlertTriangle,
+  CalendarRange,
+  Download,
+  Refrigerator,
+  ShoppingCart,
+  Sparkles,
+} from 'lucide-react'
 import {
   useActiveGroceryLists,
+  useActiveMenu,
   useIngredients,
   useWorkspaceWithMembers,
 } from '@weekly-food-planner/supabase/react'
+import type { IngredientRecord } from '@weekly-food-planner/supabase'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -16,6 +25,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -25,10 +40,21 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { EmptyState } from '@/components/empty-state'
 import { PageHeader } from '@/components/page-header'
 import { useActiveWorkspace } from '@/components/workspace-provider'
 import { useSupabase } from '@/lib/hooks/use-supabase'
+import {
+  downloadMenuExport,
+  type ExportFormat,
+} from '@/lib/hooks/export-menu'
+import { IngredientDetailDialog } from './_components/ingredient-detail-dialog'
 
 const capitalize = (s: string): string =>
   s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1)
@@ -55,11 +81,20 @@ const GroceryPage = () => {
     workspaceId: workspace?.id ?? null,
     enabled: !!workspace && !!groceryQuery.data,
   })
+  const activeMenuQuery = useActiveMenu({
+    supabase,
+    workspaceId: workspace?.id ?? null,
+    enabled: !!workspace && !!groceryQuery.data,
+  })
 
-  const ingredientNamesById = useMemo(() => {
-    const map: Record<string, string> = {}
+  const [selectedIngredientId, setSelectedIngredientId] = useState<string | null>(
+    null,
+  )
+
+  const ingredientsById = useMemo(() => {
+    const map: Record<string, IngredientRecord> = {}
     for (const ing of ingredientsQuery.data ?? []) {
-      map[ing.id] = ing.name
+      map[ing.id] = ing
     }
     return map
   }, [ingredientsQuery.data])
@@ -71,6 +106,14 @@ const GroceryPage = () => {
     }
     return map
   }, [workspaceQuery.data])
+
+  const activeMenuRecipeIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const slot of activeMenuQuery.data?.menu_slots ?? []) {
+      set.add(slot.recipe_id)
+    }
+    return set
+  }, [activeMenuQuery.data])
 
   const isLoading = workspaceLoading || groceryQuery.isLoading
   const grocery = groceryQuery.data
@@ -92,6 +135,15 @@ const GroceryPage = () => {
     })
   }, [grocery, memberNamesById])
 
+  const handleExport = (format: ExportFormat) => {
+    if (!workspace || !grocery) return
+    downloadMenuExport({
+      workspaceId: workspace.id,
+      format,
+      weekStartDate: grocery.weekStartDate,
+    })
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <PageHeader
@@ -100,6 +152,26 @@ const GroceryPage = () => {
           grocery
             ? `Aggregated for the week of ${grocery.weekStartDate}.`
             : 'Aggregated shopping list for the active menu.'
+        }
+        actions={
+          grocery ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="size-4" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => handleExport('markdown')}>
+                  Download Markdown
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => handleExport('csv')}>
+                  Download CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null
         }
       />
 
@@ -136,79 +208,149 @@ const GroceryPage = () => {
           description="The active menu didn't produce a grocery list. This usually means no slots were filled — check the menu page."
         />
       ) : (
-        <div className="flex flex-col gap-4">
-          {sortedLists.map((list) => {
-            const heading =
-              list.target_member_id === null
-                ? 'Shared'
-                : `Per member: ${
-                    memberNamesById[list.target_member_id] ??
-                    `[unknown:${list.target_member_id.slice(0, 6)}]`
-                  }`
-            const sortedItems = [...list.grocery_items].sort((a, b) => {
-              const na = ingredientNamesById[a.ingredient_id] ?? a.ingredient_id
-              const nb = ingredientNamesById[b.ingredient_id] ?? b.ingredient_id
-              return na.localeCompare(nb)
-            })
-            return (
-              <Card key={list.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{heading}</CardTitle>
-                  <CardDescription>
-                    {sortedItems.length}{' '}
-                    {sortedItems.length === 1 ? 'item' : 'items'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Ingredient</TableHead>
-                        <TableHead className="w-28 text-right">
-                          Quantity
-                        </TableHead>
-                        <TableHead className="w-20">Unit</TableHead>
-                        <TableHead className="hidden w-32 sm:table-cell">
-                          Day
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sortedItems.map((item) => {
-                        const name =
-                          ingredientNamesById[item.ingredient_id] ??
-                          `[unknown:${item.ingredient_id.slice(0, 6)}]`
-                        const qty =
-                          typeof item.quantity === 'string'
-                            ? Number.parseFloat(item.quantity)
-                            : item.quantity
-                        return (
-                          <TableRow key={item.id}>
-                            <TableCell className="font-medium">
-                              {name}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatQuantity(qty)}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {item.unit}
-                            </TableCell>
-                            <TableCell className="hidden text-muted-foreground sm:table-cell">
-                              {item.scheduled_purchase_day
-                                ? capitalize(item.scheduled_purchase_day)
-                                : '—'}
-                            </TableCell>
+        <TooltipProvider delayDuration={150}>
+          <div className="flex flex-col gap-4">
+            {sortedLists.map((list) => {
+              const heading =
+                list.target_member_id === null
+                  ? 'Shared'
+                  : `Per member: ${
+                      memberNamesById[list.target_member_id] ??
+                      `[unknown:${list.target_member_id.slice(0, 6)}]`
+                    }`
+              const sortedItems = [...list.grocery_items].sort((a, b) => {
+                const na =
+                  ingredientsById[a.ingredient_id]?.name ?? a.ingredient_id
+                const nb =
+                  ingredientsById[b.ingredient_id]?.name ?? b.ingredient_id
+                return na.localeCompare(nb)
+              })
+              return (
+                <Card key={list.id}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{heading}</CardTitle>
+                    <CardDescription>
+                      {sortedItems.length}{' '}
+                      {sortedItems.length === 1 ? 'item' : 'items'} — tap an
+                      ingredient for freshness rules and which recipes need it.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Ingredient</TableHead>
+                            <TableHead className="w-28 text-right">
+                              Quantity
+                            </TableHead>
+                            <TableHead className="w-20">Unit</TableHead>
+                            <TableHead className="hidden w-32 sm:table-cell">
+                              Day
+                            </TableHead>
                           </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+                        </TableHeader>
+                        <TableBody>
+                          {sortedItems.map((item) => {
+                            const ing = ingredientsById[item.ingredient_id]
+                            const name =
+                              ing?.name ??
+                              `[unknown:${item.ingredient_id.slice(0, 6)}]`
+                            const qty =
+                              typeof item.quantity === 'string'
+                                ? Number.parseFloat(item.quantity)
+                                : item.quantity
+                            const allergenCount =
+                              ing?.ingredient_allergens.length ?? 0
+                            return (
+                              <TableRow key={item.id}>
+                                <TableCell className="font-medium">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedIngredientId(item.ingredient_id)
+                                    }
+                                    className="flex items-center gap-2 text-left hover:underline underline-offset-4"
+                                  >
+                                    <span>{name}</span>
+                                    {ing?.requires_fresh ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Sparkles
+                                            className="size-3.5 text-sky-600 dark:text-sky-400"
+                                            aria-label="Requires fresh"
+                                          />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          Requires fresh purchase
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : ing?.is_perishable ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Refrigerator
+                                            className="size-3.5 text-amber-600 dark:text-amber-400"
+                                            aria-label="Perishable"
+                                          />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          Perishable
+                                          {ing.max_storage_days != null
+                                            ? ` — keeps ~${ing.max_storage_days}d`
+                                            : ''}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : null}
+                                    {allergenCount > 0 ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <AlertTriangle
+                                            className="size-3.5 text-destructive"
+                                            aria-label={`${allergenCount} allergen${allergenCount === 1 ? '' : 's'}`}
+                                          />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          {allergenCount} allergen
+                                          {allergenCount === 1 ? '' : 's'} tagged
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : null}
+                                  </button>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {formatQuantity(qty)}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {item.unit}
+                                </TableCell>
+                                <TableCell className="hidden text-muted-foreground sm:table-cell">
+                                  {item.scheduled_purchase_day
+                                    ? capitalize(item.scheduled_purchase_day)
+                                    : '—'}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        </TooltipProvider>
       )}
+
+      <IngredientDetailDialog
+        workspaceId={workspace?.id ?? null}
+        ingredientId={selectedIngredientId}
+        activeMenuRecipeIds={activeMenuRecipeIds}
+        open={!!selectedIngredientId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedIngredientId(null)
+        }}
+      />
     </div>
   )
 }

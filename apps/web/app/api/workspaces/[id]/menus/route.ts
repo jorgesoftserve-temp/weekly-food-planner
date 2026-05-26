@@ -33,6 +33,9 @@ type WeeklyBody = {
   seed?: number
   durationDays?: number
   options?: RawOverlay
+  // Subset of household members this menu is for. Defaults to every active
+  // member when omitted/empty. See PRODUCT_PRD §4.3.
+  participantMemberIds?: string[]
 }
 
 type CustomBody = {
@@ -41,6 +44,7 @@ type CustomBody = {
   durationDays?: number
   slots: CustomSlotInput[]
   options?: RawOverlay
+  participantMemberIds?: string[]
 }
 
 type CloneBody = {
@@ -103,12 +107,37 @@ export const POST = async (
     return jsonOk({ ok: true, menuId: result.menuId, mode: 'clone' })
   }
 
+  // Resolve the participant snapshot for both weekly and custom modes. An
+  // explicit empty list means "for nobody" which doesn't make sense — reject
+  // with a 400 so the user picks at least one. Omitted/undefined falls back
+  // to "every active workspace member" so legacy callers keep working.
+  const resolveParticipantIds = async (
+    raw: string[] | undefined,
+  ): Promise<{ ok: true; ids: string[] } | { ok: false; detail: string }> => {
+    if (Array.isArray(raw)) {
+      if (raw.length === 0) {
+        return { ok: false, detail: 'participantMemberIds cannot be empty' }
+      }
+      return { ok: true, ids: Array.from(new Set(raw)) }
+    }
+    const { data, error } = await user.supabase
+      .from('workspace_members')
+      .select('id')
+      .eq('workspace_id', workspaceId)
+      .eq('is_deleted', false)
+    if (error) return { ok: false, detail: error.message }
+    const rows = (data ?? []) as Array<{ id: string }>
+    return { ok: true, ids: rows.map((r) => r.id) }
+  }
+
   // ---- Custom mode -------------------------------------------------------
   if (mode === 'custom') {
     const customBody = body as CustomBody
     if (!Array.isArray(customBody.slots) || customBody.slots.length === 0) {
       return badRequest('custom menus require at least one slot')
     }
+    const participants = await resolveParticipantIds(customBody.participantMemberIds)
+    if (!participants.ok) return badRequest(participants.detail)
     const result = await persistCustomMenu({
       admin,
       workspaceId,
@@ -116,6 +145,7 @@ export const POST = async (
       durationDays: clampDuration(customBody.durationDays),
       slots: customBody.slots,
       generationOptions: customBody.options as Record<string, unknown> | undefined,
+      participantMemberIds: participants.ids,
     })
     if (!result.ok) {
       return jsonError(result.status, result.code, result.detail)
@@ -138,16 +168,38 @@ export const POST = async (
     return serverError(loaded.detail ?? 'failed to load engine snapshot')
   }
 
+  // Filter to participants before the engine sees the member set. Anything
+  // outside the workspace's active members is dropped — the user can only
+  // generate a menu for people who actually belong here.
+  const allMemberIds = new Set(loaded.members.map((m) => m.id))
+  const requestedIds = Array.isArray(weeklyBody.participantMemberIds)
+    ? Array.from(new Set(weeklyBody.participantMemberIds))
+    : null
+  if (requestedIds && requestedIds.length === 0) {
+    return badRequest('participantMemberIds cannot be empty')
+  }
+  const participantIds = requestedIds
+    ? requestedIds.filter((id) => allMemberIds.has(id))
+    : loaded.members.map((m) => m.id)
+  if (participantIds.length === 0) {
+    return badRequest('no valid participants for this workspace')
+  }
+  const participantIdSet = new Set(participantIds)
+  const participatingMembers = loaded.members.filter((m) => participantIdSet.has(m.id))
+
+  // computeEffectiveOverlay also vets memberFrequencyOverrides against the
+  // participant set, so unknown / non-participating ids in overrides are
+  // silently dropped from the persisted options.
   const effectiveOverlay = computeEffectiveOverlay({
     raw: weeklyBody.options,
-    members: loaded.members,
+    members: participatingMembers,
   })
 
   const seed = weeklyBody.seed ?? generateRandomSeed()
   const durationDays = clampDuration(weeklyBody.durationDays)
   const input: GenerateMenuInput = {
     workspace: loaded.workspace,
-    members: loaded.members,
+    members: participatingMembers,
     recipes: loaded.recipes,
     ingredients: loaded.ingredients,
     weekStartDate: weeklyBody.weekStartDate,
@@ -165,6 +217,7 @@ export const POST = async (
     weekStartDate: weeklyBody.weekStartDate,
     input,
     result,
+    participantMemberIds: participantIds,
   })
   if (!persisted.ok) return serverError(persisted.detail)
 

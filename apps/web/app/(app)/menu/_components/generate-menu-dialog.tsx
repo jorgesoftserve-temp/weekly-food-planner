@@ -21,6 +21,10 @@ import { Label } from '@/components/ui/label'
 import { MultiLabelCombobox } from '@/components/forms/multi-label-combobox'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import { CustomMenuBuilder, type CustomBuilderSlot } from './custom-menu-builder'
+import {
+  ParticipantsFrequencyPanel,
+  type FrequencyOverrideEntry,
+} from './participants-frequency-panel'
 import { RecipePreviewPanel } from './recipe-preview-panel'
 
 const formatYmd = (date: Date): string => {
@@ -69,6 +73,13 @@ export const GenerateMenuDialog = ({
   const [allergies, setAllergies] = useState<string[]>([])
   const [failure, setFailure] = useState<GenerateMenuResponse | null>(null)
   const [customSlots, setCustomSlots] = useState<CustomBuilderSlot[]>([])
+  // null = user hasn't picked → submit as undefined so the server defaults to
+  // "every active member". Explicit empty array would be a UX error and the
+  // panel's button-toggle UI prevents that path.
+  const [participantIds, setParticipantIds] = useState<string[] | null>(null)
+  const [frequencyOverrides, setFrequencyOverrides] = useState<
+    FrequencyOverrideEntry[]
+  >([])
 
   const autoMutation = useGenerateMenu({ workspaceId })
   const customMutation = useCustomMenu({ workspaceId })
@@ -82,6 +93,8 @@ export const GenerateMenuDialog = ({
     setDietaryRestrictions([])
     setAllergies([])
     setCustomSlots([])
+    setParticipantIds(null)
+    setFrequencyOverrides([])
   }
 
   // When the dialog re-opens, reset the form to a fresh state. We do this on
@@ -99,8 +112,17 @@ export const GenerateMenuDialog = ({
       out.additionalDietaryRestrictions = dietaryRestrictions
     }
     if (allergies.length > 0) out.additionalAllergies = allergies
+    if (frequencyOverrides.length > 0) {
+      out.memberFrequencyOverrides = frequencyOverrides
+    }
     return Object.keys(out).length > 0 ? out : undefined
-  }, [dietaryRestrictions, allergies])
+  }, [dietaryRestrictions, allergies, frequencyOverrides])
+
+  // The server treats `undefined` participantMemberIds as "every active
+  // member". Only send an explicit list when the user actually customized
+  // the participant set — otherwise we'd lock the menu to whoever was
+  // active at request time even if a member is added later.
+  const participantsForSubmit = participantIds ?? undefined
 
   const handleAutoSubmit = async () => {
     setFailure(null)
@@ -109,6 +131,7 @@ export const GenerateMenuDialog = ({
         weekStartDate,
         durationDays,
         options: overlay,
+        participantMemberIds: participantsForSubmit,
       })
       if (result.ok) {
         notifySuccess(
@@ -140,6 +163,7 @@ export const GenerateMenuDialog = ({
         durationDays,
         slots: customSlots,
         options: overlay,
+        participantMemberIds: participantsForSubmit,
       })
       notifySuccess(
         'Custom menu draft created',
@@ -246,6 +270,21 @@ export const GenerateMenuDialog = ({
               />
             </div>
           </div>
+
+          <details className="rounded-md border border-border bg-card/40 px-3 py-2 text-sm">
+            <summary className="cursor-pointer select-none font-medium">
+              Cooking for &amp; meal schedule
+            </summary>
+            <div className="pt-3">
+              <ParticipantsFrequencyPanel
+                workspaceId={workspaceId}
+                participantIds={participantIds}
+                onParticipantsChange={setParticipantIds}
+                overrides={frequencyOverrides}
+                onOverridesChange={setFrequencyOverrides}
+              />
+            </div>
+          </details>
 
           <details className="rounded-md border border-border bg-card/40 px-3 py-2 text-sm">
             <summary className="cursor-pointer select-none font-medium">

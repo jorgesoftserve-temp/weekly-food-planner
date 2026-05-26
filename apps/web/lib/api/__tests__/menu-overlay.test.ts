@@ -62,4 +62,47 @@ describe('computeEffectiveOverlay', () => {
     })
     expect(result).toBeUndefined()
   })
+
+  it('keeps memberFrequencyOverrides whose memberId is a participant', () => {
+    const alice = makeMember({ id: 'alice' })
+    const result = computeEffectiveOverlay({
+      raw: {
+        memberFrequencyOverrides: [
+          {
+            memberId: 'alice',
+            mealFrequency: [
+              { key: 'lunch', title: 'Lunch', mealType: 'lunch', defaultHour: 12 },
+            ],
+          },
+        ],
+      },
+      members: [alice],
+    })
+    expect(result?.memberFrequencyOverrides).toEqual([
+      {
+        memberId: 'alice',
+        mealFrequency: [
+          { key: 'lunch', title: 'Lunch', mealType: 'lunch', defaultHour: 12 },
+        ],
+      },
+    ])
+  })
+
+  it('drops memberFrequencyOverrides whose memberId is not a participant', () => {
+    const alice = makeMember({ id: 'alice' })
+    const result = computeEffectiveOverlay({
+      raw: {
+        memberFrequencyOverrides: [
+          {
+            memberId: 'bob',
+            mealFrequency: [
+              { key: 'lunch', title: 'Lunch', mealType: 'lunch', defaultHour: 12 },
+            ],
+          },
+        ],
+      },
+      members: [alice],
+    })
+    expect(result).toBeUndefined()
+  })
 })

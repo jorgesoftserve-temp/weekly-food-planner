@@ -192,6 +192,15 @@ Regeneration that fails (no valid solution) leaves any prior draft untouched and
 
 Weekly menus cover **1–7 consecutive days** starting from any calendar date. The engine derives the start day-of-week from `week_start_date` and walks forward, wrapping past Sunday → Monday when the duration exceeds the remaining week. The duration is part of the canonical input hash, so two regenerations with the same seed but different durations produce different menus.
 
+### 4.1.3 Per-menu meal-frequency override + menu participants
+
+A menu generation request can carry **two related per-menu inputs** that shape who the menu is for and how often they eat that week:
+
+- **`participantMemberIds`** — the subset of household members this menu is for. Omitted/undefined means "every active member" (the household). An explicit empty array is rejected — pick at least one. The participant snapshot is persisted in a dedicated `menu_participants` junction so grocery scaling and history views read it as a structural fact, not a derived blob. Cloning a menu copies its participants verbatim.
+- **`memberFrequencyOverrides`** — a list of `{ memberId, mealFrequency }` entries that replace the matching member's resolved frequency for this menu only. Members not in the list keep their profile cascade (member > workspace). An override with an empty `mealFrequency` array means "no slots for this member this menu" — that's the path for guests staying overnight or a kid skipping a dinner party.
+
+The engine's frequency cascade is now: **override → member.mealFrequency → workspace.sharedMealFrequency → empty**. Overrides for member ids that aren't in `participantMemberIds` are silently dropped before persistence — non-participants can't sneak in via override entries.
+
 ### 4.1.2 Custom menus
 
 - Slots are user-defined: any (day, meal_type, recipe) combination, including multiple of the same meal type on the same day (e.g. 2 breakfasts on Monday). `menu_key` is auto-derived from `meal_type` + occurrence to satisfy the slot unique constraint.
@@ -245,6 +254,8 @@ Ingredient exclusions have no member-profile equivalent (members carry only soft
 - Ingredient exclusions
 - Additional dietary restrictions — see [§4.2](#42-per-menu-constraint-overlay)
 - Additional food allergies — see [§4.2](#42-per-menu-constraint-overlay)
+- **Participant subset** — `participantMemberIds`; see [§4.1.3](#413-per-menu-meal-frequency-override--menu-participants)
+- **Per-member meal-frequency override** — `memberFrequencyOverrides`; see [§4.1.3](#413-per-menu-meal-frequency-override--menu-participants)
 - Random seed (weekly mode only — custom menus have no engine seed)
 - Source menu id to clone from (clone mode only)
 

@@ -68,6 +68,7 @@ const runPipeline = async ({
     weekStartDate: WEEK_START,
     input,
     result,
+    participantMemberIds: loaded.members.map((m) => m.id),
   })
   if (!persisted.ok) throw new Error(`persist failed: ${persisted.detail}`)
   // Step 29 — generation now produces a DRAFT. Accept it so the export

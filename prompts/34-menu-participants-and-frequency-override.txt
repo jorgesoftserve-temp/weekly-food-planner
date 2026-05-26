@@ -1,0 +1,24 @@
+commit the new changes (omit the setting.json file for now) and proceed with phase 2
+
+[Phase 2 of the MVP 1.5 plan]
+
+Per-menu meal-frequency override + menu participants (subset of the household
+this menu is for). Decisions locked in earlier in the conversation:
+
+- Frequency override: per-member full editor at generation time. Effective
+  overrides are snapshotted into `menus.generation_options.memberFrequencyOverrides`.
+- Menu participants: a subset of `workspace_members` this menu is for.
+  Defaults to "every active member" when the user doesn't customize.
+- Folded into the same "Generate menu" form because both questions are
+  "who is this menu for and how often do they eat?".
+- DB representation: new `menu_participants(menu_id, member_id)` junction
+  table — structural fact, not an audit blob in generation_options.
+- Engine: GenerateMenuInput.members is already filtered to participants
+  before the engine sees it; non-participants get no slots, period.
+  Frequency cascade gains a new top step: override > member > workspace.
+- Clone copies participants from source.
+- Phase 4 (servings scaling) will use COUNT(menu_participants) as the
+  shared-list eaters denominator.
+
+Out of scope for this phase: servings-aware grocery scaling (Phase 4),
+shop-for-subset filter (Phase 5), add-slot operation (Phase 3).

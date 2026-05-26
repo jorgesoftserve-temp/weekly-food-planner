@@ -20,6 +20,9 @@ export type CustomMenuInput = {
   durationDays: number
   slots: CustomMenuSlotInput[]
   options?: Record<string, unknown>
+  // Subset of household members this menu is for. Omit / undefined = "every
+  // active member". Empty array is rejected by the server.
+  participantMemberIds?: string[]
 }
 
 const parseError = async (response: Response, fallback: string): Promise<string> => {

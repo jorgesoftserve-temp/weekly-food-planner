@@ -37,13 +37,26 @@ const DAY_ORDER: Record<DayOfWeek, number> = {
 const MAX_DURATION = 7
 const DEFAULT_DURATION = 7
 
+// Cascade for a member's meal frequency:
+//   1. per-menu override (`options.memberFrequencyOverrides[memberId]`)
+//   2. member's own `meal_frequency`
+//   3. workspace `sharedMealFrequency`
+//   4. empty (no slots for this member)
+// An override with an empty array IS honoured at step 1 — it means "skip
+// this member entirely for this menu" rather than "fall through to the
+// member's profile default". This is the path PRODUCT_PRD §4.3 calls out
+// for the houseguest-only / kid-skips-dinner scenarios.
 const resolveFrequency = ({
   member,
   workspace,
+  overridesByMember,
 }: {
   member: MemberSnapshot
   workspace: WorkspaceSnapshot
+  overridesByMember: Map<string, MealFrequencyEntry[]>
 }) => {
+  const override = overridesByMember.get(member.id)
+  if (override !== undefined) return override
   if (member.mealFrequency && member.mealFrequency.length > 0) {
     return member.mealFrequency
   }
@@ -138,9 +151,18 @@ export const buildSlots = ({ input }: { input: GenerateMenuInput }): SlotSpec[] 
   // appear at most once because durationDays is capped at 7.
   const dayIndexByDay = new Map<DayOfWeek, number>()
   for (const { dayOfWeek, dayIndex } of days) dayIndexByDay.set(dayOfWeek, dayIndex)
+  // Materialise the override list as a map once so the inner loop stays O(1).
+  const overridesByMember = new Map<string, MealFrequencyEntry[]>()
+  for (const override of input.options?.memberFrequencyOverrides ?? []) {
+    overridesByMember.set(override.memberId, override.mealFrequency)
+  }
   const slots: SlotSpec[] = []
   for (const member of input.members) {
-    const frequency = resolveFrequency({ member, workspace: input.workspace })
+    const frequency = resolveFrequency({
+      member,
+      workspace: input.workspace,
+      overridesByMember,
+    })
     for (const { dayOfWeek, dayIndex } of days) {
       for (const entry of frequency) {
         if (

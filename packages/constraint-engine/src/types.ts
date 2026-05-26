@@ -100,6 +100,11 @@ export type RecipeSnapshot = {
   dietaryTags: string[]
 }
 
+export type MemberFrequencyOverride = {
+  memberId: string
+  mealFrequency: MealFrequencyEntry[]
+}
+
 export type GenerateMenuOptions = {
   // soft constraints
   calorieTolerance?: number
@@ -112,6 +117,12 @@ export type GenerateMenuOptions = {
   ingredientExclusions?: string[]
   additionalDietaryRestrictions?: string[]
   additionalAllergies?: string[]
+  // Per-menu frequency override (PRODUCT_PRD §4.3). When present, each entry
+  // replaces the matching member's mealFrequency for this generation only.
+  // memberId values not in input.members are ignored (defensive). Empty array
+  // is treated as "no overrides" so callers can pass [] without changing the
+  // engine's behaviour.
+  memberFrequencyOverrides?: MemberFrequencyOverride[]
 }
 
 export type GenerateMenuInput = {

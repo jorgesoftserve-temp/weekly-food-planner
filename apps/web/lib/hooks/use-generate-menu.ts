@@ -10,10 +10,20 @@ import {
   menuKeys,
 } from '@weekly-food-planner/supabase'
 
+export type MealFrequencyEntryInput = {
+  key: string
+  title: string
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  defaultHour: number
+}
+
 export type GenerateMenuInput = {
   weekStartDate: string
   seed?: number
   durationDays?: number
+  // Subset of household members this menu is for. Omit / undefined = "every
+  // active member". Empty array is rejected by the server.
+  participantMemberIds?: string[]
   options?: {
     additionalDietaryRestrictions?: string[]
     additionalAllergies?: string[]
@@ -21,6 +31,10 @@ export type GenerateMenuInput = {
     calorieTolerance?: number
     repetitionLimit?: number
     preferredCuisines?: string[]
+    memberFrequencyOverrides?: Array<{
+      memberId: string
+      mealFrequency: MealFrequencyEntryInput[]
+    }>
   }
 }
 

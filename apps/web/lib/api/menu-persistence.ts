@@ -44,12 +44,20 @@ export const persistGeneratedMenu = async ({
   weekStartDate,
   input,
   result,
+  participantMemberIds,
 }: {
   admin: SupabaseClient
   workspaceId: string
   weekStartDate: string
   input: GenerateMenuInput
   result: GenerateMenuResult
+  // The subset of household members this menu is for (PRODUCT_PRD §4.3).
+  // Passed separately from `input.members` so the participant snapshot stays
+  // a structural fact in the DB rather than a derived blob in
+  // `generation_options`. Empty means "fall back to everyone" — the route
+  // handler defaults to the full active household when the user didn't pick a
+  // subset, so by the time we get here this array always reflects intent.
+  participantMemberIds: string[]
 }): Promise<PersistResult> => {
   if (!result.ok) {
     const { data: runRow, error: runErr } = await admin
@@ -120,6 +128,16 @@ export const persistGeneratedMenu = async ({
       })),
     )
     if (slotErr) return { ok: false, detail: slotErr.message }
+  }
+
+  // Pin the participant snapshot. De-duplicated by the composite PK on the
+  // table, so duplicate entries in the input array fail cleanly.
+  if (participantMemberIds.length > 0) {
+    const uniqueIds = Array.from(new Set(participantMemberIds))
+    const { error: partErr } = await admin.from('menu_participants').insert(
+      uniqueIds.map((memberId) => ({ menu_id: menuId, member_id: memberId })),
+    )
+    if (partErr) return { ok: false, detail: partErr.message }
   }
 
   const { data: listRow, error: listErr } = await admin

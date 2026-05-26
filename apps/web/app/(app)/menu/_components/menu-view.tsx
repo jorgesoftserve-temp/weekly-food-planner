@@ -146,6 +146,19 @@ export const MenuView = ({
 
   const overrideCount = menu.menu_slots.filter((s) => s.is_overridden).length
 
+  // Participants and frequency-override pills surface the new Phase 2 metadata
+  // so the menu page reflects what shaped this generation. participants is
+  // sourced from the structural junction; freq override count is read off
+  // generation_options for audit (PRODUCT_PRD §4.3 + DATABASE_PRD §6.11.1).
+  const participantCount = menu.menu_participants?.length ?? 0
+  const frequencyOverrideCount = (() => {
+    const opts = menu.generation_options
+    if (!opts || typeof opts !== 'object') return 0
+    const overrides = (opts as { memberFrequencyOverrides?: unknown[] })
+      .memberFrequencyOverrides
+    return Array.isArray(overrides) ? overrides.length : 0
+  })()
+
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-md border border-border bg-card/40 px-4 py-3 text-sm text-muted-foreground">
@@ -181,6 +194,17 @@ export const MenuView = ({
           {overrideCount > 0 ? (
             <span className="text-amber-700 dark:text-amber-300">
               {overrideCount} slot{overrideCount === 1 ? '' : 's'} modified
+            </span>
+          ) : null}
+          {participantCount > 0 ? (
+            <span>
+              <span className="font-medium text-foreground">Cooking for:</span>{' '}
+              {participantCount} member{participantCount === 1 ? '' : 's'}
+            </span>
+          ) : null}
+          {frequencyOverrideCount > 0 ? (
+            <span className="text-amber-700 dark:text-amber-300">
+              Schedule customized ({frequencyOverrideCount})
             </span>
           ) : null}
         </div>

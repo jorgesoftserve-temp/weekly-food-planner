@@ -276,7 +276,7 @@ Historical (superseded) menus remain in the table for audit. See §6.17 for the 
 
 ### 6.11.1 `generation_options` shape
 
-A copy of the **effective** (post-dedup) options block passed to the constraint engine, persisted for audit and for surfacing the per-menu overlay in the menu view. `additionalDietaryRestrictions` and `additionalAllergies` contain only the values that actually took effect — anything the user typed that already existed on a member profile is silently dropped before this snapshot is taken. Example:
+A copy of the **effective** (post-dedup) options block passed to the constraint engine, persisted for audit and for surfacing the per-menu overlay in the menu view. `additionalDietaryRestrictions` and `additionalAllergies` contain only the values that actually took effect — anything the user typed that already existed on a member profile is silently dropped before this snapshot is taken. `memberFrequencyOverrides` contains only entries whose `memberId` belongs to the menu's participant set (see §6.11a). Example:
 
 ```json
 {
@@ -285,11 +285,32 @@ A copy of the **effective** (post-dedup) options block passed to the constraint 
   "preferredCuisines": ["italian", "mediterranean"],
   "ingredientExclusions": ["mushroom"],
   "additionalDietaryRestrictions": ["vegan"],
-  "additionalAllergies": ["sesame"]
+  "additionalAllergies": ["sesame"],
+  "memberFrequencyOverrides": [
+    {
+      "memberId": "uuid-of-alice",
+      "mealFrequency": [
+        { "key": "dinner", "title": "Dinner", "mealType": "dinner", "defaultHour": 19 }
+      ]
+    }
+  ]
 }
 ```
 
-All keys are optional. An empty/absent `generation_options` means "no overlay; no extra options were supplied". See [PRODUCT_PRD.md §4.2](./PRODUCT_PRD.md) for user-facing semantics and the silent-dedup rule.
+All keys are optional. An empty/absent `generation_options` means "no overlay; no extra options were supplied". See [PRODUCT_PRD.md §4.2](./PRODUCT_PRD.md) and [§4.1.3](./PRODUCT_PRD.md) for user-facing semantics.
+
+## 6.11a `menu_participants`
+
+| Column | Type | Notes |
+|---|---|---|
+| `menu_id` | uuid NOT NULL | FK → `menus.id` ON DELETE CASCADE |
+| `member_id` | uuid NOT NULL | FK → `workspace_members.id` ON DELETE CASCADE |
+
+Composite PK `(menu_id, member_id)`. Index on `(member_id)` for the reverse lookup ("which menus is this member in?"). No `is_deleted` — visibility follows the parent menu (see §6.16).
+
+Snapshots the subset of household members the menu was generated for. Phase 4's grocery scaling formula (`eaters_for_shared = participant_count`, `eaters_for_member_targeted = 1`) uses `COUNT(*)` here as the household-eaters denominator. Cloning a menu copies the participant set verbatim. RLS read mirrors `menu_slots_read` (workspace-membership through the parent menu). See [PRODUCT_PRD.md §4.1.3](./PRODUCT_PRD.md).
+
+Backfill: every pre-existing menu gets one row per active workspace member, so legacy menus behave as "for the whole household" without special-casing.
 
 ## 6.12 `menu_slots`
 

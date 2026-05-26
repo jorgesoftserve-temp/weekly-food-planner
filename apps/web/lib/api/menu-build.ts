@@ -63,6 +63,7 @@ export const persistCustomMenu = async ({
   durationDays,
   slots,
   generationOptions,
+  participantMemberIds,
 }: {
   admin: SupabaseClient
   workspaceId: string
@@ -70,6 +71,10 @@ export const persistCustomMenu = async ({
   durationDays: number
   slots: CustomSlotInput[]
   generationOptions?: Record<string, unknown>
+  // Subset of household members this menu is for (PRODUCT_PRD §4.3). Custom
+  // menus default to "everyone targeted by at least one slot" when the
+  // caller doesn't pass an explicit list — see the route handler.
+  participantMemberIds: string[]
 }): Promise<BuildResult> => {
   if (slots.length === 0) {
     return {
@@ -158,6 +163,15 @@ export const persistCustomMenu = async ({
   if (slotErr) {
     return { ok: false, status: 500, code: 'db_error', detail: slotErr.message }
   }
+  if (participantMemberIds.length > 0) {
+    const unique = Array.from(new Set(participantMemberIds))
+    const { error: partErr } = await admin.from('menu_participants').insert(
+      unique.map((memberId) => ({ menu_id: menuId, member_id: memberId })),
+    )
+    if (partErr) {
+      return { ok: false, status: 500, code: 'db_error', detail: partErr.message }
+    }
+  }
   // Custom menus get an empty shared grocery list at creation; populated on
   // acceptance once we wire grocery recomputation. For now, accept just
   // promotes the menu with whatever shared list exists.
@@ -190,7 +204,8 @@ export const cloneMenuAsDraft = async ({
     .select(
       `id, workspace_id, week_start_date, seed, inputs_hash, generation_options,
        menu_type, duration_days, start_day_of_week, accepted_at, is_deleted,
-       menu_slots (day_of_week, meal_key, meal_type, recipe_id, target_member_id)`,
+       menu_slots (day_of_week, meal_key, meal_type, recipe_id, target_member_id),
+       menu_participants (member_id)`,
     )
     .eq('id', sourceMenuId)
     .maybeSingle()
@@ -219,6 +234,7 @@ export const cloneMenuAsDraft = async ({
       recipe_id: string
       target_member_id: string | null
     }>
+    menu_participants: Array<{ member_id: string }>
   }
   const src = srcRow as Source
   if (src.workspace_id !== workspaceId || src.is_deleted) {
@@ -280,6 +296,19 @@ export const cloneMenuAsDraft = async ({
     )
     if (slotErr) {
       return { ok: false, status: 500, code: 'db_error', detail: slotErr.message }
+    }
+  }
+  // Copy the participant snapshot from the source. A clone is a fresh draft
+  // of the same intent, so the same household subset applies.
+  if (src.menu_participants.length > 0) {
+    const { error: partErr } = await admin.from('menu_participants').insert(
+      src.menu_participants.map((p) => ({
+        menu_id: newMenuId,
+        member_id: p.member_id,
+      })),
+    )
+    if (partErr) {
+      return { ok: false, status: 500, code: 'db_error', detail: partErr.message }
     }
   }
 

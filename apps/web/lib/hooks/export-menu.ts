@@ -9,13 +9,21 @@ export const downloadMenuExport = ({
   workspaceId,
   format,
   weekStartDate,
+  shopForIds,
 }: {
   workspaceId: string
   format: ExportFormat
   weekStartDate?: string
+  // Optional shop-for-subset selection. Same UUID list the in-app picker
+  // sets on `?shop_for=` — passed through so the downloaded file honours
+  // the user's current filter.
+  shopForIds?: string[] | null
 }): void => {
   const params = new URLSearchParams({ format })
   if (weekStartDate) params.set('week_start_date', weekStartDate)
+  if (shopForIds && shopForIds.length > 0) {
+    params.set('shop_for', shopForIds.join(','))
+  }
   const url = `/api/workspaces/${workspaceId}/export?${params.toString()}`
   const link = document.createElement('a')
   link.href = url

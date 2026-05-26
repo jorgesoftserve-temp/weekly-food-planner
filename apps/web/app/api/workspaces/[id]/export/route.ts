@@ -49,6 +49,16 @@ export const GET = async (
   const { searchParams } = new URL(request.url)
   const formatParam = searchParams.get('format') ?? 'markdown'
   const weekStartDate = searchParams.get('week_start_date') ?? undefined
+  // shop_for is a comma-separated list of member ids, matching the same URL
+  // convention the grocery page uses for its in-app filter (PRODUCT_PRD §7.1).
+  // Empty / missing = whole household, no filtering.
+  const shopForRaw = searchParams.get('shop_for')
+  const shopForIds = shopForRaw
+    ? shopForRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+    : null
 
   if (!isSupportedFormat(formatParam)) {
     return badRequest(`format must be one of: ${Array.from(SUPPORTED_FORMATS).join(', ')}`)
@@ -60,6 +70,7 @@ export const GET = async (
       supabase: user.supabase,
       workspaceId,
       weekStartDate,
+      shopForIds,
     })
     if (!loaded.ok) {
       if (loaded.reason === 'workspace_not_found') return notFound()

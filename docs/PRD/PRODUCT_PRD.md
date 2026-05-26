@@ -357,7 +357,7 @@ Once a menu is accepted and the grocery list is on the page, the user can narrow
 - **Shared bucket**: every quantity is multiplied by `selectedCount / participantCount`, where `participantCount` is the menu's persisted `menu_participants` count (the head-count denominator the menu was built for).
 - **Per-member buckets**: only buckets belonging to selected members are shown. Quantities are untouched because a per-member slot was already produced for a single eater.
 - **State lives in the URL** (`?shop_for=uuid,uuid`) so refreshing or sharing the link keeps the same scope. Absent param = "whole household".
-- **Export** keeps downloading the full unfiltered list for now — filtered exports are a future enhancement (the on-screen banner calls this out so the user isn't surprised).
+- **Exports honour the filter.** Markdown and CSV downloads pick up the picker's current selection via the same `?shop_for=` query param on the export endpoint — the downloaded file reflects whatever the user is looking at on screen. Absent param = full unfiltered household list.
 
 ---
 

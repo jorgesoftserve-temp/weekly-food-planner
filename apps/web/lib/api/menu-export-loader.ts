@@ -2,8 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   getActiveGroceryLists,
   getActiveMenu,
+  type GroceryListRecord,
 } from '@weekly-food-planner/supabase'
-import type { ExportInput } from './menu-export'
+import type { ExportGroceryList, ExportInput } from './menu-export'
+import { applyShopForFilter } from '@/lib/grocery-filter'
 
 export type LoadExportResult =
   | { ok: true; export: ExportInput }
@@ -20,14 +22,50 @@ const collectIds = (values: ReadonlyArray<string | null>): string[] => {
   return Array.from(set)
 }
 
+// Apply shop-for-subset semantics to the loaded grocery lists and reshape
+// into the export schema. Extracted as a pure helper so the loader stays a
+// thin orchestrator and the filter + reshape can be unit-tested without
+// mocking Supabase. When `shopForIds` is null/empty/equal to participantIds,
+// `applyShopForFilter` is a no-op pass-through (per its own contract).
+export const buildExportGroceryLists = ({
+  lists,
+  participantIds,
+  shopForIds,
+}: {
+  lists: GroceryListRecord[]
+  participantIds: string[]
+  shopForIds: string[] | null
+}): ExportGroceryList[] => {
+  const filtered = applyShopForFilter({
+    lists,
+    participantIds,
+    selectedIds: shopForIds,
+  })
+  return filtered.map((fl) => ({
+    targetMemberId: fl.target_member_id,
+    items: fl.scaledItems.map((i) => ({
+      ingredientId: i.ingredient_id,
+      quantity: i.quantity,
+      unit: i.unit,
+      scheduledPurchaseDay: i.scheduled_purchase_day,
+    })),
+  }))
+}
+
 export const loadMenuExport = async ({
   supabase,
   workspaceId,
   weekStartDate,
+  shopForIds,
 }: {
   supabase: SupabaseClient
   workspaceId: string
   weekStartDate?: string
+  // Optional shop-for-subset selection. When non-empty + a strict subset of
+  // the menu's participants, the shared bucket is scaled down and per-member
+  // buckets are filtered to only the selected members. Treated as no-op
+  // when null, empty, or equal to the full participant set.
+  shopForIds?: string[] | null
 }): Promise<LoadExportResult> => {
   try {
     const { data: workspaceData, error: wsErr } = await supabase
@@ -49,13 +87,22 @@ export const loadMenuExport = async ({
       weekStartDate,
     })
 
+    // Build the (possibly filtered) export grocery lists up front so that
+    // name lookups below only fetch entities that survive the filter.
+    const participantIds = menu.menu_participants.map((p) => p.member_id)
+    const groceryLists = buildExportGroceryLists({
+      lists: grocery?.lists ?? [],
+      participantIds,
+      shopForIds: shopForIds ?? null,
+    })
+
     const recipeIds = collectIds(menu.menu_slots.map((s) => s.recipe_id))
     const ingredientIds = collectIds(
-      (grocery?.lists ?? []).flatMap((l) => l.grocery_items.map((i) => i.ingredient_id)),
+      groceryLists.flatMap((l) => l.items.map((i) => i.ingredientId)),
     )
     const memberIds = collectIds([
       ...menu.menu_slots.map((s) => s.target_member_id),
-      ...(grocery?.lists ?? []).map((l) => l.target_member_id),
+      ...groceryLists.map((l) => l.targetMemberId),
     ])
 
     const recipes: Record<string, { name: string }> = {}
@@ -111,15 +158,7 @@ export const loadMenuExport = async ({
             targetMemberId: s.target_member_id,
           })),
         },
-        groceryLists: (grocery?.lists ?? []).map((l) => ({
-          targetMemberId: l.target_member_id,
-          items: l.grocery_items.map((i) => ({
-            ingredientId: i.ingredient_id,
-            quantity: typeof i.quantity === 'string' ? parseFloat(i.quantity) : i.quantity,
-            unit: i.unit,
-            scheduledPurchaseDay: i.scheduled_purchase_day,
-          })),
-        })),
+        groceryLists,
         recipes,
         ingredients,
         members,

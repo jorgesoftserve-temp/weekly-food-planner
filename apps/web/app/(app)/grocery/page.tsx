@@ -211,6 +211,7 @@ const GroceryPage = () => {
       workspaceId: workspace.id,
       format,
       weekStartDate: grocery.weekStartDate,
+      shopForIds: selectedShopForIds,
     })
   }
 

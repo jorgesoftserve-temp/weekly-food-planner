@@ -4,6 +4,7 @@ import {
   getActiveMenu,
   getDraftMenu,
   listAcceptedMenus,
+  listUpcomingAcceptedMenus,
   menuKeys,
   type MenuHistoryEntry,
   type MenuRecord,
@@ -74,5 +75,21 @@ export const useMenuHistory = ({
     queryKey: menuKeys.history(workspaceId ?? ''),
     queryFn: () =>
       listAcceptedMenus({ supabase, workspaceId: workspaceId! }),
+    enabled: enabled && !!workspaceId,
+  })
+
+export const useUpcomingMenus = ({
+  supabase,
+  workspaceId,
+  enabled = true,
+}: {
+  supabase: SupabaseClient
+  workspaceId: string | null
+  enabled?: boolean
+}): UseQueryResult<MenuRecord[]> =>
+  useQuery({
+    queryKey: menuKeys.upcoming(workspaceId ?? ''),
+    queryFn: () =>
+      listUpcomingAcceptedMenus({ supabase, workspaceId: workspaceId! }),
     enabled: enabled && !!workspaceId,
   })

@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowLeft, CalendarRange, Copy, History } from 'lucide-react'
 import { useMenuHistory } from '@weekly-food-planner/supabase/react'
+import type { MenuHistoryEntry } from '@weekly-food-planner/supabase'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -20,6 +21,7 @@ import { useActiveWorkspace } from '@/components/workspace-provider'
 import { useCloneMenu } from '@/lib/hooks/use-clone-menu'
 import { useSupabase } from '@/lib/hooks/use-supabase'
 import { notifyError, notifySuccess } from '@/lib/toast'
+import { CloneTargetDialog } from './_components/clone-target-dialog'
 
 const formatDate = (iso: string): string => {
   try {
@@ -32,21 +34,6 @@ const formatDate = (iso: string): string => {
   } catch {
     return iso.slice(0, 10)
   }
-}
-
-const formatYmd = (date: Date): string => {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-const nextMonday = (from: Date): string => {
-  const date = new Date(from)
-  const day = date.getDay()
-  const offset = day === 0 ? 1 : day === 1 ? 0 : 8 - day
-  date.setDate(date.getDate() + offset)
-  return formatYmd(date)
 }
 
 const MenuHistoryPage = () => {
@@ -63,14 +50,21 @@ const MenuHistoryPage = () => {
   const entries = useMemo(() => historyQuery.data ?? [], [historyQuery.data])
   const isLoading = workspaceLoading || historyQuery.isLoading
 
-  const handleClone = async (sourceMenuId: string) => {
-    if (!workspace) return
+  const [cloneTarget, setCloneTarget] = useState<MenuHistoryEntry | null>(null)
+
+  const handleCloneConfirm = async ({
+    weekStartDate,
+  }: {
+    weekStartDate: string
+  }) => {
+    if (!workspace || !cloneTarget) return
     try {
       await cloneMutation.mutateAsync({
-        sourceMenuId,
-        weekStartDate: nextMonday(new Date()),
+        sourceMenuId: cloneTarget.id,
+        weekStartDate,
       })
       notifySuccess('Menu cloned as a draft. Review it on the menu page.')
+      setCloneTarget(null)
       router.push('/menu')
     } catch (err) {
       notifyError(err instanceof Error ? err.message : 'Clone failed.')
@@ -157,11 +151,11 @@ const MenuHistoryPage = () => {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => handleClone(entry.id)}
+                    onClick={() => setCloneTarget(entry)}
                     disabled={cloneMutation.isPending}
                   >
                     <Copy className="size-4" />
-                    {cloneMutation.isPending ? 'Cloning…' : 'Clone as draft'}
+                    Clone as draft
                   </Button>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-2 text-sm text-muted-foreground">
@@ -201,6 +195,18 @@ const MenuHistoryPage = () => {
           ))}
         </ul>
       )}
+
+      <CloneTargetDialog
+        open={!!cloneTarget}
+        onOpenChange={(open) => {
+          if (!open) setCloneTarget(null)
+        }}
+        sourceWeekStartDate={cloneTarget?.week_start_date ?? null}
+        sourceMenuType={cloneTarget?.menu_type ?? null}
+        sourceDurationDays={cloneTarget?.duration_days ?? null}
+        isPending={cloneMutation.isPending}
+        onConfirm={handleCloneConfirm}
+      />
     </div>
   )
 }

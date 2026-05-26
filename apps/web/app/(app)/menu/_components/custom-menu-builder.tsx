@@ -117,12 +117,23 @@ export const CustomMenuBuilder = ({
     workspaceId,
     enabled: true,
   })
-  const recipes = recipesQuery.data ?? []
+  const recipes = useMemo(
+    () => recipesQuery.data ?? [],
+    [recipesQuery.data],
+  )
   const days = useMemo(
     () => enumerateDays(weekStartDate, durationDays),
     [weekStartDate, durationDays],
   )
   const [createOpen, setCreateOpen] = useState(false)
+  // Slot that triggered the "New recipe" sheet, if any. We use this to
+  // auto-fill the newly-created recipe back into the originating slot when
+  // the menu is short enough that the user's intent is unambiguous (1 day).
+  // For longer menus we leave the slot empty and let the user manually pick
+  // the new recipe — which slot it goes into is no longer obvious.
+  const [createTriggerSlotId, setCreateTriggerSlotId] = useState<string | null>(
+    null,
+  )
 
   const recipesByMealType = useMemo(() => {
     const map: Record<MealType, typeof recipes> = {
@@ -163,6 +174,36 @@ export const CustomMenuBuilder = ({
     )
   }
 
+  const openCreateRecipe = (slotId: string | null = null) => {
+    setCreateTriggerSlotId(slotId)
+    setCreateOpen(true)
+  }
+
+  const handleRecipeCreated = (createdRecipeId?: string) => {
+    setCreateOpen(false)
+    if (!createdRecipeId) {
+      setCreateTriggerSlotId(null)
+      return
+    }
+    // Auto-fill only when the menu is short enough to make the intent
+    // unambiguous (1 day). Even with multiple slots that day, we still
+    // fill the triggering slot if we know which one; otherwise we fill
+    // any empty slot whose meal_type matches the new recipe.
+    if (durationDays === 1) {
+      if (createTriggerSlotId) {
+        updateSlot(createTriggerSlotId, { recipeId: createdRecipeId })
+      } else {
+        // Triggered from the page-level "New recipe" button rather than a
+        // specific slot: drop into the first empty slot we can find.
+        const target = slots.find((s) => !s.recipeId)
+        if (target) {
+          updateSlot(target.clientId, { recipeId: createdRecipeId })
+        }
+      }
+    }
+    setCreateTriggerSlotId(null)
+  }
+
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border bg-card/40 p-3">
       <div className="flex items-center justify-between gap-2">
@@ -177,7 +218,7 @@ export const CustomMenuBuilder = ({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setCreateOpen(true)}
+          onClick={() => openCreateRecipe(null)}
         >
           <Plus className="size-4" />
           New recipe
@@ -246,29 +287,41 @@ export const CustomMenuBuilder = ({
 
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs">Recipe</Label>
-                  <Select
-                    value={slot.recipeId || undefined}
-                    onValueChange={(value) =>
-                      updateSlot(slot.clientId, { recipeId: value })
-                    }
-                  >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Pick a recipe…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {candidates.length === 0 ? (
-                        <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                          No {slot.mealType} recipes — create one above.
-                        </div>
-                      ) : (
-                        candidates.map((r) => (
-                          <SelectItem key={r.id} value={r.id}>
-                            {r.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-1">
+                    <Select
+                      value={slot.recipeId || undefined}
+                      onValueChange={(value) =>
+                        updateSlot(slot.clientId, { recipeId: value })
+                      }
+                    >
+                      <SelectTrigger className="h-8 flex-1 text-xs">
+                        <SelectValue placeholder="Pick a recipe…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {candidates.length === 0 ? (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                            No {slot.mealType} recipes — use New recipe.
+                          </div>
+                        ) : (
+                          candidates.map((r) => (
+                            <SelectItem key={r.id} value={r.id}>
+                              {r.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openCreateRecipe(slot.clientId)}
+                      aria-label="Create new recipe for this slot"
+                      className="size-8 shrink-0"
+                    >
+                      <Plus className="size-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="flex items-end justify-end">
@@ -300,7 +353,17 @@ export const CustomMenuBuilder = ({
         Add meal
       </Button>
 
-      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
+      <Sheet
+        open={createOpen}
+        onOpenChange={(next) => {
+          if (!next) {
+            setCreateOpen(false)
+            setCreateTriggerSlotId(null)
+          } else {
+            setCreateOpen(true)
+          }
+        }}
+      >
         <SheetContent
           side="right"
           className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl"
@@ -310,13 +373,16 @@ export const CustomMenuBuilder = ({
             <SheetDescription>
               Saved to this workspace and immediately available in the custom
               menu picker.
+              {durationDays === 1
+                ? ' Will auto-fill the open slot once created.'
+                : ''}
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-6 py-6">
             <RecipeForm
               mode="create"
               workspaceId={workspaceId}
-              onClose={() => setCreateOpen(false)}
+              onClose={handleRecipeCreated}
             />
           </div>
         </SheetContent>

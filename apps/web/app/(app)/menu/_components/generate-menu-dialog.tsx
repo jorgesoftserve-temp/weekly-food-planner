@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label'
 import { MultiLabelCombobox } from '@/components/forms/multi-label-combobox'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import { CustomMenuBuilder, type CustomBuilderSlot } from './custom-menu-builder'
+import { RecipePreviewPanel } from './recipe-preview-panel'
 
 const formatYmd = (date: Date): string => {
   const y = date.getFullYear()
@@ -276,6 +277,10 @@ export const GenerateMenuDialog = ({
               </div>
             </div>
           </details>
+
+          {dialogMode === 'auto' ? (
+            <RecipePreviewPanel workspaceId={workspaceId} />
+          ) : null}
 
           {dialogMode === 'custom' ? (
             <CustomMenuBuilder

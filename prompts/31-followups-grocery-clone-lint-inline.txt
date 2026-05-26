@@ -1,0 +1,9 @@
+lets fix all those follow ups
+
+1. for inline created recipes they should auto fill the slot if we only have a menu for 1 day, if not we should add meals manually
+2. clone destination week should have the picker logic like we added to the main modal
+3. grocery list needs to be recomputted only when a new menu s accepted, also we should be able to see grocery lists for the accepted incoming menus, not old ones.
+4. next lint needs to be fixed
+
+additionals
+1. add recipe inline creation for normal menus too, since users could have arrived at this screen without creating their recipes and they should have the option to view created recipes that fit their menu and add new ones if they want to, just a small listing, it could be the same as the recipe list ui but simplified to fit in the modal

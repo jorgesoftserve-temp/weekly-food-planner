@@ -25,11 +25,19 @@ describe('getActiveGroceryLists', () => {
   })
 
   it('joins menu → grocery_lists and returns the lists array', async () => {
+    // The data layer now batches accepted menus (up to 20, ordered desc by
+    // week_start_date) and picks the soonest upcoming one client-side. The
+    // mock returns a single-row array; duration_days is required so the
+    // upcoming/past filter has the field it needs (we set it to 1 so the
+    // 2026-06-01 menu trivially counts as past, and the code falls back to
+    // the most recent entry — which is still this one).
     const supabase = createSupabaseMock({
       from: {
         menus: {
           result: {
-            data: { id: 'menu-1', week_start_date: '2026-06-01' },
+            data: [
+              { id: 'menu-1', week_start_date: '2026-06-01', duration_days: 1 },
+            ],
             error: null,
           },
         },

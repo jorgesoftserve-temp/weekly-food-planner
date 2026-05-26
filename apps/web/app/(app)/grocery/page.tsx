@@ -14,6 +14,7 @@ import {
   useActiveGroceryLists,
   useActiveMenu,
   useIngredients,
+  useUpcomingMenus,
   useWorkspaceWithMembers,
 } from '@weekly-food-planner/supabase/react'
 import type { IngredientRecord } from '@weekly-food-planner/supabase'
@@ -41,6 +42,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -67,9 +75,19 @@ const formatQuantity = (n: number): string => {
 const GroceryPage = () => {
   const supabase = useSupabase()
   const { workspace, isLoading: workspaceLoading } = useActiveWorkspace()
+  // Track which upcoming menu the user is shopping for. The default (null)
+  // means "soonest upcoming" — getActiveGroceryLists already picks that.
+  // Once the user changes the selector we pass the explicit week.
+  const [selectedWeek, setSelectedWeek] = useState<string | null>(null)
+  const upcomingQuery = useUpcomingMenus({
+    supabase,
+    workspaceId: workspace?.id ?? null,
+    enabled: !!workspace,
+  })
   const groceryQuery = useActiveGroceryLists({
     supabase,
     workspaceId: workspace?.id ?? null,
+    weekStartDate: selectedWeek ?? undefined,
     enabled: !!workspace,
   })
   const ingredientsQuery = useIngredients({
@@ -154,24 +172,43 @@ const GroceryPage = () => {
             : 'Aggregated shopping list for the active menu.'
         }
         actions={
-          grocery ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Download className="size-4" />
-                  Export
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => handleExport('markdown')}>
-                  Download Markdown
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleExport('csv')}>
-                  Download CSV
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null
+          <div className="flex flex-wrap items-center gap-2">
+            {(upcomingQuery.data?.length ?? 0) > 1 ? (
+              <Select
+                value={selectedWeek ?? grocery?.weekStartDate ?? undefined}
+                onValueChange={(value) => setSelectedWeek(value)}
+              >
+                <SelectTrigger className="h-9 w-[220px] text-sm">
+                  <SelectValue placeholder="Pick an upcoming menu" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(upcomingQuery.data ?? []).map((menu) => (
+                    <SelectItem key={menu.id} value={menu.week_start_date}>
+                      Week of {menu.week_start_date} · {menu.duration_days}d
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            {grocery ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    <Download className="size-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => handleExport('markdown')}>
+                    Download Markdown
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => handleExport('csv')}>
+                    Download CSV
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
         }
       />
 

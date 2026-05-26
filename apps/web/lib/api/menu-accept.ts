@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { recomputeGroceryListForMenu } from './menu-grocery'
 
 export type AcceptResult =
   | { ok: true; acceptedSeed: string }
@@ -133,6 +134,17 @@ export const acceptDraftMenu = async ({
     .eq('id', menuId)
   if (updErr) {
     return { ok: false, status: 500, code: 'db_error', detail: updErr.message }
+  }
+
+  // Rebuild the shared grocery list from the menu's final slots so any
+  // per-slot overrides (or the empty list created for custom menus) are
+  // reflected before the user lands on /grocery. Failures here surface as
+  // db_error rather than rolling acceptance back — the accepted_at row is
+  // the source of truth; a stale grocery list is recoverable, an
+  // un-accepted menu after a successful UI click is not.
+  const groceryResult = await recomputeGroceryListForMenu({ admin, menuId })
+  if (!groceryResult.ok) {
+    return { ok: false, status: 500, code: 'db_error', detail: groceryResult.detail }
   }
 
   return { ok: true, acceptedSeed }

@@ -198,7 +198,9 @@ export type RecipeFormProps =
   | {
       workspaceId: string
       mode: 'create'
-      onClose?: () => void
+      // Hosts can read the created recipe id (e.g. to auto-fill a slot in
+      // the custom menu builder). Edit mode never carries a value here.
+      onClose?: (createdRecipeId?: string) => void
     }
   | {
       workspaceId: string
@@ -279,10 +281,16 @@ export const RecipeForm = (props: RecipeFormProps) => {
 
   // Default the cancel/post-save navigation to /recipes when used as a
   // standalone page; the drawer host overrides this with onClose to close
-  // the sheet and stay on the list.
-  const dismiss = () => {
+  // the sheet and stay on the list. `createdRecipeId` is only set after a
+  // successful create — hosts use it to auto-fill UI that pivots on the
+  // newly-created recipe (e.g. the custom-menu builder's slot picker).
+  const dismiss = (createdRecipeId?: string) => {
     if (props.onClose) {
-      props.onClose()
+      if (props.mode === 'create') {
+        props.onClose(createdRecipeId)
+      } else {
+        props.onClose()
+      }
     } else {
       router.push('/recipes')
       router.refresh()
@@ -292,9 +300,9 @@ export const RecipeForm = (props: RecipeFormProps) => {
   const handleSubmit: SubmitHandler<RecipeFormValues> = async (values) => {
     try {
       if (props.mode === 'create') {
-        await createMutation.mutateAsync(toCreatePayload(values))
+        const created = await createMutation.mutateAsync(toCreatePayload(values))
         notifySuccess('Recipe created', values.name)
-        dismiss()
+        dismiss(created.id)
         return
       }
       // Edit mode: scalars first so a downstream array failure doesn't leave
@@ -694,7 +702,7 @@ export const RecipeForm = (props: RecipeFormProps) => {
           <Button
             type="button"
             variant="outline"
-            onClick={dismiss}
+            onClick={() => dismiss()}
             disabled={isSubmitting}
           >
             Cancel

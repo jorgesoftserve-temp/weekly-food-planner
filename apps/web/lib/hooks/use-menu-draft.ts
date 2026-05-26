@@ -81,6 +81,9 @@ export const useAcceptMenuDraft = ({
         queryKey: menuKeys.active(workspaceId),
       })
       void queryClient.invalidateQueries({
+        queryKey: menuKeys.upcoming(workspaceId),
+      })
+      void queryClient.invalidateQueries({
         queryKey: menuKeys.history(workspaceId),
       })
       void queryClient.invalidateQueries({

@@ -36,6 +36,31 @@ export const groceryKeys = {
 const GROCERY_SELECT = `id, target_member_id,
   grocery_items (id, ingredient_id, quantity, unit, scheduled_purchase_day)`
 
+// Day-of-week helpers kept local: importing from constraint-engine here
+// would create a cycle through the supabase package's React Query layer.
+const todayYmd = (): string => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const isMenuUpcoming = ({
+  weekStartDate,
+  durationDays,
+  cutoffYmd,
+}: {
+  weekStartDate: string
+  durationDays: number
+  cutoffYmd: string
+}): boolean => {
+  const [y, m, d] = weekStartDate.split('-').map((p) => Number.parseInt(p, 10))
+  if (!y || !m || !d) return false
+  const lastDay = new Date(y, m - 1, d + Math.max(0, durationDays - 1))
+  const ly = lastDay.getFullYear()
+  const lm = String(lastDay.getMonth() + 1).padStart(2, '0')
+  const ld = String(lastDay.getDate()).padStart(2, '0')
+  return `${ly}-${lm}-${ld}` >= cutoffYmd
+}
+
 export const getActiveGroceryLists = async ({
   supabase,
   workspaceId,
@@ -45,30 +70,71 @@ export const getActiveGroceryLists = async ({
   workspaceId: string
   weekStartDate?: string
 }): Promise<ActiveGroceryResult | null> => {
-  // Grocery list always tracks the ACCEPTED menu for the week. Drafts have
-  // no grocery list of their own — they only become a shopping list once
-  // accepted (DATABASE_PRD §6.13 + step-29 draft/accept lifecycle).
-  let menuQuery = supabase
+  // Grocery list always tracks an ACCEPTED menu. Drafts have no grocery
+  // list of their own — they only become a shopping list once accepted
+  // (DATABASE_PRD §6.13 + step-29 draft/accept lifecycle).
+  //
+  // When the caller doesn't ask for a specific week, prefer the menu the
+  // user is **about to shop for** — the soonest upcoming accepted menu
+  // (last day >= today). Falls back to the most recent accepted past menu
+  // so an empty schedule still surfaces something. When a weekStartDate
+  // is supplied (selector on the grocery page), we honour it exactly.
+  if (weekStartDate) {
+    const { data: menu, error: menuErr } = await supabase
+      .from('menus')
+      .select('id, week_start_date')
+      .eq('workspace_id', workspaceId)
+      .eq('is_deleted', false)
+      .not('accepted_at', 'is', null)
+      .eq('week_start_date', weekStartDate)
+      .maybeSingle()
+    if (menuErr) throw new Error(menuErr.message)
+    if (!menu) return null
+    const menuRow = menu as { id: string; week_start_date: string }
+    const { data: lists, error: listErr } = await supabase
+      .from('grocery_lists')
+      .select(GROCERY_SELECT)
+      .eq('menu_id', menuRow.id)
+    if (listErr) throw new Error(listErr.message)
+    return {
+      menuId: menuRow.id,
+      weekStartDate: menuRow.week_start_date,
+      lists: (lists ?? []) as unknown as GroceryListRecord[],
+    }
+  }
+
+  const { data: candidates, error: candErr } = await supabase
     .from('menus')
-    .select('id, week_start_date')
+    .select('id, week_start_date, duration_days')
     .eq('workspace_id', workspaceId)
     .eq('is_deleted', false)
     .not('accepted_at', 'is', null)
     .order('week_start_date', { ascending: false })
-    .limit(1)
-  if (weekStartDate) menuQuery = menuQuery.eq('week_start_date', weekStartDate)
-  const { data: menu, error: menuErr } = await menuQuery.maybeSingle()
-  if (menuErr) throw new Error(menuErr.message)
-  if (!menu) return null
-  const menuRow = menu as { id: string; week_start_date: string }
+    .limit(20)
+  if (candErr) throw new Error(candErr.message)
+  type Cand = { id: string; week_start_date: string; duration_days: number }
+  const rows = (candidates ?? []) as Cand[]
+  if (rows.length === 0) return null
+  const cutoff = todayYmd()
+  const upcoming = [...rows]
+    .reverse()
+    .find((m) =>
+      isMenuUpcoming({
+        weekStartDate: m.week_start_date,
+        durationDays: m.duration_days,
+        cutoffYmd: cutoff,
+      }),
+    )
+  const target = upcoming ?? rows[0]
+  if (!target) return null
   const { data: lists, error: listErr } = await supabase
     .from('grocery_lists')
     .select(GROCERY_SELECT)
-    .eq('menu_id', menuRow.id)
+    .eq('menu_id', target.id)
   if (listErr) throw new Error(listErr.message)
   return {
-    menuId: menuRow.id,
-    weekStartDate: menuRow.week_start_date,
+    menuId: target.id,
+    weekStartDate: target.week_start_date,
     lists: (lists ?? []) as unknown as GroceryListRecord[],
   }
 }

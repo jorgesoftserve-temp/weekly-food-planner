@@ -49,6 +49,7 @@ export const menuQueryKeys = {
   draft: (workspaceId: string) => ['menus', 'draft', workspaceId] as const,
   draftForWeek: (workspaceId: string, weekStartDate: string) =>
     ['menus', 'draft', workspaceId, weekStartDate] as const,
+  upcoming: (workspaceId: string) => ['menus', 'upcoming', workspaceId] as const,
   history: (workspaceId: string) => ['menus', 'history', workspaceId] as const,
 }
 
@@ -59,7 +60,36 @@ export const menuKeys = {
   draft: (workspaceId: string) => ['menus', 'draft', workspaceId] as const,
   draftForWeek: (workspaceId: string, weekStartDate: string) =>
     ['menus', 'draft', workspaceId, weekStartDate] as const,
+  upcoming: (workspaceId: string) => ['menus', 'upcoming', workspaceId] as const,
   history: (workspaceId: string) => ['menus', 'history', workspaceId] as const,
+}
+
+// "Has the menu finished?" Last day of the menu is week_start_date + (n-1),
+// so the menu is still relevant for shopping while today's date is <= last
+// day. Using local date semantics matches the engine's timezone-naive
+// convention.
+const isMenuStillUpcoming = ({
+  weekStartDate,
+  durationDays,
+  todayYmd,
+}: {
+  weekStartDate: string
+  durationDays: number
+  todayYmd: string
+}): boolean => {
+  const [y, m, d] = weekStartDate.split('-').map((p) => Number.parseInt(p, 10))
+  if (!y || !m || !d) return false
+  const lastDay = new Date(y, m - 1, d + Math.max(0, durationDays - 1))
+  const ly = lastDay.getFullYear()
+  const lm = String(lastDay.getMonth() + 1).padStart(2, '0')
+  const ld = String(lastDay.getDate()).padStart(2, '0')
+  const lastYmd = `${ly}-${lm}-${ld}`
+  return lastYmd >= todayYmd
+}
+
+const todayYmd = (): string => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 const MENU_SELECT = `id, week_start_date, seed, inputs_hash, generation_options, generated_at,
@@ -67,9 +97,11 @@ const MENU_SELECT = `id, week_start_date, seed, inputs_hash, generation_options,
   menu_type, duration_days, start_day_of_week, cloned_from_menu_id,
   menu_slots (id, day_of_week, meal_key, meal_type, recipe_id, target_member_id, is_overridden, original_recipe_id)`
 
-// Active = accepted-and-not-deleted. Replaces the previous "is_deleted=false"
-// semantic now that drafts exist (drafts are also is_deleted=false but
-// accepted_at IS NULL).
+// Active = accepted-and-not-deleted, preferring the **soonest upcoming**
+// menu (the one whose end date is in the future). Falls back to the most
+// recently accepted past menu so a workspace that hasn't planned a new
+// week yet still sees something. Callers that need an exact week pass
+// `weekStartDate`.
 export const getActiveMenu = async ({
   supabase,
   workspaceId,
@@ -79,18 +111,74 @@ export const getActiveMenu = async ({
   workspaceId: string
   weekStartDate?: string
 }): Promise<MenuRecord | null> => {
-  let query = supabase
+  if (weekStartDate) {
+    const { data, error } = await supabase
+      .from('menus')
+      .select(MENU_SELECT)
+      .eq('workspace_id', workspaceId)
+      .eq('is_deleted', false)
+      .not('accepted_at', 'is', null)
+      .eq('week_start_date', weekStartDate)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return (data as MenuRecord | null) ?? null
+  }
+  // Pull a small batch of recent accepted menus and decide client-side:
+  // upcoming wins; if none are upcoming, fall back to the most recent one.
+  const { data, error } = await supabase
     .from('menus')
     .select(MENU_SELECT)
     .eq('workspace_id', workspaceId)
     .eq('is_deleted', false)
     .not('accepted_at', 'is', null)
     .order('week_start_date', { ascending: false })
-    .limit(1)
-  if (weekStartDate) query = query.eq('week_start_date', weekStartDate)
-  const { data, error } = await query.maybeSingle()
+    .limit(20)
   if (error) throw new Error(error.message)
-  return (data as MenuRecord | null) ?? null
+  const rows = (data ?? []) as MenuRecord[]
+  if (rows.length === 0) return null
+  const cutoff = todayYmd()
+  // rows are desc by week_start_date; reverse + find earliest upcoming
+  // so the user sees "this week" before "next week" when both exist.
+  const upcoming = [...rows]
+    .reverse()
+    .find((m) =>
+      isMenuStillUpcoming({
+        weekStartDate: m.week_start_date,
+        durationDays: m.duration_days,
+        todayYmd: cutoff,
+      }),
+    )
+  return upcoming ?? rows[0] ?? null
+}
+
+// Accepted menus whose last day is today or later. Returned in
+// chronological order so the grocery page can render a "shop this one
+// next" picker. Excludes past menus by design — they're available via
+// /menu/history if the user wants them.
+export const listUpcomingAcceptedMenus = async ({
+  supabase,
+  workspaceId,
+}: {
+  supabase: SupabaseClient
+  workspaceId: string
+}): Promise<MenuRecord[]> => {
+  const { data, error } = await supabase
+    .from('menus')
+    .select(MENU_SELECT)
+    .eq('workspace_id', workspaceId)
+    .eq('is_deleted', false)
+    .not('accepted_at', 'is', null)
+    .order('week_start_date', { ascending: true })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as MenuRecord[]
+  const cutoff = todayYmd()
+  return rows.filter((m) =>
+    isMenuStillUpcoming({
+      weekStartDate: m.week_start_date,
+      durationDays: m.duration_days,
+      todayYmd: cutoff,
+    }),
+  )
 }
 
 // The outstanding draft for a workspace (or for a specific week). At most one

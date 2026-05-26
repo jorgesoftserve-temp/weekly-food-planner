@@ -1,0 +1,8 @@
+lets fix this error in the menu generation logic
+
+Generation failed
+Slot monday/breakfast for member 9b42c00a-804a-41f7-bfd4-c9ae6be39427
+
+2 things to take in consideration here
+1. we should be able to generate menus for an ongoing day just omitting the meals that have passed
+2. in error messages we should show member name not id or at least member email if name is not present

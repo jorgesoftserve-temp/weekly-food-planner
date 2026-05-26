@@ -1,0 +1,4 @@
+Two things,
+1. User should be able to add elements to the enums (they should see the add element to the list at the bottom)
+2. User should be able to modify the basic user information (including password, but not email atm)
+3. Member info for groups should also be visible in the user registration section (a single user should be able to add more members to its workspace even if is a standalone user)

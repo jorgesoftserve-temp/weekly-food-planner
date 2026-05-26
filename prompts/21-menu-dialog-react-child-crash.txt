@@ -1,0 +1,13 @@
+we have an error in the menu component
+Objects are not valid as a React child (found: object with keys {day, mealKey}). If you meant to render a collection of children, use an array instead.
+
+app\(app)\menu\page.tsx (135:9) @ MenuPage
+
+
+  133 |
+  134 |       {workspace ? (
+> 135 |         <GenerateMenuDialog
+      |         ^
+  136 |           workspaceId={workspace.id}
+  137 |           open={generateOpen}
+  138 |           onOpenChange={setGenerateOpen}

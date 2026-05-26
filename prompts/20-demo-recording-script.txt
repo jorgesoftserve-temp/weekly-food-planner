@@ -1,0 +1,11 @@
+All we are missing right now is the 3-4 min demo recording of the system usage is this something you can help me with?
+
+---
+
+help me create a simple demo showing these steps (2-3 mins max)
+1. creating a user in the system
+2. login as that user (no email approve for the demo)
+3. create 1-2 recipes
+4. create a menu with some constraints
+5. export the grocerylist
+6. execute claude skill

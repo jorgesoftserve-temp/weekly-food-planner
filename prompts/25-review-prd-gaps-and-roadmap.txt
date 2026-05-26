@@ -1,0 +1,9 @@
+@.cursor/rules/ @docs/PRD/ARCHITECTURE_PRD.md  @docs/PRD/DATABASE_PRD.md @docs/PRD/OVERVIEW_PRD.md @docs/PRD/PRODUCT_PRD.md @docs/PRD/TECHNICAL_PRD.md
+
+Lets review the following (no code adding right now just planning)
+1. do we have email confirmations screens (user creation process)
+2. we need to add the member registration process to the UI (known gap)
+3. we need to add a system where user can review the menu (replace recipes, reorganize daily menus, look at individual menus for members)
+4. for mvp2 we will add mcp servers for playwright to work on improving our UI
+5. for mvp2 we will add mcp servers for postgress so that we can connect to our supabase db and generate a new skill that will allow us to audit the db and check for incomplete information and what user usage stats do we have in the system
+6. as a bonus plan a mobile version of the website that can be accesed using the url that is user friendly for mobile devices

@@ -1,0 +1,8 @@
+Lets begin work on the following:
+1. Auth completion (password reset + resend verification + verify confirmation screen) — small, well-scoped, removes shipping risk.
+2. Recipe list improvements (show recipe advanced properties like instructions, dietary restrictions and a view ingredients that opens a modal on each column with the additional info)
+3. Menu review — needs the lock-vs-override decision before any code.
+4. Mobile pass — viewport export, mobile drawer, day-picker on menu, audit each page at 375px.
+5. Grocery List improvemnets (add the export button to the groceryList and advanced information on the ingredients like their freshness and other properties)
+6. Dashboard improvements (enhance this text "Deterministic generation
+Same recipes + same seed = byte-identical menu. The exporter writes Markdown or CSV with menu and grocery list in one document." this is not user friendly) also lets add the membersList to our dashboard (just a visual new menu button no usage until we build that module yet)

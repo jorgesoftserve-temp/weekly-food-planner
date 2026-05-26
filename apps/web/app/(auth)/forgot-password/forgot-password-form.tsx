@@ -1,47 +1,66 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 import { supabaseClient } from '@/utils/supabase/client'
 
 type FormState = {
   email: string
-  password: string
 }
 
-const initialState: FormState = { email: '', password: '' }
+const initialState: FormState = { email: '' }
 
-export const SignupForm = () => {
-  const router = useRouter()
+export const ForgotPasswordForm = () => {
   const [form, setForm] = useState<FormState>(initialState)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [sent, setSent] = useState(false)
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
     setIsSubmitting(true)
     const supabase = supabaseClient()
-    const redirectTo = `${window.location.origin}/auth/callback?next=/verify-success`
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: { emailRedirectTo: redirectTo },
-    })
+    const redirectTo = `${window.location.origin}/auth/callback?next=/reset-password`
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      form.email,
+      { redirectTo },
+    )
     setIsSubmitting(false)
-    if (signUpError) {
-      setError(signUpError.message)
+    if (resetError) {
+      setError(resetError.message)
       return
     }
-    // Stash the email so /verify-email can offer a one-click resend without
-    // re-asking. sessionStorage scopes it to this tab; cleared on tab close.
-    try {
-      window.sessionStorage.setItem('wfp:pending-verify-email', form.email)
-    } catch {
-      // sessionStorage unavailable (privacy mode) — resend will degrade
-      // gracefully to a "sign up again" link on /verify-email.
-    }
-    router.push('/verify-email')
+    setSent(true)
+  }
+
+  if (sent) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-foreground">
+          If an account exists for{' '}
+          <span className="font-medium">{form.email}</span>, we&apos;ve sent it
+          a password reset link. Check your inbox.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Didn&apos;t arrive?{' '}
+          <button
+            type="button"
+            onClick={() => setSent(false)}
+            className="font-medium underline underline-offset-4 hover:text-foreground"
+          >
+            Try again
+          </button>
+        </p>
+        <p className="text-center text-sm text-muted-foreground">
+          <a
+            href="/login"
+            className="font-medium underline-offset-4 hover:underline"
+          >
+            Back to sign in
+          </a>
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -58,19 +77,6 @@ export const SignupForm = () => {
           className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </label>
-      <label className="flex flex-col gap-1.5 text-sm">
-        Password
-        <input
-          type="password"
-          required
-          minLength={8}
-          value={form.password}
-          onChange={(event) =>
-            setForm((prev) => ({ ...prev, password: event.target.value }))
-          }
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-      </label>
       {error ? (
         <p className="text-sm text-destructive" role="alert">
           {error}
@@ -81,12 +87,12 @@ export const SignupForm = () => {
         disabled={isSubmitting}
         className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
       >
-        {isSubmitting ? 'Creating account…' : 'Create account'}
+        {isSubmitting ? 'Sending…' : 'Send reset link'}
       </button>
       <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{' '}
+        Remembered it?{' '}
         <a href="/login" className="font-medium underline-offset-4 hover:underline">
-          Sign in
+          Back to sign in
         </a>
       </p>
     </form>

@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/card'
 import { PageHeader } from '@/components/page-header'
 import { useActiveWorkspace } from '@/components/workspace-provider'
+import { MembersCard } from './_components/members-card'
 
 const QUICK_LINKS = [
   {
@@ -60,15 +61,21 @@ const DashboardPage = () => {
             <Sparkles className="size-4" />
           </div>
           <div className="flex flex-col gap-1">
-            <CardTitle className="text-base">Deterministic generation</CardTitle>
+            <CardTitle className="text-base">
+              Reproducible weekly plans
+            </CardTitle>
             <CardDescription>
-              Same recipes + same seed = byte-identical menu. The exporter
-              writes Markdown or CSV with menu and grocery list in one
-              document.
+              Once your recipes and household are set, the planner builds the
+              same menu every time from the same ingredients — so you can
+              compare weeks, share a plan, and trust what you&apos;re shopping
+              for. Download any menu as Markdown or CSV when it&apos;s time to
+              shop.
             </CardDescription>
           </div>
         </CardHeader>
       </Card>
+
+      <MembersCard />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {QUICK_LINKS.map((link) => {

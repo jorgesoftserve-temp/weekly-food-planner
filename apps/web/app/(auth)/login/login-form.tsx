@@ -20,16 +20,31 @@ const sanitizeNext = (raw: string | null): string => {
   return raw
 }
 
+type ErrorState =
+  | { kind: 'generic'; message: string }
+  | { kind: 'not_confirmed'; message: string; email: string }
+  | null
+
+type ResendState =
+  | { kind: 'idle' }
+  | { kind: 'sending' }
+  | { kind: 'sent' }
+  | { kind: 'error'; message: string }
+
 export const LoginForm = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [form, setForm] = useState<FormState>(initialState)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ErrorState>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [resend, setResend] = useState<ResendState>({ kind: 'idle' })
+
+  const justReset = searchParams.get('reset') === '1'
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
+    setResend({ kind: 'idle' })
     setIsSubmitting(true)
     const supabase = supabaseClient()
     const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -38,15 +53,56 @@ export const LoginForm = () => {
     })
     setIsSubmitting(false)
     if (signInError) {
-      setError(signInError.message)
+      // Supabase exposes the machine code on `.code` for newer SDKs and falls
+      // back to a substring match for older ones. Both paths land here.
+      const code = (signInError as { code?: string }).code
+      const isUnconfirmed =
+        code === 'email_not_confirmed' ||
+        signInError.message.toLowerCase().includes('not confirmed')
+      if (isUnconfirmed) {
+        setError({
+          kind: 'not_confirmed',
+          email: form.email,
+          message:
+            "You haven't confirmed this email yet. Check your inbox for the verification link.",
+        })
+        return
+      }
+      setError({ kind: 'generic', message: signInError.message })
       return
     }
     router.push(sanitizeNext(searchParams.get('next')))
     router.refresh()
   }
 
+  const handleResend = async () => {
+    if (error?.kind !== 'not_confirmed') return
+    setResend({ kind: 'sending' })
+    const supabase = supabaseClient()
+    const { error: resendError } = await supabase.auth.resend({
+      type: 'signup',
+      email: error.email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/verify-success`,
+      },
+    })
+    if (resendError) {
+      setResend({ kind: 'error', message: resendError.message })
+      return
+    }
+    setResend({ kind: 'sent' })
+  }
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {justReset ? (
+        <p
+          className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300"
+          role="status"
+        >
+          Password updated. Sign in with your new password.
+        </p>
+      ) : null}
       <label className="flex flex-col gap-1.5 text-sm">
         Email
         <input
@@ -60,7 +116,15 @@ export const LoginForm = () => {
         />
       </label>
       <label className="flex flex-col gap-1.5 text-sm">
-        Password
+        <span className="flex items-center justify-between">
+          Password
+          <a
+            href="/forgot-password"
+            className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Forgot?
+          </a>
+        </span>
         <input
           type="password"
           required
@@ -71,10 +135,33 @@ export const LoginForm = () => {
           className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </label>
-      {error ? (
+      {error?.kind === 'generic' ? (
         <p className="text-sm text-destructive" role="alert">
-          {error}
+          {error.message}
         </p>
+      ) : null}
+      {error?.kind === 'not_confirmed' ? (
+        <div
+          className="flex flex-col gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
+          role="alert"
+        >
+          <p>{error.message}</p>
+          {resend.kind === 'sent' ? (
+            <p>Verification email re-sent — check your inbox.</p>
+          ) : (
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resend.kind === 'sending'}
+              className="self-start text-xs font-medium underline underline-offset-4 disabled:opacity-50"
+            >
+              {resend.kind === 'sending'
+                ? 'Resending…'
+                : 'Resend verification email'}
+            </button>
+          )}
+          {resend.kind === 'error' ? <p>{resend.message}</p> : null}
+        </div>
       ) : null}
       <button
         type="submit"

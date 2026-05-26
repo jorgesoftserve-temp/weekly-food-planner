@@ -141,18 +141,51 @@ Owns: factories for engine snapshots, deterministic fixture seeds, Supabase-loca
 
 # 5. Menu generation pipeline
 
-The flagship flow, executed inside a single server action / route handler in `apps/web`:
+Three modes share a single `POST /api/workspaces/[id]/menus` route, distinguished by the `mode` field: `weekly` (default, engine-generated), `custom` (user-built), and `clone` (copy from history). All three produce a DRAFT — promotion to active happens via the separate `accept` endpoint. See [DATABASE_PRD.md §6.17](./DATABASE_PRD.md) for the lifecycle.
+
+## 5.1 Weekly mode (engine-generated)
 
 1. **Authorize and validate pre-conditions** — verify the caller holds a role permitted to generate menus (`creator` or `admin`), and that the workspace contains at least one non-deleted recipe (else 412 `empty_workspace`). This is the only pre-engine validation path: on failure the engine is not invoked and no `generation_runs` row is written. The UI mirrors the check inline so users hit it before submitting.
-2. **Input assembly with overlay dedup** — load workspace, members (with role, dietary restrictions, allergies, dislikes, calorie target, meal frequency), available recipes (`is_deleted = false`), ingredient catalog with allergen labels. Compute the **effective** per-menu overlay: filter `additionalDietaryRestrictions` and `additionalAllergies` from the request to drop any value already present on any member's matching profile field (silent dedup; see [PRODUCT_PRD.md §4.2](./PRODUCT_PRD.md)). `ingredientExclusions` passes through unchanged (no member equivalent). Build a canonical `GenerateMenuInput` with the effective overlay in `options`, and compute its `inputsHash` (SHA-256 of canonical JSON).
-3. **Hard-constraint filtering** (engine) — drop any recipe that violates allergies, dietary restrictions, ingredient exclusions, or meal-type assignment. The effective hard-constraint set for each slot is the **union** of the relevant member's profile constraints and the per-menu overlay (`options.additionalDietaryRestrictions`, `options.additionalAllergies`, `options.ingredientExclusions`). Allergy checks join `member_allergies` with `ingredient_allergens` by exact string match. An allergen label not present in `ingredient_allergens` is silently skipped during filtering — see [PRODUCT_PRD.md §11.3](./PRODUCT_PRD.md) for the user-facing implication.
-4. **Greedy slot assignment** (engine) — walk slots in deterministic order; for each slot pick the highest-scoring recipe among those passing hard constraints, breaking ties with the seeded RNG. See §6.1.
-5. **Local-search refinement** (engine) — run deterministic improvement passes (swap a slot's recipe with an alternative; pairwise-swap two slots) and keep any move that strictly improves the soft-constraint score. Stop when no improving move exists or a step budget is reached. Uses `recipes.calories_per_serving` for calorie balancing.
-6. **Grocery aggregation** (engine) — produce a shared list and per-member lists; assign `scheduled_purchase_day` for perishable items using ingredient freshness flags.
-7. **Persist (replace-by-soft-delete on regeneration)** — within a single transaction:
-   1. If a non-deleted `menus` row already exists for this `(workspace_id, week_start_date)`, set its `is_deleted = true`. Historical rows and their children remain queryable by service-role for audit.
-   2. Insert the new `menus` row, copying the **effective** (post-dedup) overlay into `menus.generation_options`, plus the `menu_slots`, `grocery_lists`, `grocery_items`, and a `generation_runs` audit row (status=`success`, seed, inputs_hash).
-8. **Failure path** — engine returns a structured `GenerationError`; persisted as `generation_runs` with status=`failed` and the full error payload. Failed runs leave any prior active menu untouched. UI renders the message in the format defined in [PRODUCT_PRD.md](./PRODUCT_PRD.md) §6 (example: *"No valid dinner recipe found for gluten-free member."*).
+2. **Input assembly with overlay dedup** — load workspace, members (with role, dietary restrictions, allergies, dislikes, calorie target, meal frequency), available recipes (`is_deleted = false`), ingredient catalog with allergen labels. Compute the **effective** per-menu overlay: filter `additionalDietaryRestrictions` and `additionalAllergies` from the request to drop any value already present on any member's matching profile field (silent dedup; see [PRODUCT_PRD.md §4.2](./PRODUCT_PRD.md)). `ingredientExclusions` passes through unchanged (no member equivalent). Build a canonical `GenerateMenuInput` with the effective overlay in `options`, the requested `durationDays` (1..7, default 7), and compute its `inputsHash` (SHA-256 of canonical JSON — duration is part of the hash, so menus of different lengths with the same seed get different hashes).
+3. **Slot enumeration** (engine) — derive the start day-of-week from `weekStartDate` and walk `durationDays` consecutive days (wrapping past Sunday → Monday if needed). For each (day, member, mealFrequency entry) produce one slot.
+4. **Hard-constraint filtering** (engine) — drop any recipe that violates allergies, dietary restrictions, ingredient exclusions, or meal-type assignment. The effective hard-constraint set for each slot is the **union** of the relevant member's profile constraints and the per-menu overlay (`options.additionalDietaryRestrictions`, `options.additionalAllergies`, `options.ingredientExclusions`). Allergy checks join `member_allergies` with `ingredient_allergens` by exact string match. An allergen label not present in `ingredient_allergens` is silently skipped during filtering — see [PRODUCT_PRD.md §11.3](./PRODUCT_PRD.md) for the user-facing implication.
+5. **Greedy slot assignment** (engine) — walk slots in deterministic order; for each slot pick the highest-scoring recipe among those passing hard constraints, breaking ties with the seeded RNG. See §6.1.
+6. **Local-search refinement** (engine) — run deterministic improvement passes (swap a slot's recipe with an alternative; pairwise-swap two slots) and keep any move that strictly improves the soft-constraint score. Stop when no improving move exists or a step budget is reached. Uses `recipes.calories_per_serving` for calorie balancing.
+7. **Grocery aggregation** (engine) — produce a shared list and per-member lists; assign `scheduled_purchase_day` for perishable items using ingredient freshness flags.
+8. **Persist as DRAFT** — within a single transaction:
+   1. If an outstanding draft already exists for `(workspace_id, week_start_date)` (`accepted_at IS NULL AND is_deleted = false`), set its `is_deleted = true`. The accepted menu for the same week (if any) is untouched.
+   2. Insert the new `menus` row with `menu_type = 'weekly'`, `duration_days`, `start_day_of_week`, `seed`, `inputs_hash`, `generation_options` (effective overlay), `accepted_at = NULL`. Insert `menu_slots`, an empty `grocery_lists` row, `grocery_items` from the engine output, and a `generation_runs` audit row (status=`success`).
+9. **Failure path** — engine returns a structured `GenerationError`; persisted as `generation_runs` with status=`failed` and the full error payload. Failed runs leave any prior draft untouched. UI renders the message in the format defined in [PRODUCT_PRD.md](./PRODUCT_PRD.md) §6.
+
+## 5.2 Custom mode
+
+User-built menus skip steps 1–7 entirely. The route handler:
+
+1. Authorizes the caller (creator or admin).
+2. Validates the request body: at least one slot, each `recipe_id` belongs to the workspace, each slot's `meal_type` matches its recipe's `meal_type`.
+3. Soft-deletes any outstanding draft for `(workspace, week)`.
+4. Inserts a `menus` row with `menu_type = 'custom'`, `seed = NULL`, `inputs_hash = NULL`, the supplied `duration_days`, and an empty `grocery_lists` row.
+5. Inserts the user-supplied `menu_slots` rows. `meal_key` is auto-derived as `{meal_type}` or `{meal_type}_{N}` to keep the slot unique constraint happy when the user has two of the same meal type on one day.
+
+No `generation_runs` row is written — there's no engine run to audit.
+
+## 5.3 Clone mode
+
+Cloning copies a historical accepted menu's slots into a fresh draft. The route handler:
+
+1. Authorizes the caller.
+2. Loads the source menu; verifies it belongs to the workspace and `accepted_at IS NOT NULL` (only accepted menus are cloneable). 422 `source_not_accepted` otherwise.
+3. Soft-deletes any outstanding draft for the target `(workspace, week)`.
+4. Inserts a new `menus` row inheriting the source's `seed`, `inputs_hash`, `generation_options`, `menu_type`, and `duration_days`; sets `cloned_from_menu_id` to the source id for audit; `accepted_at = NULL`.
+5. Copies every `menu_slots` row from the source into the new draft.
+
+## 5.4 Acceptance + slot replacement
+
+After a draft exists, the user can:
+
+- `PATCH /api/workspaces/[id]/menus/[menuId]/slots/[slotId]` — replace a slot's recipe. Server re-runs the engine's `isRecipeValidForSlot` filter for `weekly` drafts. Sets `is_overridden = true` and preserves the engine's original pick in `original_recipe_id`.
+- `POST /api/workspaces/[id]/menus/[menuId]/accept` — promote the draft. Computes `accepted_seed` (SHA-256 over `inputs_hash` + canonical slot list). Soft-deletes the previously accepted menu for the same week. Sets `accepted_at` and `accepted_seed`.
+- `DELETE /api/workspaces/[id]/menus/[menuId]` — discard a draft (only drafts; accepted menus are immutable).
 
 ---
 
@@ -160,7 +193,8 @@ The flagship flow, executed inside a single server action / route handler in `ap
 
 - Single seed entry point; RNG instance injected, never imported globally.
 - Forbidden inside `constraint-engine`: `Math.random`, `Date.now`, `new Date()`, `crypto.randomUUID()` without a seed-derived alternative.
-- `inputs_hash` + `seed` persisted on every `generation_runs` row. Because the **effective** (post-dedup) overlay is part of `options`, two regeneration attempts with the same seed and the same effective overlay produce the same `inputs_hash` and the same menu — even if the user typed the overlay slightly differently each time.
+- `inputs_hash` + `seed` persisted on every `generation_runs` row. Because the **effective** (post-dedup) overlay is part of `options`, and `durationDays` is part of the canonical input, two regeneration attempts with the same seed, overlay, and duration produce the same `inputs_hash` and the same menu — even if the user typed the overlay slightly differently each time. Custom menus (`menu_type = 'custom'`) are deliberately non-deterministic; they carry no `seed` or `inputs_hash`.
+- Acceptance produces a separate `accepted_seed` (SHA-256 over `inputs_hash` + canonical slot tuples). It identifies the final accepted state (engine output + any user overrides) — distinct from `seed` so modified menus still get a stable history identifier. See [DATABASE_PRD.md §6.17](./DATABASE_PRD.md).
 - Regression suite: golden snapshots of `(input, seed) → output` enforce that the engine never drifts.
 
 ## 6.1 Algorithm: greedy + local search
@@ -256,8 +290,14 @@ Resource-oriented under `app/api/`:
 /api/workspaces/:id                 → GET, PATCH, DELETE (soft delete)
 /api/workspaces/:id/members         → GET, POST, PATCH, DELETE (soft delete)
 /api/workspaces/:id/recipes         → CRUD (delete is soft)
-/api/workspaces/:id/menus           → GET (active only), POST (generate, accepts overlay options, silent-dedup applied server-side, replace-on-regen)
-/api/workspaces/:id/grocery         → GET (derived from active menu)
+/api/workspaces/:id/menus           → POST (mode = weekly | custom | clone — all produce a DRAFT)
+/api/workspaces/:id/menus/active    → GET (the workspace's accepted menu)
+/api/workspaces/:id/menus/draft     → GET (the outstanding draft, if any)
+/api/workspaces/:id/menus/history   → GET (accepted menus, newest first, with is_modified)
+/api/workspaces/:id/menus/:menuId           → DELETE (discard a draft)
+/api/workspaces/:id/menus/:menuId/accept    → POST (promote draft → accepted)
+/api/workspaces/:id/menus/:menuId/slots/:slotId → PATCH (replace a slot's recipe in a draft; server re-validates hard constraints)
+/api/workspaces/:id/grocery         → GET (derived from the workspace's accepted menu)
 /api/uploads/images                 → POST (signed-URL flow to Supabase Storage)
 /api/labels/search                  → GET (debounced autocomplete over enum_metadata)
 /api/labels/suggestions             → DELETE (a user removes their own pending label)

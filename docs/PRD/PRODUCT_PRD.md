@@ -159,30 +159,45 @@ Recipes may include:
 # 4. Menu generation
 
 ## Objective
-Generate a valid 7-day meal plan.
+Build a meal plan for any 1–7 day window. Two production paths exist:
+
+- **Weekly (auto)** — engine-generated, deterministic, honours member profiles. Editable per slot.
+- **Custom (manual)** — user-built, non-deterministic, free-form slots (any meal at any time, including multiple of the same meal type on one day). Editable per slot.
+
+Both modes produce a **draft** the user reviews, edits, and accepts before it becomes the workspace's active menu for the week.
 
 ---
 
 ## 4.0 Pre-conditions
 
-Menu generation requires:
-
 - The caller has a role of `creator` or `admin`.
-- The workspace contains at least one recipe.
-
-When a workspace has zero recipes the UI **must** disable the "Generate Menu" action and surface a "Create your first recipe" call-to-action as the primary path. The API also enforces this server-side and returns a structured "empty workspace" error if called with no recipes.
+- For `weekly` mode: the workspace contains at least one recipe. UI disables "Generate menu" and surfaces a "Create your first recipe" CTA when the pool is empty. The API enforces this server-side and returns a structured `empty_workspace` error.
+- For `custom` mode: the user must add at least one slot before submitting. No engine pool requirement — the user can create recipes inline while building the menu.
 
 ---
 
-## 4.1 Regeneration
+## 4.1 Draft / accept lifecycle
 
-A workspace can have only one active menu per `(workspace, week_start_date)`. Regenerating the same week:
+Every menu lives in one of three states: **draft → accepted → superseded**.
 
-- Soft-deletes the previous menu (preserved in history with `is_deleted = true` — see [DATABASE_PRD.md §6.16](./DATABASE_PRD.md)).
-- Creates a new menu as the active one for that week.
-- Leaves both the prior `generation_runs` row and the new one in the audit trail.
+1. **Generating creates a DRAFT.** Drafts are not the active menu; the previous accepted menu (if any) is untouched. At most one outstanding draft per `(workspace, week)`. Generating again while a draft exists replaces it.
+2. **The user reviews the draft.** They can replace any slot's recipe; the server re-validates hard constraints and rejects violations. A "Modified" badge surfaces overridden slots; the engine's original recipe is preserved in `menu_slots.original_recipe_id` for audit.
+3. **Acceptance** promotes the draft. The accepted menu drives the grocery list. The previously accepted menu (if any) is soft-deleted into history. A deterministic `accepted_seed` (SHA-256 over inputs + slot recipes) is stamped onto the accepted row so history rows can be uniquely identified — pristine acceptances effectively equal `inputs_hash`; modified acceptances diverge.
+4. **Discard** removes a draft. Accepted menus cannot be discarded — they're superseded by a new acceptance and live on in history.
+5. **Clone from history** copies a historical accepted menu into a fresh draft for any target week, preserving the source's seed and engine inputs (audit link via `cloned_from_menu_id`). User edits before accepting like any other draft.
 
-Regeneration is the only mechanism for "editing" a generated menu in MVP — there is no in-place edit. A regeneration that fails (no valid solution) leaves the prior active menu untouched.
+Regeneration that fails (no valid solution) leaves any prior draft untouched and writes a failed `generation_runs` row.
+
+### 4.1.1 Duration and start day
+
+Weekly menus cover **1–7 consecutive days** starting from any calendar date. The engine derives the start day-of-week from `week_start_date` and walks forward, wrapping past Sunday → Monday when the duration exceeds the remaining week. The duration is part of the canonical input hash, so two regenerations with the same seed but different durations produce different menus.
+
+### 4.1.2 Custom menus
+
+- Slots are user-defined: any (day, meal_type, recipe) combination, including multiple of the same meal type on the same day (e.g. 2 breakfasts on Monday). `menu_key` is auto-derived from `meal_type` + occurrence to satisfy the slot unique constraint.
+- The engine isn't invoked. The server only validates that each recipe belongs to the workspace and matches the slot's meal type.
+- "Create new recipe" is available inline; the new recipe persists to the workspace catalog and is immediately selectable for any slot.
+- Acceptance and history work identically to weekly menus. `seed` and `inputs_hash` are NULL on the persisted row; `accepted_seed` is still computed from the final slot state.
 
 ---
 
@@ -210,21 +225,28 @@ Ingredient exclusions have no member-profile equivalent (members carry only soft
 
 ## Menu generator inputs
 
-### Required
+### Required (weekly mode)
 - Group or user
 - Available recipes
-- Week start date
+- Week start date (any calendar date — engine derives day-of-week)
+- Duration (1–7 days, default 7)
+
+### Required (custom mode)
+- Group or user
+- Week start date + duration
+- At least one user-defined slot `{ day, meal_type, recipe_id }`
 
 ---
 
-### Optional
+### Optional (both modes)
 - Calorie targets
 - Recipe repetition limits
 - Preferred cuisines
 - Ingredient exclusions
 - Additional dietary restrictions — see [§4.2](#42-per-menu-constraint-overlay)
 - Additional food allergies — see [§4.2](#42-per-menu-constraint-overlay)
-- Random seed
+- Random seed (weekly mode only — custom menus have no engine seed)
+- Source menu id to clone from (clone mode only)
 
 ---
 

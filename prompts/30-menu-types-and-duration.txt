@@ -1,0 +1,15 @@
+lets push to the origin, and work on the next feature, allow users to generate a menu from a previous seed, if recipes are available, that way users have both options, to either generate a new deterministic menu with the existing recipes or use an existing accepted menu from a previous seed as a baseline for their grocery shopping.
+
+also lets add a new feature that will allow users to start their shopping from other day than monday, or a date range, for example a user could want to shop today for a 3 day menu, or a 1 day menu for a special meal, or something specific, so they should be able to generate smaller chunk menus, with the ability to set specific dietary or allergy constraints in this custom menus, and also add a special recipe on the fly if they want a feature recipe on this short menu,
+
+in short users can create 3 types of menus
+1. a normal menu for 7days or less (deterministic but with the ability to update like we added before)
+2. a special custom menu for 1-2 food servings per day and it can have multiple per frequency, maybe 2 breakfasts, dinner regardless of their user preferences for meal frequency (non-deterministic since is a custom one, with the ability to select any recipe or add a new one on the fly for this menu that will later be stored for reusability)
+
+they should also be able to preset food allergies or dietary restrictions before generating a menu
+
+once we are done with this one we need to update our prd files accodingly with this new functionality and the ones we added previously to have our documentation up to date
+
+Design clarifications captured via AskUserQuestion:
+- Seed reuse = Clone historical menu as a new draft (preserves engine seed; user edits before accepting).
+- Custom menu = same menus table with menu_type enum ('weekly' | 'custom'); seed nullable.

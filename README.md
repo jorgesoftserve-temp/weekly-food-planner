@@ -84,7 +84,7 @@ All routes are typed Next.js Route Handlers under [`apps/web/app/api/`](./apps/w
 | [`/api/workspaces/[id]/recipes`](./apps/web/app/api/workspaces/[id]/recipes/route.ts) | GET, POST | List or create recipes |
 | [`/api/workspaces/[id]/recipes/[recipeId]`](./apps/web/app/api/workspaces/[id]/recipes/[recipeId]/route.ts) | GET, PATCH, DELETE | Read, update scalars, or soft-delete |
 | [`/api/workspaces/[id]/recipes/[recipeId]/{ingredients,instructions,dietary-tags}`](./apps/web/app/api/workspaces/[id]/recipes/[recipeId]/) | PUT | Replace the array fields atomically (delete-then-insert) |
-| [`/api/workspaces/[id]/menus`](./apps/web/app/api/workspaces/[id]/menus/route.ts) | POST | Generate + persist a menu as a DRAFT (`weekStartDate`, optional `seed`, optional overlay). One draft per (workspace, week); generating again replaces the prior draft. |
+| [`/api/workspaces/[id]/menus`](./apps/web/app/api/workspaces/[id]/menus/route.ts) | POST | Build a menu DRAFT in one of three modes (`mode` body field). **`weekly`** (default): engine-generated, accepts `seed`, `durationDays` (1–7), and the dietary/allergy overlay. **`custom`**: user-supplied `slots[]`, no engine, no seed. **`clone`**: copy a historical accepted menu by `cloneFromMenuId`. One outstanding draft per (workspace, week). |
 | [`/api/workspaces/[id]/menus/active`](./apps/web/app/api/workspaces/[id]/menus/active/route.ts) | GET | The accepted (active) menu for the workspace |
 | [`/api/workspaces/[id]/menus/draft`](./apps/web/app/api/workspaces/[id]/menus/draft/route.ts) | GET | The current draft menu, if any |
 | [`/api/workspaces/[id]/menus/history`](./apps/web/app/api/workspaces/[id]/menus/history/route.ts) | GET | Accepted menus in reverse-chronological order, with `is_modified` flag |

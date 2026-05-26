@@ -76,6 +76,7 @@ Backed by native Postgres enums. Values can only be added via migration. Used wh
 | `generation_status` | `pending`, `running`, `success`, `failed` |
 | `day_of_week` | `monday`, `tuesday`, `wednesday`, `thursday`, `friday`, `saturday`, `sunday` |
 | `unit` | `g`, `kg`, `ml`, `l`, `tsp`, `tbsp`, `cup`, `piece`, `slice`, `pinch`, `clove`, `can`, `pack` |
+| `menu_type` | `weekly`, `custom` |
 
 No user-suggestion path for these in MVP — a new value requires a migration.
 
@@ -248,14 +249,30 @@ Composite PK `(recipe_id, tag)`.
 |---|---|---|
 | `id` | uuid PK | |
 | `workspace_id` | uuid NOT NULL | FK |
-| `week_start_date` | date NOT NULL | |
-| `seed` | bigint NOT NULL | |
-| `inputs_hash` | text NOT NULL | sha256 of canonical input JSON |
-| `generation_options` | jsonb NULL | Audit snapshot of the **effective** (post-dedup) per-menu overlay and other engine options used to produce this menu (see §6.11.1) |
-| `generated_at` | timestamptz | |
-| `is_deleted` | boolean NOT NULL DEFAULT false | Soft delete flag (§6.16); set true when superseded by regeneration |
+| `week_start_date` | date NOT NULL | First day of the menu (any calendar date — not required to be Monday). Naming is historical |
+| `menu_type` | `menu_type` NOT NULL DEFAULT `'weekly'` | `weekly` = engine-generated deterministic menu. `custom` = user-built menu (no engine seed). See §6.11.2 |
+| `duration_days` | int NOT NULL DEFAULT 7 CHECK (1..7) | Number of consecutive days the menu covers. Walks from `start_day_of_week`, wraps past Sunday → Monday if needed |
+| `start_day_of_week` | `day_of_week` NOT NULL DEFAULT `'monday'` | Day-of-week implied by `week_start_date`. Cached to avoid recomputing from the date in queries |
+| `seed` | bigint NULL | Engine RNG seed. NULL for `menu_type = 'custom'` |
+| `inputs_hash` | text NULL | sha256 of canonical engine input JSON. NULL for `menu_type = 'custom'` |
+| `generation_options` | jsonb NULL | Audit snapshot of the **effective** (post-dedup) per-menu overlay and other options used to produce this menu (see §6.11.1) |
+| `cloned_from_menu_id` | uuid NULL | FK → `menus.id` ON DELETE SET NULL. Set when this menu was created via "Clone as draft" from a historical accepted menu. Pure audit link |
+| `generated_at` | timestamptz NOT NULL DEFAULT NOW() | |
+| `accepted_at` | timestamptz NULL | Set when a draft menu is accepted (§6.17). NULL while draft. The accepted menu is the workspace's active menu for the week and drives the grocery list |
+| `accepted_seed` | text NULL | Hash of the final accepted state (engine output + any user overrides). NULL while draft. Distinct from `seed` so modified menus get a stable history identifier even though regenerating the engine wouldn't reproduce them |
+| `is_deleted` | boolean NOT NULL DEFAULT false | Soft delete flag (§6.16); set true when superseded by acceptance, replaced by a newer draft, or explicitly discarded |
 
-Partial unique index: UNIQUE `(workspace_id, week_start_date) WHERE is_deleted = false` — only one active menu per (workspace, week). Historical (superseded) menus remain in the table for audit. See §6.17 for the regeneration flow.
+Partial unique indexes:
+
+- UNIQUE `(workspace_id, week_start_date) WHERE is_deleted = false AND accepted_at IS NOT NULL` — only one accepted menu per (workspace, week).
+- UNIQUE `(workspace_id, week_start_date) WHERE is_deleted = false AND accepted_at IS NULL` — only one outstanding draft per (workspace, week).
+
+Historical (superseded) menus remain in the table for audit. See §6.17 for the draft → accept lifecycle.
+
+### 6.11.2 Menu types
+
+- **`weekly`** — produced by the constraint engine. Honours member `meal_frequency`, the per-menu dietary/allergy overlay, and the `duration_days` / `start_day_of_week` shape. Carries non-NULL `seed` and `inputs_hash`. Editable per slot during draft review.
+- **`custom`** — user-built. Slots are supplied directly by the caller; the engine isn't invoked. `seed` and `inputs_hash` are NULL. Multiple slots can share `(day_of_week, meal_type)` (different `meal_key`s — e.g. `breakfast`, `breakfast_2`). Same draft / accept lifecycle as weekly. The user is responsible for the constraint set; the server only validates that each `recipe_id` belongs to the workspace and its `meal_type` matches the slot's `meal_type`.
 
 ### 6.11.1 `generation_options` shape
 
@@ -281,12 +298,14 @@ All keys are optional. An empty/absent `generation_options` means "no overlay; n
 | `id` | uuid PK | |
 | `menu_id` | uuid NOT NULL | FK ON DELETE CASCADE |
 | `day_of_week` | `day_of_week` NOT NULL | |
-| `meal_key` | text NOT NULL | matches a key inside the relevant `meal_frequency` (see §7) |
+| `meal_key` | text NOT NULL | For `weekly` menus, matches a key in the relevant `meal_frequency` (see §7). For `custom` menus, derived from meal_type + occurrence (`breakfast`, `breakfast_2`, …) to keep multiple meals of the same type on the same day unique |
 | `meal_type` | `meal_type` NOT NULL | denormalized for engine queries |
 | `recipe_id` | uuid NOT NULL | FK → `recipes.id` |
 | `target_member_id` | uuid NULL | FK → `workspace_members.id`. NULL = shared |
+| `is_overridden` | boolean NOT NULL DEFAULT false | TRUE when the user replaced the engine's pick during draft review. `recipe_id` holds the user-chosen recipe; `original_recipe_id` holds the engine's. Always FALSE for `custom` menus (user picked everything from the start, so "override" is not meaningful) |
+| `original_recipe_id` | uuid NULL | FK → `recipes.id`. Engine's original pick before any user override. NULL on pristine slots and on `custom` menus |
 
-UNIQUE `(menu_id, day_of_week, meal_key, target_member_id)`. No own `is_deleted` — visibility follows the parent menu.
+UNIQUE NULLS NOT DISTINCT `(menu_id, day_of_week, meal_key, target_member_id)`. No own `is_deleted` — visibility follows the parent menu.
 
 ## 6.13 `grocery_lists`
 
@@ -343,15 +362,21 @@ Rules:
 - Junction tables (`member_dietary_restrictions`, `member_allergies`, `member_ingredient_dislikes`, `recipe_dietary_tags`, `ingredient_allergens`) use direct delete — soft delete has no value there.
 - A future maintenance job may hard-delete soft-deleted rows older than a configurable threshold (currently undefined; see §13).
 
-## 6.17 Menu regeneration
+## 6.17 Menu lifecycle (draft → accept)
 
-Regenerating a menu for an existing `(workspace_id, week_start_date)` follows the replace-by-soft-delete pattern:
+Every menu — `weekly` or `custom` — moves through a three-state lifecycle: **draft → accepted → superseded**.
 
-1. Inside a single transaction, mark the existing active menu `is_deleted = true` if one exists.
-2. Insert the new `menus` row (including a fresh `generation_options` snapshot of the **effective** overlay) plus its `menu_slots`, `grocery_lists`, and `grocery_items`.
-3. Append a `generation_runs` row referencing the new menu.
+1. **Generation creates a DRAFT.** `POST /api/workspaces/[id]/menus` (any mode: `weekly`, `custom`, `clone`) inserts a new `menus` row with `accepted_at = NULL`. If an outstanding draft already exists for the same `(workspace_id, week_start_date)`, it is soft-deleted (`is_deleted = true`) before the new draft is inserted. The accepted menu (if any) is untouched.
+2. **User reviews the draft.** They may replace any slot via `PATCH /api/workspaces/[id]/menus/[menuId]/slots/[slotId]` — server re-runs the engine's hard-constraint filter and rejects the change with 422 if it violates a hard constraint. Replaced slots set `is_overridden = true` and preserve the engine's original pick in `original_recipe_id`. Custom menus aren't validated this way because they were already user-picked.
+3. **Acceptance promotes the draft.** `POST /api/workspaces/[id]/menus/[menuId]/accept`:
+   - Computes `accepted_seed` = SHA-256 over `(inputs_hash, sorted slot tuples)`. Pristine acceptances effectively equal `inputs_hash`; modified acceptances diverge.
+   - Soft-deletes the previously accepted menu for the same `(workspace_id, week_start_date)`.
+   - Sets `accepted_at = NOW()` and `accepted_seed = <hash>` on the draft.
+   - The accepted menu becomes the workspace's active menu for the week and drives the grocery list.
+4. **Discard** (`DELETE /api/workspaces/[id]/menus/[menuId]`) soft-deletes a draft. Accepted menus cannot be discarded — they go to history when superseded by a new acceptance.
+5. **Clone from history** (`POST /api/workspaces/[id]/menus` with `mode: 'clone'`) copies a historical accepted menu's slots into a new draft for any target week. The new draft inherits `seed`, `inputs_hash`, `generation_options`, `menu_type`, and `duration_days` from the source; `cloned_from_menu_id` records the source for audit. Same draft / accept flow afterwards.
 
-Historical (soft-deleted) menus and their children remain queryable by service-role for audit. The partial unique index on `menus(workspace_id, week_start_date) WHERE is_deleted = false` enforces that only one active menu exists per week.
+Historical (soft-deleted) menus and their children remain queryable by service-role for audit. The partial unique indexes from §6.11 enforce one accepted + one draft maximum per `(workspace_id, week_start_date)`.
 
 ---
 

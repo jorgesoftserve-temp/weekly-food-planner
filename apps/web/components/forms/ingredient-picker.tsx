@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus } from 'lucide-react'
 import {
   Command,
   CommandEmpty,
@@ -9,12 +9,14 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { useIngredients } from '@weekly-food-planner/supabase/react'
 import { useSupabase } from '@/lib/hooks/use-supabase'
 import { cn } from '@/lib/utils'
+import { CreateIngredientDialog } from './create-ingredient-dialog'
 
 export type IngredientPickerProps = {
   value: string | null
@@ -33,6 +35,7 @@ export const IngredientPicker = ({
 }: IngredientPickerProps) => {
   const supabase = useSupabase()
   const [open, setOpen] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
   const ingredientsQuery = useIngredients({ supabase, enabled: open || !!value })
 
   const ingredients = ingredientsQuery.data ?? []
@@ -42,59 +45,87 @@ export const IngredientPicker = ({
   )
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className={cn('w-full justify-between', className)}
-        >
-          <span className={cn(!selected && 'text-muted-foreground')}>
-            {selected?.name ?? placeholder}
-          </span>
-          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search ingredients…" />
-          <CommandList>
-            <CommandEmpty>
-              {ingredientsQuery.isLoading
-                ? 'Loading ingredients…'
-                : 'No matching ingredient.'}
-            </CommandEmpty>
-            <CommandGroup>
-              {ingredients.map((ing) => (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            disabled={disabled}
+            className={cn('w-full justify-between', className)}
+          >
+            <span className={cn(!selected && 'text-muted-foreground')}>
+              {selected?.name ?? placeholder}
+            </span>
+            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search ingredients…" />
+            <CommandList>
+              <CommandEmpty>
+                {ingredientsQuery.isLoading
+                  ? 'Loading ingredients…'
+                  : 'No matching ingredient.'}
+              </CommandEmpty>
+              <CommandGroup>
+                {ingredients.map((ing) => (
+                  <CommandItem
+                    key={ing.id}
+                    value={`${ing.name} ${ing.id}`}
+                    onSelect={() => {
+                      onChange(ing.id)
+                      setOpen(false)
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        'mr-2 size-4',
+                        ing.id === value ? 'opacity-100' : 'opacity-0',
+                      )}
+                    />
+                    <span className="flex-1 truncate">{ing.name}</span>
+                    {ing.is_perishable ? (
+                      <span className="ml-2 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        perishable
+                      </span>
+                    ) : null}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              {/* Sticky add-row at the bottom — discoverability matters: users
+                  should not have to know the catalog is editable. Closes the
+                  popover before opening the Dialog so Radix focus traps don't
+                  fight each other. */}
+              <CommandSeparator />
+              <CommandGroup>
                 <CommandItem
-                  key={ing.id}
-                  value={`${ing.name} ${ing.id}`}
+                  value="__add_new_ingredient__"
                   onSelect={() => {
-                    onChange(ing.id)
                     setOpen(false)
+                    setShowCreate(true)
                   }}
+                  className="text-primary"
                 >
-                  <Check
-                    className={cn(
-                      'mr-2 size-4',
-                      ing.id === value ? 'opacity-100' : 'opacity-0',
-                    )}
-                  />
-                  <span className="flex-1 truncate">{ing.name}</span>
-                  {ing.is_perishable ? (
-                    <span className="ml-2 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                      perishable
-                    </span>
-                  ) : null}
+                  <Plus className="mr-2 size-4" />
+                  Add new ingredient
                 </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      <CreateIngredientDialog
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        onCreated={(ingredient) => {
+          onChange(ingredient.id)
+        }}
+      />
+    </>
   )
 }

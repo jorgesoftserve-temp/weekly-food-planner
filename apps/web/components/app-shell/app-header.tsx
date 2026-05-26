@@ -18,6 +18,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/recipes': 'Recipes',
   '/menu': 'Weekly menu',
   '/grocery': 'Grocery list',
+  '/settings': 'Account settings',
 }
 
 const currentTitle = (pathname: string): string => {

@@ -1,0 +1,2 @@
+continue with the user changes feat (log this prompt and the response to our respective folders)
+1. also lets allos users to edit their dietary constraints info and their meal_frequency info

@@ -13,6 +13,7 @@ import {
 export type GenerateMenuInput = {
   weekStartDate: string
   seed?: number
+  durationDays?: number
   options?: {
     additionalDietaryRestrictions?: string[]
     additionalAllergies?: string[]

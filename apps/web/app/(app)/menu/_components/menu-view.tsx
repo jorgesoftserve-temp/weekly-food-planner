@@ -155,17 +155,29 @@ export const MenuView = ({
             {menu.week_start_date}
           </span>
           <span>
-            <span className="font-medium text-foreground">Seed:</span>{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">
-              {menu.seed}
-            </code>
+            <span className="font-medium text-foreground">Type:</span>{' '}
+            <span className="capitalize">{menu.menu_type}</span>
           </span>
           <span>
-            <span className="font-medium text-foreground">Inputs hash:</span>{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">
-              {menu.inputs_hash.slice(0, 12)}…
-            </code>
+            <span className="font-medium text-foreground">Duration:</span>{' '}
+            {menu.duration_days} day{menu.duration_days === 1 ? '' : 's'}
           </span>
+          {menu.seed !== null ? (
+            <span>
+              <span className="font-medium text-foreground">Seed:</span>{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                {menu.seed}
+              </code>
+            </span>
+          ) : null}
+          {menu.inputs_hash ? (
+            <span>
+              <span className="font-medium text-foreground">Inputs hash:</span>{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                {menu.inputs_hash.slice(0, 12)}…
+              </code>
+            </span>
+          ) : null}
           {overrideCount > 0 ? (
             <span className="text-amber-700 dark:text-amber-300">
               {overrideCount} slot{overrideCount === 1 ? '' : 's'} modified

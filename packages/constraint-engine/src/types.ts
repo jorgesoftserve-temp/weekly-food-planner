@@ -122,6 +122,13 @@ export type GenerateMenuInput = {
   weekStartDate: string
   seed: number
   options?: GenerateMenuOptions
+  // Number of consecutive days the menu should cover (1..7). Defaults to 7
+  // when omitted, preserving the original full-week behaviour. The first day
+  // is the day-of-week implied by weekStartDate; subsequent days walk forward
+  // through Monday→Sunday and wrap if needed. durationDays IS part of the
+  // canonical input, so two runs with different durationDays produce
+  // different inputs_hash values even with the same seed.
+  durationDays?: number
   // ISO timestamp ("now"). When provided, buildSlots filters out any meal slot
   // whose (day, defaultHour) is before this moment. Required for the ongoing-week
   // UX: if today is Wed 2pm, the engine should not try to fill Mon/Tue or

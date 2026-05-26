@@ -8,6 +8,24 @@ export type PersistResult =
   | { ok: true; menuId: string | null; generationRunId: string }
   | { ok: false; detail: string }
 
+const DAY_BY_JS_INDEX = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+] as const
+
+// Mirror of the engine's day-of-week derivation in slots.ts. Local-time
+// interpretation matches the engine's timezone-naive convention.
+const deriveStartDayOfWeek = (weekStartDate: string): string => {
+  const [y, m, d] = weekStartDate.split('-').map((part) => Number.parseInt(part, 10))
+  if (!y || !m || !d) return 'monday'
+  return DAY_BY_JS_INDEX[new Date(y, m - 1, d).getDay()] ?? 'monday'
+}
+
 // Step 29 — Drafts coexist with accepted menus.
 // On a successful generation:
 //   1. Soft-delete any prior DRAFT for the same (workspace, week). The
@@ -64,6 +82,10 @@ export const persistGeneratedMenu = async ({
     .is('accepted_at', null)
   if (softDelErr) return { ok: false, detail: softDelErr.message }
 
+  // Derive start_day_of_week from weekStartDate so the DB row carries it
+  // directly (history queries don't have to recompute from the date). The
+  // engine uses the same derivation in enumerateMenuDays.
+  const startDayOfWeek = deriveStartDayOfWeek(weekStartDate)
   const { data: menuRow, error: menuErr } = await admin
     .from('menus')
     .insert({
@@ -72,6 +94,9 @@ export const persistGeneratedMenu = async ({
       seed: input.seed,
       inputs_hash: result.inputsHash,
       generation_options: input.options ?? null,
+      menu_type: 'weekly',
+      duration_days: input.durationDays ?? 7,
+      start_day_of_week: startDayOfWeek,
       // accepted_at + accepted_seed stay NULL until the user accepts.
     })
     .select('id')

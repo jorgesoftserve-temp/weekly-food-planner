@@ -34,6 +34,9 @@ const DAY_ORDER: Record<DayOfWeek, number> = {
   sunday: 6,
 }
 
+const MAX_DURATION = 7
+const DEFAULT_DURATION = 7
+
 const resolveFrequency = ({
   member,
   workspace,
@@ -47,40 +50,75 @@ const resolveFrequency = ({
   return workspace.sharedMealFrequency ?? []
 }
 
+// Compute the day-of-week for weekStartDate using a local Date construction
+// that matches the rest of the engine's timezone assumptions (server-local).
+// Returns null for malformed inputs; callers fall back to Monday.
+const dayOfWeekFromDate = (weekStartDate: string): DayOfWeek | null => {
+  const [y, m, d] = weekStartDate.split('-').map((part) => Number.parseInt(part, 10))
+  if (!y || !m || !d) return null
+  const date = new Date(y, m - 1, d)
+  // Date.getDay(): Sun=0, Mon=1, ..., Sat=6
+  const jsDay = date.getDay()
+  const idx = jsDay === 0 ? 6 : jsDay - 1
+  return DAYS_OF_WEEK[idx] ?? null
+}
+
+// Build the ordered list of (dayOfWeek, dayIndexFromStart) tuples the menu
+// will cover. dayIndexFromStart is 0-based and used for date offset math;
+// dayOfWeek is the enum value used in slot identity. Wrapping around the
+// week is allowed: e.g. start = friday, duration = 4 → fri/sat/sun/mon.
+export const enumerateMenuDays = ({
+  weekStartDate,
+  durationDays,
+}: {
+  weekStartDate: string
+  durationDays?: number
+}): Array<{ dayOfWeek: DayOfWeek; dayIndex: number }> => {
+  const startDay = dayOfWeekFromDate(weekStartDate) ?? 'monday'
+  const startIdx = DAY_ORDER[startDay]
+  const requested = durationDays ?? DEFAULT_DURATION
+  const clamped = Math.max(1, Math.min(MAX_DURATION, Math.floor(requested)))
+  const days: Array<{ dayOfWeek: DayOfWeek; dayIndex: number }> = []
+  for (let i = 0; i < clamped; i++) {
+    const day = DAYS_OF_WEEK[(startIdx + i) % 7]
+    if (!day) continue
+    days.push({ dayOfWeek: day, dayIndex: i })
+  }
+  return days
+}
+
 // Compute the wall-clock moment a slot starts, interpreted in the server's
-// local timezone. The engine is naive about timezones — it assumes the user
-// generating the menu lives in the same zone as the server, which holds for
-// the single-tenant MVP. Multi-zone support would require carrying a tz on the
-// workspace or member.
+// local timezone. dayIndex is the 0-based offset from weekStartDate (not
+// DAY_ORDER[dayOfWeek]) so menus starting on Friday still get a continuous
+// calendar timeline.
 const slotStart = ({
   weekStartDate,
-  dayOfWeek,
+  dayIndex,
   defaultHour,
 }: {
   weekStartDate: string
-  dayOfWeek: DayOfWeek
+  dayIndex: number
   defaultHour: number
 }): number => {
   const [y, m, d] = weekStartDate.split('-').map((part) => Number.parseInt(part, 10))
   if (!y || !m || !d) return Number.POSITIVE_INFINITY
-  const dayOffset = DAY_ORDER[dayOfWeek]
-  return new Date(y, m - 1, d + dayOffset, defaultHour, 0, 0, 0).getTime()
+  return new Date(y, m - 1, d + dayIndex, defaultHour, 0, 0, 0).getTime()
 }
 
 const isSlotPast = ({
   weekStartDate,
-  dayOfWeek,
+  dayIndex,
   entry,
   nowMs,
 }: {
   weekStartDate: string
-  dayOfWeek: DayOfWeek
+  dayIndex: number
   entry: MealFrequencyEntry
   nowMs: number
 }): boolean => {
   const start = slotStart({
     weekStartDate,
-    dayOfWeek,
+    dayIndex,
     defaultHour: entry.defaultHour,
   })
   return start < nowMs
@@ -91,16 +129,25 @@ const isSlotPast = ({
 // collapse those into a shared slot in the output.
 export const buildSlots = ({ input }: { input: GenerateMenuInput }): SlotSpec[] => {
   const nowMs = input.now ? new Date(input.now).getTime() : null
+  const days = enumerateMenuDays({
+    weekStartDate: input.weekStartDate,
+    durationDays: input.durationDays,
+  })
+  // Pre-compute date offsets keyed by dayOfWeek for the past-filter. When
+  // duration wraps around the week (e.g. fri→mon), the same dayOfWeek can
+  // appear at most once because durationDays is capped at 7.
+  const dayIndexByDay = new Map<DayOfWeek, number>()
+  for (const { dayOfWeek, dayIndex } of days) dayIndexByDay.set(dayOfWeek, dayIndex)
   const slots: SlotSpec[] = []
   for (const member of input.members) {
     const frequency = resolveFrequency({ member, workspace: input.workspace })
-    for (const day of DAYS_OF_WEEK) {
+    for (const { dayOfWeek, dayIndex } of days) {
       for (const entry of frequency) {
         if (
           nowMs !== null &&
           isSlotPast({
             weekStartDate: input.weekStartDate,
-            dayOfWeek: day,
+            dayIndex,
             entry,
             nowMs,
           })
@@ -108,7 +155,7 @@ export const buildSlots = ({ input }: { input: GenerateMenuInput }): SlotSpec[] 
           continue
         }
         slots.push({
-          dayOfWeek: day,
+          dayOfWeek,
           mealKey: entry.key,
           mealType: entry.mealType,
           targetMemberId: member.id,
@@ -116,8 +163,12 @@ export const buildSlots = ({ input }: { input: GenerateMenuInput }): SlotSpec[] 
       }
     }
   }
+  // Sort by the actual dayIndex (calendar order) rather than DAY_ORDER, so a
+  // menu starting Friday gets fri/sat/sun, not mon/tue/wed/.../fri/sat/sun.
   slots.sort((a, b) => {
-    if (a.dayOfWeek !== b.dayOfWeek) return DAY_ORDER[a.dayOfWeek] - DAY_ORDER[b.dayOfWeek]
+    const ai = dayIndexByDay.get(a.dayOfWeek) ?? 99
+    const bi = dayIndexByDay.get(b.dayOfWeek) ?? 99
+    if (ai !== bi) return ai - bi
     if (a.mealKey !== b.mealKey) return a.mealKey.localeCompare(b.mealKey)
     return a.targetMemberId.localeCompare(b.targetMemberId)
   })

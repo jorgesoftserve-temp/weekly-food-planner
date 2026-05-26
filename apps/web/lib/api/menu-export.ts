@@ -24,8 +24,9 @@ export type ExportGroceryList = {
 
 export type ExportMenu = {
   weekStartDate: string
-  seed: number
-  inputsHash: string
+  // seed + inputsHash are NULL for custom menus (engine wasn't involved).
+  seed: number | null
+  inputsHash: string | null
   generatedAt: string
   slots: ExportSlot[]
 }
@@ -70,8 +71,8 @@ const renderHeader = ({
     '',
     `- **Week starting:** ${menu.weekStartDate}`,
     `- **Generated:** ${menu.generatedAt}`,
-    `- **Seed:** ${menu.seed}`,
-    `- **Inputs hash:** \`${menu.inputsHash}\``,
+    `- **Seed:** ${menu.seed ?? '—'}`,
+    `- **Inputs hash:** \`${menu.inputsHash ?? '—'}\``,
     '',
   ].join('\n')
 }
@@ -209,8 +210,8 @@ const renderCsvHeader = ({
     csvRow(['# Workspace', workspace.name]),
     csvRow(['# Week starting', menu.weekStartDate]),
     csvRow(['# Generated', menu.generatedAt]),
-    csvRow(['# Seed', menu.seed.toString()]),
-    csvRow(['# Inputs hash', menu.inputsHash]),
+    csvRow(['# Seed', menu.seed?.toString() ?? '']),
+    csvRow(['# Inputs hash', menu.inputsHash ?? '']),
     '',
   ].join('\n')
 }

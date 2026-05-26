@@ -47,6 +47,56 @@ describe('buildSlots', () => {
     expect(slots).toHaveLength(0)
   })
 
+  describe('with durationDays + non-Monday start', () => {
+    it('honours durationDays for variable-length menus', () => {
+      const slots = buildSlots({
+        input: { ...baseInput, durationDays: 3 },
+      })
+      // 3 days × 2 meals × 1 member = 6
+      expect(slots).toHaveLength(6)
+      const uniqueDays = new Set(slots.map((s) => s.dayOfWeek))
+      expect(uniqueDays.size).toBe(3)
+    })
+
+    it('starts on the day implied by weekStartDate', () => {
+      // 2026-06-05 is a Friday.
+      const slots = buildSlots({
+        input: {
+          ...baseInput,
+          weekStartDate: '2026-06-05',
+          durationDays: 3,
+        },
+      })
+      const days = Array.from(new Set(slots.map((s) => s.dayOfWeek)))
+      expect(days).toEqual(['friday', 'saturday', 'sunday'])
+    })
+
+    it('wraps across the Sunday boundary when duration extends past week end', () => {
+      // 2026-06-05 = Friday. Duration 4 → fri/sat/sun/mon.
+      const slots = buildSlots({
+        input: {
+          ...baseInput,
+          weekStartDate: '2026-06-05',
+          durationDays: 4,
+        },
+      })
+      const days = Array.from(new Set(slots.map((s) => s.dayOfWeek)))
+      expect(days).toEqual(['friday', 'saturday', 'sunday', 'monday'])
+    })
+
+    it('clamps durationDays to [1, 7]', () => {
+      const tooMany = buildSlots({
+        input: { ...baseInput, durationDays: 99 },
+      })
+      const tooFew = buildSlots({
+        input: { ...baseInput, durationDays: 0 },
+      })
+      // Default frequency is 2 meals/day, 1 member.
+      expect(tooMany).toHaveLength(14) // capped at 7 days
+      expect(tooFew).toHaveLength(2) // floored to 1 day
+    })
+  })
+
   describe('with `now` set (ongoing-week filtering)', () => {
     // baseInput.weekStartDate = '2026-06-01' (Monday). Default frequency =
     // breakfast (defaultHour 8) + dinner (defaultHour 18).

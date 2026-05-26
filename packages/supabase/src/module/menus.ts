@@ -12,25 +12,33 @@ export type MenuSlotRecord = {
   original_recipe_id: string | null
 }
 
+export type MenuType = 'weekly' | 'custom'
+
 export type MenuRecord = {
   id: string
   week_start_date: string
-  seed: number
-  inputs_hash: string
+  seed: number | null
+  inputs_hash: string | null
   generation_options: unknown
   generated_at: string
   accepted_at: string | null
   accepted_seed: string | null
+  menu_type: MenuType
+  duration_days: number
+  start_day_of_week: string
+  cloned_from_menu_id: string | null
   menu_slots: MenuSlotRecord[]
 }
 
 export type MenuHistoryEntry = {
   id: string
   week_start_date: string
-  seed: number
-  inputs_hash: string
+  seed: number | null
+  inputs_hash: string | null
   accepted_at: string
   accepted_seed: string
+  menu_type: MenuType
+  duration_days: number
   is_modified: boolean
 }
 
@@ -56,6 +64,7 @@ export const menuKeys = {
 
 const MENU_SELECT = `id, week_start_date, seed, inputs_hash, generation_options, generated_at,
   accepted_at, accepted_seed,
+  menu_type, duration_days, start_day_of_week, cloned_from_menu_id,
   menu_slots (id, day_of_week, meal_key, meal_type, recipe_id, target_member_id, is_overridden, original_recipe_id)`
 
 // Active = accepted-and-not-deleted. Replaces the previous "is_deleted=false"
@@ -126,6 +135,7 @@ export const listAcceptedMenus = async ({
     .from('menus')
     .select(
       `id, week_start_date, seed, inputs_hash, accepted_at, accepted_seed,
+       menu_type, duration_days,
        menu_slots (is_overridden)`,
     )
     .eq('workspace_id', workspaceId)
@@ -137,10 +147,12 @@ export const listAcceptedMenus = async ({
   type RawRow = {
     id: string
     week_start_date: string
-    seed: number
-    inputs_hash: string
+    seed: number | null
+    inputs_hash: string | null
     accepted_at: string
     accepted_seed: string
+    menu_type: MenuType
+    duration_days: number
     menu_slots: Array<{ is_overridden: boolean }>
   }
   return ((data ?? []) as RawRow[]).map((row) => ({
@@ -150,6 +162,8 @@ export const listAcceptedMenus = async ({
     inputs_hash: row.inputs_hash,
     accepted_at: row.accepted_at,
     accepted_seed: row.accepted_seed,
+    menu_type: row.menu_type,
+    duration_days: row.duration_days,
     is_modified: row.menu_slots.some((s) => s.is_overridden),
   }))
 }

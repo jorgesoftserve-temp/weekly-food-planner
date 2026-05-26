@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { AlertCircle, Loader2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertCircle, Loader2, Sparkles, Wand2 } from 'lucide-react'
 import {
   useGenerateMenu,
   type GenerateMenuResponse,
 } from '@/lib/hooks/use-generate-menu'
+import { useCustomMenu } from '@/lib/hooks/use-custom-menu'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -17,7 +18,9 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MultiLabelCombobox } from '@/components/forms/multi-label-combobox'
 import { notifyError, notifySuccess } from '@/lib/toast'
+import { CustomMenuBuilder, type CustomBuilderSlot } from './custom-menu-builder'
 
 const formatYmd = (date: Date): string => {
   const y = date.getFullYear()
@@ -26,18 +29,8 @@ const formatYmd = (date: Date): string => {
   return `${y}-${m}-${d}`
 }
 
-// Returns the next Monday on or after `from`. Used as the default week-start
-// because day_of_week in the engine starts Monday (DATABASE_PRD).
-const nextMonday = (from: Date): string => {
-  const date = new Date(from)
-  const day = date.getDay() // Sun=0, Mon=1, ..., Sat=6
-  const offset = day === 0 ? 1 : day === 1 ? 0 : 8 - day
-  date.setDate(date.getDate() + offset)
-  return formatYmd(date)
-}
+const today = (): string => formatYmd(new Date())
 
-// Engine reasonCodes are UPPERCASE_SNAKE. Map the common ones to short labels;
-// the full explanation comes from humanMessage rendered below.
 const reasonLabel = (reasonCode: string): string => {
   switch (reasonCode) {
     case 'NO_CANDIDATES':
@@ -53,6 +46,8 @@ const reasonLabel = (reasonCode: string): string => {
   }
 }
 
+type DialogMode = 'auto' | 'custom'
+
 export type GenerateMenuDialogProps = {
   workspaceId: string
   open: boolean
@@ -66,26 +61,58 @@ export const GenerateMenuDialog = ({
   onOpenChange,
   mode,
 }: GenerateMenuDialogProps) => {
-  const [weekStartDate, setWeekStartDate] = useState<string>(() =>
-    nextMonday(new Date()),
-  )
+  const [dialogMode, setDialogMode] = useState<DialogMode>('auto')
+  const [weekStartDate, setWeekStartDate] = useState<string>(() => today())
+  const [durationDays, setDurationDays] = useState<number>(7)
+  const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([])
+  const [allergies, setAllergies] = useState<string[]>([])
   const [failure, setFailure] = useState<GenerateMenuResponse | null>(null)
-  const mutation = useGenerateMenu({ workspaceId })
+  const [customSlots, setCustomSlots] = useState<CustomBuilderSlot[]>([])
+
+  const autoMutation = useGenerateMenu({ workspaceId })
+  const customMutation = useCustomMenu({ workspaceId })
+  const isPending = autoMutation.isPending || customMutation.isPending
 
   const reset = () => {
     setFailure(null)
-    setWeekStartDate(nextMonday(new Date()))
+    setDialogMode('auto')
+    setWeekStartDate(today())
+    setDurationDays(7)
+    setDietaryRestrictions([])
+    setAllergies([])
+    setCustomSlots([])
   }
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  // When the dialog re-opens, reset the form to a fresh state. We do this on
+  // every open rather than on close so a previous failure doesn't leak into
+  // the next attempt.
+  useEffect(() => {
+    if (open) {
+      setFailure(null)
+    }
+  }, [open])
+
+  const overlay = useMemo(() => {
+    const out: Record<string, unknown> = {}
+    if (dietaryRestrictions.length > 0) {
+      out.additionalDietaryRestrictions = dietaryRestrictions
+    }
+    if (allergies.length > 0) out.additionalAllergies = allergies
+    return Object.keys(out).length > 0 ? out : undefined
+  }, [dietaryRestrictions, allergies])
+
+  const handleAutoSubmit = async () => {
     setFailure(null)
     try {
-      const result = await mutation.mutateAsync({ weekStartDate })
+      const result = await autoMutation.mutateAsync({
+        weekStartDate,
+        durationDays,
+        options: overlay,
+      })
       if (result.ok) {
         notifySuccess(
-          mode === 'create' ? 'Menu generated' : 'Menu regenerated',
-          `Week of ${weekStartDate}`,
+          mode === 'create' ? 'Draft menu generated' : 'Draft menu regenerated',
+          `Week of ${weekStartDate} · ${durationDays} day${durationDays === 1 ? '' : 's'}`,
         )
         reset()
         onOpenChange(false)
@@ -93,12 +120,44 @@ export const GenerateMenuDialog = ({
       }
       setFailure(result)
     } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : 'Could not reach the menu generator.'
-      notifyError('Generation failed', message)
+      notifyError(
+        'Generation failed',
+        err instanceof Error ? err.message : 'Could not reach the menu generator.',
+      )
     }
+  }
+
+  const handleCustomSubmit = async () => {
+    setFailure(null)
+    if (customSlots.length === 0) {
+      notifyError('Pick at least one meal for your custom menu.')
+      return
+    }
+    try {
+      await customMutation.mutateAsync({
+        weekStartDate,
+        durationDays,
+        slots: customSlots,
+        options: overlay,
+      })
+      notifySuccess(
+        'Custom menu draft created',
+        `${customSlots.length} meal${customSlots.length === 1 ? '' : 's'} · review before accepting`,
+      )
+      reset()
+      onOpenChange(false)
+    } catch (err) {
+      notifyError(
+        'Custom menu failed',
+        err instanceof Error ? err.message : 'Could not create the custom menu.',
+      )
+    }
+  }
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (dialogMode === 'auto') void handleAutoSubmit()
+    else void handleCustomSubmit()
   }
 
   return (
@@ -109,33 +168,124 @@ export const GenerateMenuDialog = ({
         onOpenChange(next)
       }}
     >
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-y-auto">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <DialogHeader>
             <DialogTitle>
-              {mode === 'create' ? 'Generate a weekly menu' : 'Regenerate menu'}
+              {mode === 'create' ? 'Generate a menu' : 'Generate a new draft'}
             </DialogTitle>
             <DialogDescription>
-              {mode === 'create'
-                ? 'Pick the week start (Monday) and the constraint engine will assign a recipe to every member-meal slot.'
-                : 'A new menu replaces the active one. The previous menu is soft-deleted in a single transaction.'}
+              Auto-generate from the constraint engine, or build a custom menu
+              by picking each meal yourself. Either way, the result is a draft
+              you can review and edit before accepting.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="week_start_date">Week starting</Label>
-            <Input
-              id="week_start_date"
-              type="date"
-              required
-              value={weekStartDate}
-              onChange={(event) => setWeekStartDate(event.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Tip: the engine treats day_of_week as Monday-first, so a Monday
-              date keeps the export layout clean.
-            </p>
+          <div
+            className="grid grid-cols-2 gap-1 rounded-md border border-border bg-muted/40 p-1"
+            role="tablist"
+            aria-label="Menu generation mode"
+          >
+            <button
+              role="tab"
+              type="button"
+              aria-selected={dialogMode === 'auto'}
+              onClick={() => setDialogMode('auto')}
+              className={`flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
+                dialogMode === 'auto'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Sparkles className="size-4" />
+              Auto
+            </button>
+            <button
+              role="tab"
+              type="button"
+              aria-selected={dialogMode === 'custom'}
+              onClick={() => setDialogMode('custom')}
+              className={`flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
+                dialogMode === 'custom'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Wand2 className="size-4" />
+              Custom
+            </button>
           </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="week_start_date">Start date</Label>
+              <Input
+                id="week_start_date"
+                type="date"
+                required
+                value={weekStartDate}
+                onChange={(event) => setWeekStartDate(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="duration_days">Duration (days)</Label>
+              <Input
+                id="duration_days"
+                type="number"
+                min={1}
+                max={7}
+                required
+                value={durationDays}
+                onChange={(event) => {
+                  const n = Number.parseInt(event.target.value, 10)
+                  if (Number.isFinite(n)) {
+                    setDurationDays(Math.max(1, Math.min(7, n)))
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          <details className="rounded-md border border-border bg-card/40 px-3 py-2 text-sm">
+            <summary className="cursor-pointer select-none font-medium">
+              Dietary &amp; allergy presets for this menu
+            </summary>
+            <div className="flex flex-col gap-3 pt-3">
+              <p className="text-xs text-muted-foreground">
+                Applied on top of every member&apos;s profile constraints.
+                Values already on any member&apos;s profile are skipped
+                server-side.
+              </p>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs">Dietary restrictions</Label>
+                <MultiLabelCombobox
+                  enumType="dietary_restriction"
+                  value={dietaryRestrictions}
+                  onChange={setDietaryRestrictions}
+                  placeholder="e.g. vegan, gluten_free"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs">Allergies</Label>
+                <MultiLabelCombobox
+                  enumType="food_allergy"
+                  value={allergies}
+                  onChange={setAllergies}
+                  placeholder="e.g. peanut, shellfish"
+                />
+              </div>
+            </div>
+          </details>
+
+          {dialogMode === 'custom' ? (
+            <CustomMenuBuilder
+              workspaceId={workspaceId}
+              weekStartDate={weekStartDate}
+              durationDays={durationDays}
+              slots={customSlots}
+              onChange={setCustomSlots}
+            />
+          ) : null}
 
           {failure && !failure.ok ? (
             <div className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
@@ -172,20 +322,20 @@ export const GenerateMenuDialog = ({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={mutation.isPending}
+              disabled={isPending}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? (
+            <Button type="submit" disabled={isPending}>
+              {isPending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  Generating…
+                  {dialogMode === 'auto' ? 'Generating…' : 'Creating…'}
                 </>
-              ) : mode === 'create' ? (
-                'Generate menu'
+              ) : dialogMode === 'auto' ? (
+                'Generate draft'
               ) : (
-                'Replace active menu'
+                'Create custom draft'
               )}
             </Button>
           </DialogFooter>

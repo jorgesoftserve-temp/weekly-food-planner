@@ -6,7 +6,14 @@ type CookieToSet = { name: string; value: string; options: CookieOptions }
 // Paths that require an authenticated user. Anything else (including the
 // public auth pages, the callback, and static assets handled by `matcher`)
 // flows through untouched.
-const PROTECTED_PREFIXES = ['/dashboard', '/recipes', '/menu', '/grocery', '/settings']
+const PROTECTED_PREFIXES = [
+  '/dashboard',
+  '/members',
+  '/recipes',
+  '/menu',
+  '/grocery',
+  '/settings',
+]
 const AUTH_PUBLIC_PATHS = ['/login', '/signup', '/verify-email']
 
 const isProtected = (pathname: string): boolean =>

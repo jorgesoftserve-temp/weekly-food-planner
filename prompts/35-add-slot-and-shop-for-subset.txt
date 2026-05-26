@@ -1,0 +1,36 @@
+lets commit and work on phase 3,5 and ignore phase 4 for now
+
+[Phases 3 + 5 of the MVP 1.5 plan, bundled because they're independent
+deliverables and small enough to ship together. Phase 4 (servings-aware
+grocery scaling) is intentionally skipped per the user's call — Phase 5
+ships as a faithful relative filter on top of current raw quantities.
+When Phase 4 lands later the math composes correctly without re-doing
+Phase 5.]
+
+Phase 3 — Add a slot to an existing draft.
+
+- New POST /api/workspaces/[id]/menus/[menuId]/slots route. For weekly
+  drafts the server re-runs the engine's isRecipeValidForSlot filter
+  against the resolved target member; for custom drafts the engine check
+  is skipped (matches existing custom-menu stance). target_member_id
+  must be one of the menu's participants (Phase 2 boundary). The server
+  auto-derives a unique meal_key in the (day, target_member_id) bucket
+  ({meal_type}, {meal_type}_2, …).
+- New AddSlotDialog + "Add meal" button on every day card in the
+  draft-review MenuView. The menu-view's groupByDay now emits one bucket
+  per duration day so the button shows up even on days the engine left
+  empty for a member.
+- Created slots get is_overridden=false / original_recipe_id=null
+  (they're user-added, not engine-pick overrides).
+
+Phase 5 — Shop-for-subset filter on the grocery page.
+
+- Pure read-side feature; the accepted menu and grocery_items rows are
+  never mutated. State lives in ?shop_for=uuid,uuid so refresh / share
+  preserves the selection.
+- Shared bucket quantities scale by selectedCount / participantCount
+  (the head-count denominator is the menu's menu_participants count).
+- Per-member buckets filter to selected members only; quantities stay
+  raw (a per-member slot was already produced for 1 eater).
+- Export keeps downloading the full unfiltered list — a banner on the
+  filtered view calls this out. Filtered exports are a follow-up.

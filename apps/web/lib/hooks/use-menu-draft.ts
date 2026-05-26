@@ -21,6 +21,44 @@ const parseError = async (response: Response, fallback: string): Promise<string>
   }
 }
 
+export type AddSlotInput = {
+  dayOfWeek: string
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  recipeId: string
+  targetMemberId: string | null
+}
+
+export const useAddMenuSlot = ({
+  workspaceId,
+  menuId,
+}: {
+  workspaceId: string
+  menuId: string | null
+}): UseMutationResult<void, Error, AddSlotInput, DraftMutationContext> => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: AddSlotInput) => {
+      if (!menuId) throw new Error('no draft menu to add to')
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/menus/${menuId}/slots`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+      )
+      if (!response.ok) {
+        throw new Error(await parseError(response, 'add slot failed'))
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: menuKeys.draft(workspaceId),
+      })
+    },
+  })
+}
+
 export const useReplaceMenuSlot = ({
   workspaceId,
   menuId,

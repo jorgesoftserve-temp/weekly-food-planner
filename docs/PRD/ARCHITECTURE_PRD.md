@@ -183,6 +183,7 @@ Cloning copies a historical accepted menu's slots into a fresh draft. The route 
 
 After a draft exists, the user can:
 
+- `POST /api/workspaces/[id]/menus/[menuId]/slots` — add a brand-new slot to a draft. Server validates the recipe belongs to the workspace, the `target_member_id` (when non-null) is a participant of the menu, and — for `weekly` drafts — that the engine's hard-constraint filter passes. Auto-derives a unique `meal_key` in the (day, target_member_id) bucket. Created slots have `is_overridden = false` and `original_recipe_id = NULL`. See [PRODUCT_PRD.md §4.0.1](./PRODUCT_PRD.md).
 - `PATCH /api/workspaces/[id]/menus/[menuId]/slots/[slotId]` — replace a slot's recipe. Server re-runs the engine's `isRecipeValidForSlot` filter for `weekly` drafts. Sets `is_overridden = true` and preserves the engine's original pick in `original_recipe_id`.
 - `POST /api/workspaces/[id]/menus/[menuId]/accept` — promote the draft. Computes `accepted_seed` (SHA-256 over `inputs_hash` + canonical slot list). Soft-deletes the previously accepted menu for the same week. Sets `accepted_at` and `accepted_seed`.
 - `DELETE /api/workspaces/[id]/menus/[menuId]` — discard a draft (only drafts; accepted menus are immutable).
@@ -296,6 +297,7 @@ Resource-oriented under `app/api/`:
 /api/workspaces/:id/menus/history   → GET (accepted menus, newest first, with is_modified)
 /api/workspaces/:id/menus/:menuId           → DELETE (discard a draft)
 /api/workspaces/:id/menus/:menuId/accept    → POST (promote draft → accepted)
+/api/workspaces/:id/menus/:menuId/slots     → POST (add a new slot to a draft; server validates hard constraints + participant membership)
 /api/workspaces/:id/menus/:menuId/slots/:slotId → PATCH (replace a slot's recipe in a draft; server re-validates hard constraints)
 /api/workspaces/:id/grocery         → GET (derived from the workspace's accepted menu)
 /api/uploads/images                 → POST (signed-URL flow to Supabase Storage)
@@ -325,6 +327,7 @@ In-app menu and grocery list pages are first-class deliverables in MVP:
 - The week menu view shows all 7 days, every meal slot, with recipe titles, images, and visual cues distinguishing shared vs member-specific slots. Only the active (non-deleted) menu for the week is shown.
 - The menu header surfaces the **effective** per-menu overlay used (if any) — sourced from `menus.generation_options` — so users can see what extra constraints shaped this week.
 - Grocery list views (shared + per-member) are organized by `scheduled_purchase_day` so users can shop in freshness-aware batches.
+- A "Shop for" picker scopes the page to a subset of the menu's participants. Selecting fewer than all participants rescales the shared list by `selectedCount / participantCount` and hides per-member buckets for non-selected members. State is URL-synced via `?shop_for=uuid,uuid`. The transform is presentation-only — `grocery_items` rows are never mutated. See [PRODUCT_PRD.md §7.1](./PRODUCT_PRD.md).
 - Both views are designed with a layout and typography optimized for paper / PDF rendering. The post-MVP PDF export will reuse the same template without rework.
 - PDF export itself is **out of MVP** — see [OVERVIEW_PRD.md §6](./OVERVIEW_PRD.md).
 

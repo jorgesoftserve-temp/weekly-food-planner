@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useMemo, useState } from 'react'
 import {
   AlertTriangle,
   CalendarRange,
@@ -62,7 +63,9 @@ import {
   downloadMenuExport,
   type ExportFormat,
 } from '@/lib/hooks/export-menu'
+import { applyShopForFilter } from '@/lib/grocery-filter'
 import { IngredientDetailDialog } from './_components/ingredient-detail-dialog'
+import { ShopForPicker } from './_components/shop-for-picker'
 
 const capitalize = (s: string): string =>
   s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1)
@@ -72,13 +75,43 @@ const formatQuantity = (n: number): string => {
   return Number.isInteger(rounded) ? rounded.toString() : rounded.toString()
 }
 
+const SHOP_FOR_PARAM = 'shop_for'
+
 const GroceryPage = () => {
   const supabase = useSupabase()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { workspace, isLoading: workspaceLoading } = useActiveWorkspace()
   // Track which upcoming menu the user is shopping for. The default (null)
   // means "soonest upcoming" — getActiveGroceryLists already picks that.
   // Once the user changes the selector we pass the explicit week.
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null)
+
+  // Shop-for-subset selection lives in the URL so the filter survives
+  // refresh and can be shared / bookmarked. Comma-separated member ids;
+  // absent param = whole household.
+  const shopForRaw = searchParams.get(SHOP_FOR_PARAM)
+  const selectedShopForIds = useMemo<string[] | null>(() => {
+    if (!shopForRaw) return null
+    const parts = shopForRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+    return parts.length > 0 ? parts : null
+  }, [shopForRaw])
+  const setShopForIds = useCallback(
+    (next: string[] | null) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next === null || next.length === 0) {
+        params.delete(SHOP_FOR_PARAM)
+      } else {
+        params.set(SHOP_FOR_PARAM, next.join(','))
+      }
+      const query = params.toString()
+      router.replace(query.length > 0 ? `?${query}` : '?', { scroll: false })
+    },
+    [router, searchParams],
+  )
   const upcomingQuery = useUpcomingMenus({
     supabase,
     workspaceId: workspace?.id ?? null,
@@ -136,11 +169,30 @@ const GroceryPage = () => {
   const isLoading = workspaceLoading || groceryQuery.isLoading
   const grocery = groceryQuery.data
 
-  // Shared list first, then per-member sorted alphabetically — same order as
-  // the markdown / CSV exporter so the UI matches the downloads.
-  const sortedLists = useMemo(() => {
+  // menu_participants is the head-count denominator for shared-list scaling.
+  // Falls back to workspace_members when the active menu hasn't loaded yet
+  // (the picker is still useful — the math just isn't applied until the menu
+  // is available).
+  const participantIds = useMemo(() => {
+    const fromMenu =
+      activeMenuQuery.data?.menu_participants?.map((p) => p.member_id) ?? []
+    if (fromMenu.length > 0) return fromMenu
+    return workspaceQuery.data?.workspace_members?.map((m) => m.id) ?? []
+  }, [activeMenuQuery.data, workspaceQuery.data])
+
+  // Apply the shop-for filter (scale shared, filter per-member) before sort.
+  // Shared bucket stays first regardless of filter state.
+  const filteredLists = useMemo(() => {
     if (!grocery) return []
-    return [...grocery.lists].sort((a, b) => {
+    return applyShopForFilter({
+      lists: grocery.lists,
+      participantIds,
+      selectedIds: selectedShopForIds,
+    })
+  }, [grocery, participantIds, selectedShopForIds])
+
+  const sortedLists = useMemo(() => {
+    return [...filteredLists].sort((a, b) => {
       if (a.target_member_id === null && b.target_member_id !== null) return -1
       if (a.target_member_id !== null && b.target_member_id === null) return 1
       const na = a.target_member_id
@@ -151,7 +203,7 @@ const GroceryPage = () => {
         : ''
       return na.localeCompare(nb)
     })
-  }, [grocery, memberNamesById])
+  }, [filteredLists, memberNamesById])
 
   const handleExport = (format: ExportFormat) => {
     if (!workspace || !grocery) return
@@ -247,6 +299,14 @@ const GroceryPage = () => {
       ) : (
         <TooltipProvider delayDuration={150}>
           <div className="flex flex-col gap-4">
+            {participantIds.length > 0 ? (
+              <ShopForPicker
+                participantIds={participantIds}
+                memberNamesById={memberNamesById}
+                selectedIds={selectedShopForIds}
+                onChange={setShopForIds}
+              />
+            ) : null}
             {sortedLists.map((list) => {
               const heading =
                 list.target_member_id === null
@@ -255,7 +315,7 @@ const GroceryPage = () => {
                       memberNamesById[list.target_member_id] ??
                       `[unknown:${list.target_member_id.slice(0, 6)}]`
                     }`
-              const sortedItems = [...list.grocery_items].sort((a, b) => {
+              const sortedItems = [...list.scaledItems].sort((a, b) => {
                 const na =
                   ingredientsById[a.ingredient_id]?.name ?? a.ingredient_id
                 const nb =
@@ -293,10 +353,7 @@ const GroceryPage = () => {
                             const name =
                               ing?.name ??
                               `[unknown:${item.ingredient_id.slice(0, 6)}]`
-                            const qty =
-                              typeof item.quantity === 'string'
-                                ? Number.parseFloat(item.quantity)
-                                : item.quantity
+                            const qty = item.quantity
                             const allergenCount =
                               ing?.ingredient_allergens.length ?? 0
                             return (

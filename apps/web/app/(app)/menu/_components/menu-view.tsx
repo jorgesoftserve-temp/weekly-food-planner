@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Lock, MoreHorizontal, Repeat2 } from 'lucide-react'
+import { Lock, MoreHorizontal, Plus, Repeat2 } from 'lucide-react'
 import type { MenuRecord, MenuSlotRecord } from '@weekly-food-planner/supabase'
 import { Button } from '@/components/ui/button'
 import {
@@ -37,23 +37,58 @@ export type MenuViewProps = {
   memberNamesById?: Record<string, string>
   editable?: boolean
   onReplaceSlot?: (slot: MenuSlotRecord) => void
+  onAddSlot?: (dayOfWeek: string) => void
 }
 
 type DayBucket = { day: string; slots: MenuSlotRecord[] }
 
-const groupByDay = (slots: MenuSlotRecord[]): DayBucket[] => {
-  const map = new Map<string, MenuSlotRecord[]>()
-  for (const slot of slots) {
-    const list = map.get(slot.day_of_week) ?? []
-    list.push(slot)
-    map.set(slot.day_of_week, list)
+const DAYS_OF_WEEK = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+] as const
+
+// Returns every day the menu covers, with its (possibly empty) slot list.
+// Walks `durationDays` forward from `start_day_of_week`, wrapping Sun → Mon
+// — matches the engine's enumerateMenuDays so the UI shows the same calendar
+// as the engine planned. We need the full set (not just days that already
+// have slots) so the user can add a slot on a day the engine left empty —
+// e.g. a per-member menu where the child only had breakfast and the user
+// wants to add lunch.
+const groupByDay = ({
+  slots,
+  startDayOfWeek,
+  durationDays,
+}: {
+  slots: MenuSlotRecord[]
+  startDayOfWeek: string
+  durationDays: number
+}): DayBucket[] => {
+  const startIdx = DAY_ORDER[startDayOfWeek] ?? 0
+  const clamped = Math.max(1, Math.min(7, Math.floor(durationDays)))
+  const orderedDays: string[] = []
+  for (let i = 0; i < clamped; i++) {
+    const day = DAYS_OF_WEEK[(startIdx + i) % 7]
+    if (day) orderedDays.push(day)
   }
-  for (const [, list] of map) {
+  const byDay = new Map<string, MenuSlotRecord[]>()
+  for (const day of orderedDays) byDay.set(day, [])
+  for (const slot of slots) {
+    const list = byDay.get(slot.day_of_week)
+    if (list) list.push(slot)
+    else byDay.set(slot.day_of_week, [slot])
+  }
+  for (const [, list] of byDay) {
     list.sort((a, b) => a.meal_key.localeCompare(b.meal_key))
   }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99))
-    .map(([day, dSlots]) => ({ day, slots: dSlots }))
+  return orderedDays.map((day) => ({
+    day,
+    slots: byDay.get(day) ?? [],
+  }))
 }
 
 const SlotCard = ({
@@ -128,8 +163,17 @@ export const MenuView = ({
   memberNamesById,
   editable = false,
   onReplaceSlot,
+  onAddSlot,
 }: MenuViewProps) => {
-  const buckets = useMemo(() => groupByDay(menu.menu_slots), [menu.menu_slots])
+  const buckets = useMemo(
+    () =>
+      groupByDay({
+        slots: menu.menu_slots,
+        startDayOfWeek: menu.start_day_of_week,
+        durationDays: menu.duration_days,
+      }),
+    [menu.menu_slots, menu.start_day_of_week, menu.duration_days],
+  )
   const initialDay =
     buckets[0]?.day && DAY_ORDER[buckets[0].day] !== undefined ? buckets[0].day : 'monday'
   const [activeDay, setActiveDay] = useState<string>(initialDay)
@@ -261,6 +305,18 @@ export const MenuView = ({
                     onReplaceSlot={onReplaceSlot}
                   />
                 ))}
+                {editable && onAddSlot ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onAddSlot(bucket.day)}
+                    className="justify-start text-muted-foreground"
+                  >
+                    <Plus className="size-4" />
+                    Add meal
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
           ))}
@@ -290,6 +346,18 @@ export const MenuView = ({
                   onReplaceSlot={onReplaceSlot}
                 />
               ))}
+              {editable && onAddSlot ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onAddSlot(bucket.day)}
+                  className="justify-start text-muted-foreground"
+                >
+                  <Plus className="size-4" />
+                  Add meal
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
         ))}

@@ -39,6 +39,7 @@ import {
   useDiscardMenuDraft,
 } from '@/lib/hooks/use-menu-draft'
 import { notifyError, notifySuccess } from '@/lib/toast'
+import { AddSlotDialog } from './_components/add-slot-dialog'
 import { GenerateMenuDialog } from './_components/generate-menu-dialog'
 import { MenuView } from './_components/menu-view'
 import { ReplaceSlotDialog } from './_components/replace-slot-dialog'
@@ -76,6 +77,7 @@ const MenuPage = () => {
 
   const [generateOpen, setGenerateOpen] = useState(false)
   const [replaceSlot, setReplaceSlot] = useState<MenuSlotRecord | null>(null)
+  const [addSlotDay, setAddSlotDay] = useState<string | null>(null)
   const isLoading =
     workspaceLoading || activeMenuQuery.isLoading || draftQuery.isLoading
 
@@ -246,6 +248,7 @@ const MenuPage = () => {
             memberNamesById={memberNamesById}
             editable
             onReplaceSlot={(slot) => setReplaceSlot(slot)}
+            onAddSlot={(day) => setAddSlotDay(day)}
           />
         </div>
       ) : null}
@@ -289,6 +292,19 @@ const MenuPage = () => {
           open={!!replaceSlot}
           onOpenChange={(open) => {
             if (!open) setReplaceSlot(null)
+          }}
+        />
+      ) : null}
+
+      {workspace && draft ? (
+        <AddSlotDialog
+          workspaceId={workspace.id}
+          menu={draft}
+          dayOfWeek={addSlotDay}
+          memberNamesById={memberNamesById}
+          open={!!addSlotDay}
+          onOpenChange={(open) => {
+            if (!open) setAddSlotDay(null)
           }}
         />
       ) : null}

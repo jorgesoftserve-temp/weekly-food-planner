@@ -176,6 +176,23 @@ Both modes produce a **draft** the user reviews, edits, and accepts before it be
 
 ---
 
+## 4.0.1 Add a slot to an existing draft
+
+Beyond the existing "Replace recipe" affordance on each slot, draft review now exposes an **Add meal** action on every day card. Use cases:
+
+- Add a special dinner for one member (e.g. an adult's late-night meal the engine didn't plan).
+- Add a meal on a day the engine left empty (e.g. when a member's frequency override only covered breakfasts).
+
+Rules:
+- Caller must be creator/admin.
+- The menu must still be a draft (not accepted).
+- For **weekly** menus the server re-runs the engine's hard-constraint filter against the target member (or the first participant for shared slots); a violation returns 422 (allergy, dietary restriction, ingredient exclusion, or meal-type mismatch).
+- For **custom** menus the engine check is skipped, matching the existing custom-menu "user owns the constraint set" stance.
+- `target_member_id` must be one of the menu's participants. Targeting a non-participant returns 422.
+- The server auto-derives a unique `meal_key` for the new slot within the same (day, target_member_id) bucket — `{meal_type}` for the first occurrence, `{meal_type}_2`, `_3`, … up to 7. The DB constraint on `(menu_id, day_of_week, meal_key, target_member_id)` is `NULLS NOT DISTINCT`, so the bucket boundary respects null/non-null `target_member_id` separately.
+
+Created slots set `is_overridden = false` and leave `original_recipe_id` NULL — they're user-added from scratch, not modifications of an engine pick.
+
 ## 4.1 Draft / accept lifecycle
 
 Every menu lives in one of three states: **draft → accepted → superseded**.
@@ -320,6 +337,16 @@ Separate ingredients required by a single member due to:
 - Allergies forcing a substitution
 - Dietary substitutions for that member
 - A member-specific meal slot (the engine assigned a different recipe to this member because the shared recipe violated their hard constraints)
+
+## 7.1 Shop-for-subset filter
+
+Once a menu is accepted and the grocery list is on the page, the user can narrow the household down to a subset they're shopping for **right now** (e.g. shopping for me + the kid this week, not the whole family).
+
+- **Pure read-side** — the filter never mutates the accepted menu or the persisted grocery items. It's a presentation-only rescaling.
+- **Shared bucket**: every quantity is multiplied by `selectedCount / participantCount`, where `participantCount` is the menu's persisted `menu_participants` count (the head-count denominator the menu was built for).
+- **Per-member buckets**: only buckets belonging to selected members are shown. Quantities are untouched because a per-member slot was already produced for a single eater.
+- **State lives in the URL** (`?shop_for=uuid,uuid`) so refreshing or sharing the link keeps the same scope. Absent param = "whole household".
+- **Export** keeps downloading the full unfiltered list for now — filtered exports are a future enhancement (the on-screen banner calls this out so the user isn't surprised).
 
 ---
 

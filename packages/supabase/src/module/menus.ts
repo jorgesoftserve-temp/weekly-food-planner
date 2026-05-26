@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MealType } from '../types/db.js'
+import { isMenuStillUpcoming, todayYmd } from './date-utils.js'
 
 export type MenuSlotRecord = {
   id: string
@@ -65,34 +66,6 @@ export const menuKeys = {
     ['menus', 'draft', workspaceId, weekStartDate] as const,
   upcoming: (workspaceId: string) => ['menus', 'upcoming', workspaceId] as const,
   history: (workspaceId: string) => ['menus', 'history', workspaceId] as const,
-}
-
-// "Has the menu finished?" Last day of the menu is week_start_date + (n-1),
-// so the menu is still relevant for shopping while today's date is <= last
-// day. Using local date semantics matches the engine's timezone-naive
-// convention.
-const isMenuStillUpcoming = ({
-  weekStartDate,
-  durationDays,
-  todayYmd,
-}: {
-  weekStartDate: string
-  durationDays: number
-  todayYmd: string
-}): boolean => {
-  const [y, m, d] = weekStartDate.split('-').map((p) => Number.parseInt(p, 10))
-  if (!y || !m || !d) return false
-  const lastDay = new Date(y, m - 1, d + Math.max(0, durationDays - 1))
-  const ly = lastDay.getFullYear()
-  const lm = String(lastDay.getMonth() + 1).padStart(2, '0')
-  const ld = String(lastDay.getDate()).padStart(2, '0')
-  const lastYmd = `${ly}-${lm}-${ld}`
-  return lastYmd >= todayYmd
-}
-
-const todayYmd = (): string => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 const MENU_SELECT = `id, week_start_date, seed, inputs_hash, generation_options, generated_at,

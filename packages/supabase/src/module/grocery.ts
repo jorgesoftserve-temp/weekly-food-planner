@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Unit } from '../types/db.js'
+import { isMenuStillUpcoming, todayYmd } from './date-utils.js'
 
 export type GroceryItem = {
   id: string
@@ -35,31 +36,6 @@ export const groceryKeys = {
 
 const GROCERY_SELECT = `id, target_member_id,
   grocery_items (id, ingredient_id, quantity, unit, scheduled_purchase_day)`
-
-// Day-of-week helpers kept local: importing from constraint-engine here
-// would create a cycle through the supabase package's React Query layer.
-const todayYmd = (): string => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-const isMenuUpcoming = ({
-  weekStartDate,
-  durationDays,
-  cutoffYmd,
-}: {
-  weekStartDate: string
-  durationDays: number
-  cutoffYmd: string
-}): boolean => {
-  const [y, m, d] = weekStartDate.split('-').map((p) => Number.parseInt(p, 10))
-  if (!y || !m || !d) return false
-  const lastDay = new Date(y, m - 1, d + Math.max(0, durationDays - 1))
-  const ly = lastDay.getFullYear()
-  const lm = String(lastDay.getMonth() + 1).padStart(2, '0')
-  const ld = String(lastDay.getDate()).padStart(2, '0')
-  return `${ly}-${lm}-${ld}` >= cutoffYmd
-}
 
 export const getActiveGroceryLists = async ({
   supabase,
@@ -119,10 +95,10 @@ export const getActiveGroceryLists = async ({
   const upcoming = [...rows]
     .reverse()
     .find((m) =>
-      isMenuUpcoming({
+      isMenuStillUpcoming({
         weekStartDate: m.week_start_date,
         durationDays: m.duration_days,
-        cutoffYmd: cutoff,
+        todayYmd: cutoff,
       }),
     )
   const target = upcoming ?? rows[0]

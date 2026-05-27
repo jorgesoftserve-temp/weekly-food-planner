@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { recomputeGroceryListForMenu } from './menu-grocery'
+import { recomputeGroceryListsForMenu } from './menu-grocery'
 
 export type AcceptResult =
   | { ok: true; acceptedSeed: string }
@@ -142,7 +142,7 @@ export const acceptDraftMenu = async ({
   // db_error rather than rolling acceptance back — the accepted_at row is
   // the source of truth; a stale grocery list is recoverable, an
   // un-accepted menu after a successful UI click is not.
-  const groceryResult = await recomputeGroceryListForMenu({ admin, menuId })
+  const groceryResult = await recomputeGroceryListsForMenu({ admin, menuId })
   if (!groceryResult.ok) {
     return { ok: false, status: 500, code: 'db_error', detail: groceryResult.detail }
   }

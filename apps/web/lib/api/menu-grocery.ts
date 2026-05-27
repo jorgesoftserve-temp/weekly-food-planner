@@ -372,6 +372,3 @@ export const recomputeGroceryListsForMenu = async ({
   return { ok: true, listIds, itemCount: totalItems }
 }
 
-// Back-compat alias for the previous name. Old call sites can keep working
-// while we migrate; new code should call `recomputeGroceryListsForMenu`.
-export const recomputeGroceryListForMenu = recomputeGroceryListsForMenu

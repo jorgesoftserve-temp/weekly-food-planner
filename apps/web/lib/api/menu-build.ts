@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { recomputeGroceryListsForMenu } from './menu-grocery'
 
 export type BuildResult =
   | { ok: true; menuId: string }
@@ -172,14 +173,16 @@ export const persistCustomMenu = async ({
       return { ok: false, status: 500, code: 'db_error', detail: partErr.message }
     }
   }
-  // Custom menus get an empty shared grocery list at creation; populated on
-  // acceptance once we wire grocery recomputation. For now, accept just
-  // promotes the menu with whatever shared list exists.
-  const { error: listErr } = await admin
-    .from('grocery_lists')
-    .insert({ menu_id: menuId, target_member_id: null })
-  if (listErr) {
-    return { ok: false, status: 500, code: 'db_error', detail: listErr.message }
+  // Unified grocery path — same recompute drafts + accepted menus share.
+  // For a custom menu being built with user-supplied slots, this produces
+  // shared + per-member buckets with freshness-aware scheduled_purchase_day
+  // straight away (no more empty placeholder list waiting for accept).
+  // If slots are empty (rare — minimum 1 slot is enforced elsewhere) the
+  // recompute still writes an empty shared list so the grocery view has
+  // something to render.
+  const recomputed = await recomputeGroceryListsForMenu({ admin, menuId })
+  if (!recomputed.ok) {
+    return { ok: false, status: 500, code: 'db_error', detail: recomputed.detail }
   }
   return { ok: true, menuId }
 }
@@ -312,11 +315,15 @@ export const cloneMenuAsDraft = async ({
     }
   }
 
-  const { error: listErr } = await admin
-    .from('grocery_lists')
-    .insert({ menu_id: newMenuId, target_member_id: null })
-  if (listErr) {
-    return { ok: false, status: 500, code: 'db_error', detail: listErr.message }
+  // Same unified recompute. Clones bring slots over from the source menu,
+  // so the cloned draft gets a populated grocery list immediately — no
+  // more empty placeholder until accept.
+  const recomputed = await recomputeGroceryListsForMenu({
+    admin,
+    menuId: newMenuId,
+  })
+  if (!recomputed.ok) {
+    return { ok: false, status: 500, code: 'db_error', detail: recomputed.detail }
   }
   return { ok: true, menuId: newMenuId }
 }

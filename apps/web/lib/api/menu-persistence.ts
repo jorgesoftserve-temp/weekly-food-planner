@@ -3,6 +3,7 @@ import type {
   GenerateMenuInput,
   GenerateMenuResult,
 } from '@weekly-food-planner/constraint-engine'
+import { recomputeGroceryListsForMenu } from './menu-grocery'
 
 export type PersistResult =
   | { ok: true; menuId: string | null; generationRunId: string }
@@ -140,28 +141,18 @@ export const persistGeneratedMenu = async ({
     if (partErr) return { ok: false, detail: partErr.message }
   }
 
-  const { data: listRow, error: listErr } = await admin
-    .from('grocery_lists')
-    .insert({ menu_id: menuId, target_member_id: null })
-    .select('id')
-    .single()
-  if (listErr || !listRow) {
-    return { ok: false, detail: listErr?.message ?? 'grocery list insert failed' }
-  }
-  const listId = (listRow as { id: string }).id
-
-  if (result.groceryLists.shared.items.length > 0) {
-    const { error: itemErr } = await admin.from('grocery_items').insert(
-      result.groceryLists.shared.items.map((item) => ({
-        list_id: listId,
-        ingredient_id: item.ingredientId,
-        quantity: item.quantity,
-        unit: item.unit,
-        scheduled_purchase_day: item.scheduledPurchaseDay,
-      })),
-    )
-    if (itemErr) return { ok: false, detail: itemErr.message }
-  }
+  // Unified grocery path: instead of writing the engine's pre-computed
+  // shared bucket here (which discards per-member buckets + leaves
+  // scheduled_purchase_day NULL until accept), delegate to the server
+  // recompute. It reads the slots we just inserted and produces shared +
+  // per-member buckets with freshness-aware scheduled_purchase_day —
+  // identical to what `acceptDraftMenu` would run, so drafts and accepted
+  // menus share one source of truth. See PRODUCT_PRD §7 + DATABASE_PRD
+  // §6.13. The engine's `result.groceryLists` stays in the response for
+  // callers that want an in-memory view, but it's no longer the source
+  // for persistence.
+  const recomputed = await recomputeGroceryListsForMenu({ admin, menuId })
+  if (!recomputed.ok) return { ok: false, detail: recomputed.detail }
 
   const { data: runRow, error: runErr } = await admin
     .from('generation_runs')

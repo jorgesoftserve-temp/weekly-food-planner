@@ -56,8 +56,21 @@ describe.skipIf(!INTEGRATION_ENABLED)('mvp1.5 follow-ups (integration)', () => {
 
   beforeAll(async () => {
     fixture = await createIntegrationFixture()
-    // Signup trigger inserted one creator member. Add a second so we can
-    // exercise per-member shop-for filtering.
+    // Signup trigger inserted one creator member. The BEFORE INSERT
+    // default-meal-frequency trigger (step 37) gave them adult defaults
+    // (breakfast/lunch/dinner) — but we've only seeded breakfast + dinner
+    // + snack recipes, so we override the creator's meal_frequency to
+    // match WEEKLY_FREQ. We do the same explicitly for the second member
+    // so the tests stay independent of whatever the age-default mapping
+    // happens to be.
+    const { error: creatorFreqErr } = await fixture.supabase
+      .from('workspace_members')
+      .update({ meal_frequency: WEEKLY_FREQ })
+      .eq('workspace_id', fixture.workspaceId)
+      .eq('role', 'creator')
+    if (creatorFreqErr) {
+      throw new Error(`set creator meal_frequency: ${creatorFreqErr.message}`)
+    }
     const second = await createMember({
       supabase: fixture.supabase,
       workspaceId: fixture.workspaceId,
@@ -65,12 +78,14 @@ describe.skipIf(!INTEGRATION_ENABLED)('mvp1.5 follow-ups (integration)', () => {
         name: 'Bob',
         role: 'member',
         age_category: 'adult',
+        meal_frequency: WEEKLY_FREQ,
       },
     })
     secondMemberId = second.id
 
-    // Workspace needs a shared_meal_frequency or the engine refuses with
-    // NO_SLOTS. The signup trigger leaves it NULL.
+    // Workspace shared_meal_frequency also set, so any member who reverts
+    // to NULL (or a future test that adds a NULL-meal-frequency member)
+    // still has a sensible fallback.
     const { error: wsUpdateErr } = await fixture.supabase
       .from('workspaces')
       .update({ shared_meal_frequency: WEEKLY_FREQ })

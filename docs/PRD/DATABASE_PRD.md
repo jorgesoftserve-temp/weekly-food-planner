@@ -434,7 +434,7 @@ Its purpose is to:
 2. Display the schedule in the UI so users understand when each slot is meant to be eaten.
 3. Provide the substrate for a future MVP feature that links recipes to specific times of day.
 
-A migration ships a default `meal_frequency` per `age_category` so newly created members start with sensible defaults.
+Default `meal_frequency` per `age_category` is applied automatically by a `BEFORE INSERT` trigger on `workspace_members` (function `fn_default_meal_frequency_for_age`). Adults / teens / seniors default to breakfast + lunch + dinner; toddlers + children pick up an additional snack; infants are left NULL (deferring to whoever feeds them, which means the engine falls back to `workspaces.shared_meal_frequency`). Callers can pass an explicit `meal_frequency` to the insert to override the default, or `UPDATE` the row to `NULL` after creation to revert to workspace-level fallback (the "Inherit from workspace" toggle in the member form does this).
 
 ---
 

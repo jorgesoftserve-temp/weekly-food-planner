@@ -105,6 +105,20 @@ describe.skipIf(!INTEGRATION_ENABLED)('end-to-end determinism (integration)', ()
 
   beforeAll(async () => {
     fixture = await createIntegrationFixture()
+    // Override the creator's auto-defaulted meal_frequency (3 meals/day
+    // from the age-category trigger) to match the recipes we seed below
+    // (breakfast + dinner only). Without this the engine asks for lunch
+    // recipes and bails with no_valid_recipe.
+    const TWO_MEAL_FREQ = [
+      { key: 'breakfast', title: 'Breakfast', mealType: 'breakfast', defaultHour: 8 },
+      { key: 'dinner', title: 'Dinner', mealType: 'dinner', defaultHour: 19 },
+    ]
+    const { error: freqErr } = await fixture.supabase
+      .from('workspace_members')
+      .update({ meal_frequency: TWO_MEAL_FREQ })
+      .eq('workspace_id', fixture.workspaceId)
+      .eq('role', 'creator')
+    if (freqErr) throw new Error(`set creator meal_frequency: ${freqErr.message}`)
     const ingredients = await seedIngredients({ fixture })
     const oats = ingredients.find((i) => i.name === 'Rolled oats')
     const milk = ingredients.find((i) => i.name === 'Milk')

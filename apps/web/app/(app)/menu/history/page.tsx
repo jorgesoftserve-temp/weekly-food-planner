@@ -117,15 +117,20 @@ const MenuHistoryPage = () => {
         <ul className="flex flex-col gap-3">
           {entries.map((entry) => (
             <li key={entry.id}>
-              <Card>
+              <Card className="transition-colors hover:border-foreground/40">
                 <CardHeader className="flex flex-row items-start justify-between gap-3 pb-2">
                   <div className="flex flex-col gap-1">
                     <CardTitle className="text-base">
-                      Week of {entry.week_start_date} ·{' '}
-                      <span className="text-muted-foreground">
-                        {entry.duration_days} day
-                        {entry.duration_days === 1 ? '' : 's'}
-                      </span>
+                      <Link
+                        href={`/menu/history/${entry.id}`}
+                        className="hover:underline"
+                      >
+                        Week of {entry.week_start_date} ·{' '}
+                        <span className="text-muted-foreground">
+                          {entry.duration_days} day
+                          {entry.duration_days === 1 ? '' : 's'}
+                        </span>
+                      </Link>
                     </CardTitle>
                     <CardDescription>
                       <span className="capitalize">{entry.menu_type}</span> ·

@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   getActiveMenu,
   getDraftMenu,
+  getMenuById,
   listAcceptedMenus,
   listUpcomingAcceptedMenus,
   menuKeys,
@@ -76,6 +77,28 @@ export const useMenuHistory = ({
     queryFn: () =>
       listAcceptedMenus({ supabase, workspaceId: workspaceId! }),
     enabled: enabled && !!workspaceId,
+  })
+
+export const useMenuById = ({
+  supabase,
+  workspaceId,
+  menuId,
+  enabled = true,
+}: {
+  supabase: SupabaseClient
+  workspaceId: string | null
+  menuId: string | null
+  enabled?: boolean
+}): UseQueryResult<MenuRecord | null> =>
+  useQuery({
+    queryKey: menuKeys.byId(workspaceId ?? '', menuId ?? ''),
+    queryFn: () =>
+      getMenuById({
+        supabase,
+        workspaceId: workspaceId!,
+        menuId: menuId!,
+      }),
+    enabled: enabled && !!workspaceId && !!menuId,
   })
 
 export const useUpcomingMenus = ({

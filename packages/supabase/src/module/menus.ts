@@ -55,6 +55,8 @@ export const menuQueryKeys = {
     ['menus', 'draft', workspaceId, weekStartDate] as const,
   upcoming: (workspaceId: string) => ['menus', 'upcoming', workspaceId] as const,
   history: (workspaceId: string) => ['menus', 'history', workspaceId] as const,
+  byId: (workspaceId: string, menuId: string) =>
+    ['menus', 'byId', workspaceId, menuId] as const,
 }
 
 export const menuKeys = {
@@ -66,6 +68,8 @@ export const menuKeys = {
     ['menus', 'draft', workspaceId, weekStartDate] as const,
   upcoming: (workspaceId: string) => ['menus', 'upcoming', workspaceId] as const,
   history: (workspaceId: string) => ['menus', 'history', workspaceId] as const,
+  byId: (workspaceId: string, menuId: string) =>
+    ['menus', 'byId', workspaceId, menuId] as const,
 }
 
 const MENU_SELECT = `id, week_start_date, seed, inputs_hash, generation_options, generated_at,
@@ -126,6 +130,32 @@ export const getActiveMenu = async ({
       }),
     )
   return upcoming ?? rows[0] ?? null
+}
+
+// Loads a single menu by id, scoped to a workspace. Used by the history
+// drill-down page — RLS still enforces workspace access, but scoping by
+// workspaceId catches a stale URL pointing at a workspace the user no
+// longer has a role in. Past menus stay readable here (the cutoff filter
+// only applies to "active" + "upcoming" loaders) so users can review
+// what they cooked any week back.
+export const getMenuById = async ({
+  supabase,
+  workspaceId,
+  menuId,
+}: {
+  supabase: SupabaseClient
+  workspaceId: string
+  menuId: string
+}): Promise<MenuRecord | null> => {
+  const { data, error } = await supabase
+    .from('menus')
+    .select(MENU_SELECT)
+    .eq('id', menuId)
+    .eq('workspace_id', workspaceId)
+    .eq('is_deleted', false)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return (data as MenuRecord | null) ?? null
 }
 
 // Accepted menus whose last day is today or later. Returned in

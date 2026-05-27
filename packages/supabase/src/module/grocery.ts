@@ -26,12 +26,16 @@ export const groceryQueryKeys = {
   active: (workspaceId: string) => ['grocery', 'active', workspaceId] as const,
   activeForWeek: (workspaceId: string, weekStartDate: string) =>
     ['grocery', 'active', workspaceId, weekStartDate] as const,
+  byMenuId: (workspaceId: string, menuId: string) =>
+    ['grocery', 'byMenuId', workspaceId, menuId] as const,
 }
 
 export const groceryKeys = {
   active: (workspaceId: string) => ['grocery', 'active', workspaceId] as const,
   activeForWeek: (workspaceId: string, weekStartDate: string) =>
     ['grocery', 'active', workspaceId, weekStartDate] as const,
+  byMenuId: (workspaceId: string, menuId: string) =>
+    ['grocery', 'byMenuId', workspaceId, menuId] as const,
 }
 
 const GROCERY_SELECT = `id, target_member_id,
@@ -113,4 +117,24 @@ export const getActiveGroceryLists = async ({
     weekStartDate: target.week_start_date,
     lists: (lists ?? []) as unknown as GroceryListRecord[],
   }
+}
+
+// Loads grocery lists for an arbitrary menu_id. Used by the history
+// drill-down so users can re-review what they shopped for a past menu
+// without going through the active/upcoming cutoff logic. RLS still
+// gates by workspace access — the menu row itself is what enforces
+// visibility, the join from grocery_lists is the same.
+export const getGroceryListsForMenuId = async ({
+  supabase,
+  menuId,
+}: {
+  supabase: SupabaseClient
+  menuId: string
+}): Promise<GroceryListRecord[]> => {
+  const { data, error } = await supabase
+    .from('grocery_lists')
+    .select(GROCERY_SELECT)
+    .eq('menu_id', menuId)
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as GroceryListRecord[]
 }

@@ -1,0 +1,6 @@
+Add MCP servers for the things agents query a lot:
+Supabase MCP — schema introspection, RLS policy listing, migration status (kills a lot of speculative grepping).
+shadcn MCP — component registry browsing for ui-component-builder.
+Vitest MCP — run + parse for ci-gate-runner and the test agents.
+
+@.cursor/rules/agentic-rules.md  we need to follow agentic rules for this prompt and the next ones so that we can keep track of the prompting history and claude info

@@ -111,16 +111,73 @@ The `apps/web/integration/end-to-end.integration.test.ts` test exercises the ful
 
 CI ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) runs typecheck + the mocked unit tier. Integration and end-to-end drivers are run locally — they need a Supabase instance and (for the driver) a running dev server.
 
-## Agent skills
+## Agentic collaboration
 
-Custom skills live under [`.claude/skills/`](./.claude/skills/) and are auto-discovered by the Claude Code harness.
+This repo is set up for both Claude Code and Cursor.
+
+### CLAUDE.md
+
+A short, token-efficient orientation file lives at the root and at each package boundary. Claude Code loads them automatically when working in that area; PRDs are referenced by path so they aren't pulled into every session.
+
+- [`CLAUDE.md`](./CLAUDE.md) — root: stack snapshot, the 10 non-negotiables, agent + skill catalogue, commands cheat sheet.
+- [`apps/web/CLAUDE.md`](./apps/web/CLAUDE.md) — Next.js + React Query + Zustand + shadcn conventions.
+- [`packages/constraint-engine/CLAUDE.md`](./packages/constraint-engine/CLAUDE.md) — engine determinism contract.
+- [`packages/supabase/CLAUDE.md`](./packages/supabase/CLAUDE.md) — migrations + SQL style + module hooks.
+
+### Agents
+
+Subagent definitions live under [`.claude/agents/`](./.claude/agents/) and can be invoked via the Agent tool with `subagent_type: "<name>"`. Each agent has a tight scope and a hand-off list so the parent session can delegate without bloat.
+
+| Agent | When to use |
+|---|---|
+| [`ui-component-builder`](./.claude/agents/ui-component-builder.md) | New UI under `apps/web/components/` or any feature `_components/` |
+| [`route-handler-engineer`](./.claude/agents/route-handler-engineer.md) | New or modified handlers under `apps/web/app/api/` and server actions |
+| [`supabase-migration-author`](./.claude/agents/supabase-migration-author.md) | Any schema change — tables, columns, enums, RLS, functions, triggers, indexes |
+| [`vitest-integration-author`](./.claude/agents/vitest-integration-author.md) | New `.integration.test.ts` covering CRUD + RLS + role matrix |
+| [`constraint-engine-engineer`](./.claude/agents/constraint-engine-engineer.md) | Any edit inside `packages/constraint-engine/` |
+| [`determinism-snapshot-curator`](./.claude/agents/determinism-snapshot-curator.md) | Engine golden snapshots and regression suite |
+| [`ux-reviewer`](./.claude/agents/ux-reviewer.md) | Pre-PR review of UI flows against product UX expectations |
+| [`accessibility-auditor`](./.claude/agents/accessibility-auditor.md) | Pre-PR a11y review (keyboard nav, ARIA, contrast) |
+| [`prd-aligner`](./.claude/agents/prd-aligner.md) | Cross-check code state against the PRDs, flag drift |
+
+### Skills
+
+Custom skills live under [`.claude/skills/`](./.claude/skills/) and are auto-discovered.
 
 - **[`constraint-menu-generator-life-cycle-test`](./.claude/skills/constraint-menu-generator-life-cycle-test/SKILL.md)** — given a recipes + dietary-constraints spec, emits a paired life-cycle integration test: a Vitest `*.integration.test.ts` for the engine + DB layer (gated on `INTEGRATION_ENABLED`) and a Node ESM HTTP driver mirroring [`scripts/verify-flow.mjs`](./scripts/verify-flow.mjs) for the full Next.js API walk. Both artifacts come from the same input so the engine and HTTP layers can't drift. Reference inputs live in the skill's [`docs/examples/`](./.claude/skills/constraint-menu-generator-life-cycle-test/docs/examples/).
+- **[`menu-generation-impact-review`](./.claude/skills/menu-generation-impact-review/SKILL.md)** — given a proposed menu-generation feature, produces a structured impact review (no code): which layers change, what could break, snapshot drift risk, tests to add, PRD sections to update, and the agent-by-agent implementation order. Invoke when scoping a new feature, evaluating an architecture change, or pre-flighting a refactor. Worked example: [`docs/examples/max-budget-per-week.md`](./.claude/skills/menu-generation-impact-review/docs/examples/max-budget-per-week.md).
+- **[`supabase-add-column`](./.claude/skills/supabase-add-column/SKILL.md)** — emit the full multi-artifact change set for adding a column (migration with `COMMENT ON COLUMN`, soft-delete-aware partial-index handling, optional backfill, types regen command, and the list of TypeScript files that need to update in lockstep). Worked example: [`docs/examples/ingredients-cost-per-unit.md`](./.claude/skills/supabase-add-column/docs/examples/ingredients-cost-per-unit.md).
+- **[`feature-folder-scaffold`](./.claude/skills/feature-folder-scaffold/SKILL.md)** — scaffold a CRUD feature folder under `apps/web/app/(app)/<feature>/` matching the canonical shape (client list page + create/edit drawer + soft-delete confirm + Zod schema + integration test + middleware/sidebar patches). Reuses hooks from `@weekly-food-planner/supabase/react`; never generates app-level hooks. Worked example: [`docs/examples/shopping-templates.md`](./.claude/skills/feature-folder-scaffold/docs/examples/shopping-templates.md).
 
-## Project rules
+### MCP servers
 
-The [`.cursor/rules/`](./.cursor/rules/) directory contains rules consumed by Cursor and Claude:
+Three servers wired via [`.mcp.json`](./.mcp.json) at the repo root, auto-discovered by Claude Code on session start. Run `/mcp` inside Claude Code to confirm connection.
+
+| Server | Use for | Auth |
+|---|---|---|
+| `supabase` | Schema introspection, RLS policy listing, migration status. `--read-only`. | `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` env vars |
+| `shadcn` | Component registry browsing (list / demo / source) — backs `ui-component-builder` | None |
+| `vitest` | Run + parse JSON reporter output — backs the test-authoring agents | None |
+
+Read-only Supabase keeps schema mutations on the migration-ritual path through [`supabase-migration-author`](./.claude/agents/supabase-migration-author.md). See [`docs/agentic/changelog/2026-05-26_mcp-servers.md`](./docs/agentic/changelog/2026-05-26_mcp-servers.md) for env-var setup and rationale.
+
+### Cursor rules
+
+The [`.cursor/rules/`](./.cursor/rules/) directory contains rules consumed by both Cursor and Claude Code. CLAUDE.md files reference these but do not duplicate them:
 
 - [`global-rules.md`](./.cursor/rules/global-rules.md) — TypeScript / React / Supabase / SQL conventions
 - [`agentic-rules.md`](./.cursor/rules/agentic-rules.md) — Agent collaboration: required folders, prompt + log format
 - [`query-patterns.md`](./.cursor/rules/query-patterns.md) — TanStack Query + Next.js hydration patterns
+
+### Reference docs
+
+The [`docs/agentic/`](./docs/agentic/) directory holds the detailed reference documentation for the agentic infrastructure — start with [`docs/agentic/README.md`](./docs/agentic/README.md) for the directory index. Quick links:
+
+- [`architecture.md`](./docs/agentic/architecture.md) — how cursor rules, CLAUDE.md, agents, skills, and MCP servers compose; the skill-vs-agent decision criteria.
+- [`agents.md`](./docs/agentic/agents.md) — full agent catalog.
+- [`skills.md`](./docs/agentic/skills.md) — full skill catalog.
+- [`claude-md.md`](./docs/agentic/claude-md.md) — CLAUDE.md inventory + auto-load model.
+- [`extending.md`](./docs/agentic/extending.md) — playbook for adding new agents/skills/CLAUDE.md.
+- [`changelog/`](./docs/agentic/changelog/) — dated entries describing notable changes to the agentic setup itself.
+
+Session-by-session history (prompt + context + observed issues + follow-ups) lives in [`agent-log/`](./agent-log/) per [`.cursor/rules/agentic-rules.md`](./.cursor/rules/agentic-rules.md), distinct from the static reference docs above.

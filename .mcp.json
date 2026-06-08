@@ -1,7 +1,15 @@
 {
   "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/mcp.json",
   "mcpServers": {
-    "supabase": {
+    "supabase-local": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+      ]
+    },
+    "supabase-remote": {
       "command": "npx",
       "args": [
         "-y",
@@ -17,11 +25,17 @@
       "command": "npx",
       "args": ["-y", "shadcn@latest", "mcp"]
     },
-    "vitest": {
-      "command": "npx",
-      "args": ["-y", "vitest-mcp-server@latest"],
+    "menu": {
+      "command": "pnpm",
+      "args": [
+        "--filter",
+        "@weekly-food-planner/menu-mcp-server",
+        "--silent",
+        "start"
+      ],
       "env": {
-        "VITEST_MCP_ROOT": "${PWD}"
+        "MENU_MCP_BASE_URL": "${MENU_MCP_BASE_URL:-http://127.0.0.1:3000}",
+        "MENU_MCP_USER_JWT": "${MENU_MCP_USER_JWT}"
       }
     }
   }

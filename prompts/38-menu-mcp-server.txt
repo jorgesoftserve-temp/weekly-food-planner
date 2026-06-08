@@ -1,0 +1,18 @@
+Lets plan a custom mcp that will allow us to
+Review constraints and previous menu choices inside the MCP context so the menu generator agent can consult dietary constraints, recipe/ingredient usability, and previously planned meals.
+
+the mcp should be able to generate new menus for existing users and test cases demonstrate constraint enforcement when context changes.
+
+Lets plan first before adding code and review if this custom mcp could enhance the current workflow that we have or what other alternatives we can use
+
+---
+
+lets review a combination of options B,C to cover both th engine and the db with custom mcp, how would this affect existing functionality and performance of the system agents
+
+---
+
+Lets draft the full implementation of B,C1 in tandem, we will built both together
+
+---
+
+lets start with the refactor steps

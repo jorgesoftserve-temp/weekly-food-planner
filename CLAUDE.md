@@ -63,11 +63,12 @@ Wired via [`.mcp.json`](./.mcp.json) at the repo root. Claude Code auto-discover
 
 | Server | Use for | Auth |
 |---|---|---|
-| `supabase` | Schema introspection, RLS policy listing, migration status. Read-only. | `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` env vars |
+| `supabase-local` | Generic Postgres SQL access against the local dev DB on `127.0.0.1:54322`. Single `query` tool — useful for ad-hoc reads while iterating. Does NOT introspect Supabase-specific state (RLS, migrations, advisors). | None — connection string baked in. Requires `pnpm --filter @weekly-food-planner/supabase db:start`. |
+| `supabase-remote` | Supabase-feature introspection against the hosted project: schema, RLS policies, migration status, advisors. Read-only. | `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` env vars |
 | `shadcn` | Component registry browsing (list / demo / source) for `ui-component-builder` | None |
-| `vitest` | Run + parse JSON reporter for the test-authoring agents | None |
+| `menu` | Engine + workspace tools for menu generation: `engine_generate_menu` / `engine_compute_inputs_hash` / `engine_validate_input` / `workspace_preview_menu` / `workspace_member_constraints` / `workspace_recipe_usability` / `workspace_recent_menus`. Engine half pure; workspace half hits the running Next.js app. | `MENU_MCP_USER_JWT` (workspace tools only — engine tools work without it). Optionally `MENU_MCP_BASE_URL` (default `http://127.0.0.1:3000`). |
 
-Prefer these over speculative grepping when the data lives in the database or registry. Setup + rationale: [`docs/agentic/changelog/2026-05-26_mcp-servers.md`](./docs/agentic/changelog/2026-05-26_mcp-servers.md).
+Prefer these over speculative grepping when the data lives in the database or registry. Setup + rationale: [`docs/agentic/changelog/2026-05-26_mcp-servers.md`](./docs/agentic/changelog/2026-05-26_mcp-servers.md), [`docs/agentic/changelog/2026-05-29_menu-mcp-server.md`](./docs/agentic/changelog/2026-05-29_menu-mcp-server.md).
 
 ## Agent skills available
 

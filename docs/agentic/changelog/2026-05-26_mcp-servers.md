@@ -117,3 +117,15 @@ Generate the access token from the Supabase dashboard → Account → Access Tok
 `shadcn` and `vitest` servers need no credentials.
 
 Existing agents and skills are unchanged. Anyone who doesn't export the env vars sees the supabase MCP server fail to connect but the other two still work and the repo's existing tools (Bash, Grep, Read) keep functioning as the fallback path.
+
+---
+
+## 2026-06-08 — Correction
+
+A smoke pass on 2026-06-08 surfaced that this entry's `.mcp.json` snippet diverged from reality:
+
+- The `vitest` row pointed at `vitest-mcp-server@latest`, which **does not exist** on the npm registry (404). The entry was removed.
+- The original `supabase` row described features (RLS introspection, advisors) that belong to `@supabase/mcp-server-supabase`. Between this entry and the smoke pass, a second supabase entry (`supabase-local`, generic Postgres MCP) was added without a changelog. The current setup has both: `supabase-local` (generic SQL) and `supabase-remote` (the Supabase-feature server).
+- The `menu` row (added by [`2026-05-29_menu-mcp-server.md`](./2026-05-29_menu-mcp-server.md)) used `node --import tsx/esm ...`, which failed because `tsx` is not hoisted to repo root under pnpm. Now invoked via `pnpm --filter`.
+
+Full corrections + the smoke driver itself: [`2026-06-08_mcp-server-smoke-corrections.md`](./2026-06-08_mcp-server-smoke-corrections.md).

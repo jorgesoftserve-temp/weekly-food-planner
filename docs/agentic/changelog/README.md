@@ -4,6 +4,8 @@ Dated entries describing notable changes to the agentic infrastructure: new agen
 
 ## Entries (newest first)
 
+- [`2026-06-08_mcp-server-smoke-corrections.md`](./2026-06-08_mcp-server-smoke-corrections.md) — Pre-commit smoke pass on the four MCP servers surfaces three corrections: fixes the `menu` launch command (pnpm-filter, not `node --import tsx/esm` which couldn't resolve `tsx` from repo root), removes the `vitest` entry (configured npm package doesn't exist), and splits `supabase-local` vs `supabase-remote` honestly in every catalog. Adds reusable [`scripts/smoke-mcp.mjs`](../../../scripts/smoke-mcp.mjs).
+- [`2026-05-29_menu-mcp-server.md`](./2026-05-29_menu-mcp-server.md) — Adds a fourth MCP server: a custom in-repo runtime at [`apps/menu-mcp-server/`](../../../apps/menu-mcp-server/) with three pure-engine tools and four HTTP-backed workspace tools. Backed by three new app routes (`/menus/preview`, `/recipes/:id/usability`, `/members/:id/constraints`), a shared `buildWeeklyEngineInput` helper, an engine extension (`describeRecipeEligibility`), and a 3-test constraint-regression suite.
 - [`2026-05-26_mcp-servers.md`](./2026-05-26_mcp-servers.md) — Wires three MCP servers (Supabase read-only, shadcn CLI, Vitest) via repo-root [`.mcp.json`](../../../.mcp.json). Closes the deferred MCP-evaluation item from the initial setup.
 - [`2026-05-26_initial-agentic-setup.md`](./2026-05-26_initial-agentic-setup.md) — Initial agentic foundation: root + per-package CLAUDE.md, 9 sub-agents, 3 skills (impact-review, supabase-add-column, feature-folder-scaffold), and the [`docs/agentic/`](../) reference docs themselves.
 

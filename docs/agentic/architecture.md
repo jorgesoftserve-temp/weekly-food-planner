@@ -8,7 +8,7 @@ How the Weekly Food Planner's agentic toolchain composes. Reference for understa
 2. **CLAUDE.md files** — root + per-package. Token-efficient orientation auto-loaded by Claude Code based on the working directory. Each is short and links out to PRDs / cursor rules rather than inlining them. See [`claude-md.md`](./claude-md.md).
 3. **Sub-agents** — [`.claude/agents/`](../../.claude/agents/). Specialist roles the parent session can delegate to via the Agent tool. Each has a tight scope, frontmatter (`name`, `description`, `model`), operating rules, hand-off list, and output expectations. See [`agents.md`](./agents.md).
 4. **Skills** — [`.claude/skills/`](../../.claude/skills/). Deterministic, multi-artifact emitters invoked by name. Each has a `SKILL.md` (with frontmatter), authoritative repo references, step-by-step workflow, non-negotiables, and at least one worked example under `docs/examples/`. See [`skills.md`](./skills.md).
-5. **MCP servers** — [`.mcp.json`](../../.mcp.json) at the repo root. External capabilities exposed to Claude Code as tools. Three wired today: `supabase` (read-only schema introspection + RLS listing), `shadcn` (component registry browsing), `vitest` (run + parse). See [`changelog/2026-05-26_mcp-servers.md`](./changelog/2026-05-26_mcp-servers.md).
+5. **MCP servers** — [`.mcp.json`](../../.mcp.json) at the repo root. External capabilities exposed to Claude Code as tools. Four wired today: `supabase-local` (generic Postgres `query` against local dev DB), `supabase-remote` (read-only Supabase-feature MCP — schema, RLS, advisors), `shadcn` (component registry browsing), `menu` (custom in-repo). See [`mcp-servers.md`](./mcp-servers.md).
 
 ## When each layer is the right fit
 
@@ -106,17 +106,20 @@ Common chains:
 
 ## MCP servers
 
-Three servers wired via [`.mcp.json`](../../.mcp.json) at the repo root. Claude Code reads the file on session start and exposes each server as tools:
+Four servers wired via [`.mcp.json`](../../.mcp.json) at the repo root. Claude Code reads the file on session start and exposes each server as tools. The full catalog is in [`mcp-servers.md`](./mcp-servers.md); the table here is the at-a-glance view.
 
 | Server | Purpose | Auth | Consuming agents |
 |---|---|---|---|
-| `supabase` | Schema introspection, RLS policy listing, migration status. `--read-only`. | `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` env vars | [`supabase-migration-author`](../../.claude/agents/supabase-migration-author.md), [`route-handler-engineer`](../../.claude/agents/route-handler-engineer.md) |
+| `supabase-local` | Generic Postgres MCP (`@modelcontextprotocol/server-postgres`) against local dev DB on `127.0.0.1:54322`. Single `query` tool — ad-hoc SQL only, not Supabase-aware. | None — needs local Supabase running | [`vitest-integration-author`](../../.claude/agents/vitest-integration-author.md), [`route-handler-engineer`](../../.claude/agents/route-handler-engineer.md) (debugging fixtures / RLS denials) |
+| `supabase-remote` | Supabase-feature MCP (`@supabase/mcp-server-supabase`, `--read-only`) against the hosted project. Schema, RLS policies, migrations, advisors. | `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` env vars | [`supabase-migration-author`](../../.claude/agents/supabase-migration-author.md), [`route-handler-engineer`](../../.claude/agents/route-handler-engineer.md) |
 | `shadcn` | Component registry browsing (list, demo, source). | None | [`ui-component-builder`](../../.claude/agents/ui-component-builder.md) |
-| `vitest` | Test runner with JSON reporter output. | None — `VITEST_MCP_ROOT` pins working dir | [`vitest-integration-author`](../../.claude/agents/vitest-integration-author.md) and the future `ci-gate-runner` |
+| `menu` | Custom server at [`apps/menu-mcp-server/`](../../apps/menu-mcp-server/). Engine half (`engine_generate_menu`, `engine_compute_inputs_hash`, `engine_validate_input`) wraps the constraint engine in-process. Workspace half (`workspace_preview_menu`, `workspace_member_constraints`, `workspace_recipe_usability`, `workspace_recent_menus`) talks to the running Next.js app via authenticated bearer JWT. | `MENU_MCP_USER_JWT` (workspace half only). `MENU_MCP_BASE_URL` optional, defaults to `http://127.0.0.1:3000`. | [`constraint-engine-engineer`](../../.claude/agents/constraint-engine-engineer.md), [`route-handler-engineer`](../../.claude/agents/route-handler-engineer.md), [`vitest-integration-author`](../../.claude/agents/vitest-integration-author.md) |
 
-Read-only Supabase is intentional: schema mutations stay on the migration-ritual path through [`supabase-migration-author`](../../.claude/agents/supabase-migration-author.md) so the change is auditable in git.
+Read-only / non-mutating posture is intentional: schema mutations stay on the migration-ritual path through [`supabase-migration-author`](../../.claude/agents/supabase-migration-author.md) so the change is auditable in git. The `menu` server is non-mutating from the MCP side — `workspace_preview_menu` deliberately uses a no-persist route so what-if loops don't pollute history; persisting menu generation still flows through `POST /menus`.
 
-See [`changelog/2026-05-26_mcp-servers.md`](./changelog/2026-05-26_mcp-servers.md) for the rationale per server, env-var setup, and the validation plan.
+A `vitest` MCP entry was removed on 2026-06-08 after smoke-testing revealed its npm package (`vitest-mcp-server`) does not exist. Agents run tests via `Bash(pnpm test)` instead. See [`changelog/2026-06-08_mcp-server-smoke-corrections.md`](./changelog/2026-06-08_mcp-server-smoke-corrections.md).
+
+See [`changelog/2026-05-26_mcp-servers.md`](./changelog/2026-05-26_mcp-servers.md) for the initial baseline, [`changelog/2026-05-29_menu-mcp-server.md`](./changelog/2026-05-29_menu-mcp-server.md) for the custom menu server, and [`changelog/2026-06-08_mcp-server-smoke-corrections.md`](./changelog/2026-06-08_mcp-server-smoke-corrections.md) for the smoke-driven corrections.
 
 ### Open candidate
 

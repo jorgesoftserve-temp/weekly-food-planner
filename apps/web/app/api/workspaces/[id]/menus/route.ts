@@ -9,12 +9,11 @@ import {
   forbidden,
   jsonError,
   jsonOk,
-  notFound,
   serverError,
   unauthorized,
 } from '@/lib/api/responses'
-import { loadEngineSnapshot } from '@/lib/api/menu-loader'
-import { computeEffectiveOverlay, type RawOverlay } from '@/lib/api/menu-overlay'
+import { buildWeeklyEngineInput } from '@/lib/api/menu-input-builder'
+import type { RawOverlay } from '@/lib/api/menu-overlay'
 import { persistGeneratedMenu } from '@/lib/api/menu-persistence'
 import {
   cloneMenuAsDraft,
@@ -23,7 +22,6 @@ import {
 } from '@/lib/api/menu-build'
 import { supabaseAdminClient } from '@/utils/supabase/admin'
 import { generateMenu } from '@weekly-food-planner/constraint-engine'
-import type { GenerateMenuInput } from '@weekly-food-planner/constraint-engine'
 
 type RouteParams = { id: string }
 
@@ -54,8 +52,6 @@ type CloneBody = {
 }
 
 type GenerateBody = WeeklyBody | CustomBody | CloneBody
-
-const generateRandomSeed = (): number => Math.floor(Math.random() * 2_147_483_647)
 
 const clampDuration = (raw: number | undefined): number => {
   if (raw === undefined || raw === null) return 7
@@ -155,59 +151,16 @@ export const POST = async (
 
   // ---- Weekly (default) — engine-driven, deterministic -------------------
   const weeklyBody = body as WeeklyBody
-  const loaded = await loadEngineSnapshot({ supabase: user.supabase, workspaceId })
-  if (!loaded.ok) {
-    if (loaded.reason === 'workspace_not_found') return notFound()
-    if (loaded.reason === 'no_recipes') {
-      return jsonError(
-        412,
-        'empty_workspace',
-        'Create at least one recipe in this workspace before generating a menu.',
-      )
-    }
-    return serverError(loaded.detail ?? 'failed to load engine snapshot')
-  }
-
-  // Filter to participants before the engine sees the member set. Anything
-  // outside the workspace's active members is dropped — the user can only
-  // generate a menu for people who actually belong here.
-  const allMemberIds = new Set(loaded.members.map((m) => m.id))
-  const requestedIds = Array.isArray(weeklyBody.participantMemberIds)
-    ? Array.from(new Set(weeklyBody.participantMemberIds))
-    : null
-  if (requestedIds && requestedIds.length === 0) {
-    return badRequest('participantMemberIds cannot be empty')
-  }
-  const participantIds = requestedIds
-    ? requestedIds.filter((id) => allMemberIds.has(id))
-    : loaded.members.map((m) => m.id)
-  if (participantIds.length === 0) {
-    return badRequest('no valid participants for this workspace')
-  }
-  const participantIdSet = new Set(participantIds)
-  const participatingMembers = loaded.members.filter((m) => participantIdSet.has(m.id))
-
-  // computeEffectiveOverlay also vets memberFrequencyOverrides against the
-  // participant set, so unknown / non-participating ids in overrides are
-  // silently dropped from the persisted options.
-  const effectiveOverlay = computeEffectiveOverlay({
-    raw: weeklyBody.options,
-    members: participatingMembers,
+  const built = await buildWeeklyEngineInput({
+    supabase: user.supabase,
+    workspaceId,
+    body: weeklyBody,
+    nowIso: new Date().toISOString(),
   })
-
-  const seed = weeklyBody.seed ?? generateRandomSeed()
-  const durationDays = clampDuration(weeklyBody.durationDays)
-  const input: GenerateMenuInput = {
-    workspace: loaded.workspace,
-    members: participatingMembers,
-    recipes: loaded.recipes,
-    ingredients: loaded.ingredients,
-    weekStartDate: weeklyBody.weekStartDate,
-    seed,
-    durationDays,
-    options: effectiveOverlay,
-    now: new Date().toISOString(),
+  if (!built.ok) {
+    return jsonError(built.status, built.code, built.detail)
   }
+  const { input, participantMemberIds, effectiveOverlay, seed, durationDays } = built
 
   const result = await generateMenu(input)
 
@@ -217,7 +170,7 @@ export const POST = async (
     weekStartDate: weeklyBody.weekStartDate,
     input,
     result,
-    participantMemberIds: participantIds,
+    participantMemberIds,
   })
   if (!persisted.ok) return serverError(persisted.detail)
 

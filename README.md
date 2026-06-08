@@ -151,15 +151,16 @@ Custom skills live under [`.claude/skills/`](./.claude/skills/) and are auto-dis
 
 ### MCP servers
 
-Three servers wired via [`.mcp.json`](./.mcp.json) at the repo root, auto-discovered by Claude Code on session start. Run `/mcp` inside Claude Code to confirm connection.
+Four servers wired via [`.mcp.json`](./.mcp.json) at the repo root, auto-discovered by Claude Code on session start. Run `/mcp` inside Claude Code to confirm connection.
 
 | Server | Use for | Auth |
 |---|---|---|
-| `supabase` | Schema introspection, RLS policy listing, migration status. `--read-only`. | `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` env vars |
+| `supabase-local` | Generic Postgres MCP (`@modelcontextprotocol/server-postgres`) pointed at the local dev DB on `127.0.0.1:54322`. Exposes a single `query` tool — ad-hoc SQL reads while iterating. Does NOT introspect Supabase-specific state (RLS, migrations, advisors). | None — connection string baked in. Requires `pnpm --filter @weekly-food-planner/supabase db:start`. |
+| `supabase-remote` | `@supabase/mcp-server-supabase --read-only` against the hosted project. Schema introspection, RLS policy listing, migration status, advisors. | `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` env vars |
 | `shadcn` | Component registry browsing (list / demo / source) — backs `ui-component-builder` | None |
-| `vitest` | Run + parse JSON reporter output — backs the test-authoring agents | None |
+| `menu` | Custom server in [`apps/menu-mcp-server/`](./apps/menu-mcp-server/). Engine tools (`engine_generate_menu`, `engine_compute_inputs_hash`, `engine_validate_input`) wrap the constraint engine directly; workspace tools (`workspace_preview_menu`, `workspace_member_constraints`, `workspace_recipe_usability`, `workspace_recent_menus`) hit the running Next.js app. | `MENU_MCP_USER_JWT` (Supabase user JWT with admin role on a dev workspace) — workspace tools only. Optionally `MENU_MCP_BASE_URL` (default `http://127.0.0.1:3000`). Engine tools work without any env. |
 
-Read-only Supabase keeps schema mutations on the migration-ritual path through [`supabase-migration-author`](./.claude/agents/supabase-migration-author.md). See [`docs/agentic/changelog/2026-05-26_mcp-servers.md`](./docs/agentic/changelog/2026-05-26_mcp-servers.md) for env-var setup and rationale.
+Read-only Supabase keeps schema mutations on the migration-ritual path through [`supabase-migration-author`](./.claude/agents/supabase-migration-author.md). The menu server impersonates a real workspace member via JWT — RLS still applies, bounding blast radius. See [`docs/agentic/changelog/2026-05-26_mcp-servers.md`](./docs/agentic/changelog/2026-05-26_mcp-servers.md), [`docs/agentic/changelog/2026-05-29_menu-mcp-server.md`](./docs/agentic/changelog/2026-05-29_menu-mcp-server.md), and [`docs/agentic/changelog/2026-06-08_mcp-server-smoke-corrections.md`](./docs/agentic/changelog/2026-06-08_mcp-server-smoke-corrections.md) for env-var setup, rationale, and the smoke-driven corrections.
 
 ### Cursor rules
 

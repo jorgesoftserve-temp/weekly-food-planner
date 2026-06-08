@@ -11,6 +11,7 @@ Reference documentation for the Weekly Food Planner's agentic infrastructure: th
 | [`agents.md`](./agents.md) | Catalog of every sub-agent under [`.claude/agents/`](../../.claude/agents/) — scope, inputs/outputs, hand-offs. |
 | [`skills.md`](./skills.md) | Catalog of every skill under [`.claude/skills/`](../../.claude/skills/) — input shape, output shape, examples. |
 | [`claude-md.md`](./claude-md.md) | Inventory of every CLAUDE.md file in the repo, what each covers, and when the harness auto-loads it. |
+| [`mcp-servers.md`](./mcp-servers.md) | Catalog of every MCP server wired via [`.mcp.json`](../../.mcp.json) — functionality, consuming agents, example flows. |
 | [`extending.md`](./extending.md) | Playbook for adding a new agent / skill / CLAUDE.md. Conventions, frontmatter, worked-example expectations. |
 | [`changelog/`](./changelog/) | Dated entries describing notable changes to the agentic setup itself. Read the latest entry for "what's new"; older entries for rationale on past decisions. |
 

@@ -21,6 +21,7 @@ The architecture must prioritize:
 - **shadcn/ui** — component primitives copied into the codebase via the official CLI. Initialize once per app (`npx shadcn@latest init`); add components individually (`npx shadcn@latest add button`). Components live under `apps/web/components/ui/`.
 - React Query for server-state cache on the client
 - Zustand for ephemeral UI state (modals, drawers, multi-step form drafts — never server data)
+- **(v1.8)** `next-themes` for class-based light/dark/system theming, and `next/font` (Inter body + Fraunces headings) for self-hosted fonts with no layout shift. Brand tokens, gradients, and the per-user/per-member accent palettes live as CSS variables in `globals.css` + the Tailwind theme, owned by the `design-system-architect`; components reference tokens only (no hex literals). See [`docs/design/`](../design/).
 
 All backend logic lives inside the Next.js app: server components, route handlers (`app/api/**/route.ts`), and server actions. There is no separate Express service. This aligns with the project's cursor rules, which expect Supabase clients to be consumed directly from `apps/web/utils/supabase/`.
 

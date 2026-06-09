@@ -32,3 +32,6 @@ Thumbs.db
 # Supabase
 supabase/.branches/
 supabase/.temp/
+
+# Playwright MCP (browser drive/screenshot artifacts: console logs, page snapshots, screenshots)
+.playwright-mcp/

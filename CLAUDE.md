@@ -45,39 +45,50 @@ Most session pain comes from violating one of these. Re-read before generating c
 
 Defined under [`.claude/agents/`](./.claude/agents/). Delegate work to these instead of doing everything in the parent session:
 
+Terse index — full descriptions, model tiers, and hand-off chains live in [`docs/agentic/agents.md`](./docs/agentic/agents.md).
+
 | Agent | When |
 |---|---|
-| `ui-component-builder` | New UI under [`apps/web/components/`](./apps/web/components/) or any feature `_components/` |
-| `route-handler-engineer` | New or modified handlers under [`apps/web/app/api/`](./apps/web/app/api/) and server actions |
-| `supabase-migration-author` | Any schema change — new tables, columns, enums, RLS, functions, triggers, indexes |
-| `vitest-integration-author` | New `.integration.test.ts` covering CRUD + RLS + role matrix |
-| `constraint-engine-engineer` | Any edit inside [`packages/constraint-engine/`](./packages/constraint-engine/) |
-| `determinism-snapshot-curator` | Engine golden snapshot updates and regression suite |
-| `ux-reviewer` | Pre-PR review of UI flows against product UX expectations |
-| `accessibility-auditor` | Pre-PR review for a11y compliance (keyboard nav, ARIA, contrast) |
-| `prd-aligner` | Cross-checks code state against the PRDs, flags drift |
+| `design-system-architect` | Design tokens, gradients, fonts, accents — owns globals.css + Tailwind + docs/design/ |
+| `ui-component-builder` | New UI under apps/web/components/ or feature `_components/` |
+| `supabase-migration-author` | Any schema change (tables, columns, enums, RLS, RPCs, triggers, indexes) |
+| `supabase-module-author` | Data-layer modules + hooks (`module/<table>.ts` + `.react.ts` + barrel) |
+| `route-handler-engineer` | Handlers under apps/web/app/api/ + server actions; menu pipeline |
+| `constraint-engine-engineer` | Any edit inside packages/constraint-engine/ (model: opus) |
+| `determinism-snapshot-curator` | Engine golden snapshots + regression suite (model: opus) |
+| `vitest-integration-author` | New `.integration.test.ts` (CRUD + RLS + role matrix) |
+| `ux-reviewer` | Pre-PR product-UX review (read-only) |
+| `accessibility-auditor` | Pre-PR a11y review — keyboard, ARIA, contrast (read-only) |
+| `prd-aligner` | PRD↔code drift punch list (read-only, model: haiku) |
 
 ## MCP servers available
 
 Wired via [`.mcp.json`](./.mcp.json) at the repo root. Claude Code auto-discovers on session start; run `/mcp` to confirm connection.
 
+Terse index — tool lists, setup, and rationale live in [`docs/agentic/mcp-servers.md`](./docs/agentic/mcp-servers.md).
+
 | Server | Use for | Auth |
 |---|---|---|
-| `supabase-local` | Generic Postgres SQL access against the local dev DB on `127.0.0.1:54322`. Single `query` tool — useful for ad-hoc reads while iterating. Does NOT introspect Supabase-specific state (RLS, migrations, advisors). | None — connection string baked in. Requires `pnpm --filter @weekly-food-planner/supabase db:start`. |
-| `supabase-remote` | Supabase-feature introspection against the hosted project: schema, RLS policies, migration status, advisors. Read-only. | `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` env vars |
-| `shadcn` | Component registry browsing (list / demo / source) for `ui-component-builder` | None |
-| `menu` | Engine + workspace tools for menu generation: `engine_generate_menu` / `engine_compute_inputs_hash` / `engine_validate_input` / `workspace_preview_menu` / `workspace_member_constraints` / `workspace_recipe_usability` / `workspace_recent_menus`. Engine half pure; workspace half hits the running Next.js app. | `MENU_MCP_USER_JWT` (workspace tools only — engine tools work without it). Optionally `MENU_MCP_BASE_URL` (default `http://127.0.0.1:3000`). |
+| `supabase-local` | Ad-hoc Postgres SQL on the local dev DB (`:54322`) | none — needs `db:start` |
+| `supabase-remote` | Hosted-project introspection (schema/RLS/advisors), read-only | env vars |
+| `shadcn` | Component registry browse (list / demo / source) | none |
+| `playwright` | Drive / screenshot the running app; responsive checks | none — needs dev server |
+| `figma` | Pull Figma frames for reference; dormant until a token is set | `FIGMA_API_KEY` |
+| `menu` | Engine + workspace menu-generation tools | `MENU_MCP_USER_JWT` (workspace tools) |
 
-Prefer these over speculative grepping when the data lives in the database or registry. Setup + rationale: [`docs/agentic/changelog/2026-05-26_mcp-servers.md`](./docs/agentic/changelog/2026-05-26_mcp-servers.md), [`docs/agentic/changelog/2026-05-29_menu-mcp-server.md`](./docs/agentic/changelog/2026-05-29_menu-mcp-server.md).
+Prefer these over speculative grepping when the data lives in the database or registry.
 
 ## Agent skills available
 
-Defined under [`.claude/skills/`](./.claude/skills/) (project-local) and the user's global skills directory:
+Defined under [`.claude/skills/`](./.claude/skills/) (project-local) and the user's global skills directory. Terse index — full input schemas + worked examples in [`docs/agentic/skills.md`](./docs/agentic/skills.md).
 
-- `constraint-menu-generator-life-cycle-test` — given a recipes + dietary-constraints spec, emits a Vitest integration test and a Node ESM HTTP driver.
-- `menu-generation-impact-review` — given a proposed menu-generation feature, produces a layered impact review + implementation plan (no code). Invoke before scoping any change that touches the engine, route handler, persistence, or grocery recompute.
-- `supabase-add-column` — emits a migration + types-regen + module-update plan for adding columns to existing Supabase tables. Invoke instead of having an agent re-derive the full multi-file change each time.
-- `feature-folder-scaffold` — scaffolds a CRUD feature folder under `apps/web/app/(app)/<feature>/` matching the canonical members/recipes shape. Use when adding a new authenticated CRUD page whose underlying table + module already exist.
+- `menu-generation-impact-review` — layered impact plan before any engine/route/persistence/grocery change (no code).
+- `constraint-menu-generator-life-cycle-test` — emits a Vitest + Node ESM flow test from a recipes + constraints spec.
+- `supabase-add-column` — migration + types-regen + module-edit plan for adding column(s) to an existing table.
+- `add-module-and-hooks` — emits a new data-layer module pair (`.ts` + `.react.ts` + barrel) for an already-migrated table.
+- `add-route-handler` — scaffolds a standard route handler / server action (three-client rule, Zod, error envelope, auth).
+- `feature-folder-scaffold` — scaffolds a CRUD feature folder under `apps/web/app/(app)/<feature>/` (table + module must exist).
+- `promote-design-lab-mock` — screen-by-screen plan to graduate a `/design-lab` mock into the live app (v1.8 Phase 3).
 
 ## Commands worth remembering
 

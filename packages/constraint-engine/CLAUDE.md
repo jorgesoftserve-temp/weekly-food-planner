@@ -89,5 +89,12 @@ Vitest unit tests live under [`src/__tests__/`](./src/__tests__/) and target ≈
 
 ## Delegate to
 
-- `constraint-engine-engineer` — implementation work inside this package.
-- `determinism-snapshot-curator` — updating or extending the regression suite.
+- `constraint-engine-engineer` — implementation work inside this package (model: opus).
+- `determinism-snapshot-curator` — updating or extending the regression suite (model: opus).
+
+## Related areas (load only what your task needs)
+
+- Root non-negotiables + agent/skill/MCP index → [`CLAUDE.md`](../../CLAUDE.md)
+- Who builds the engine input + persists output (the route handler boundary) → [`apps/web/CLAUDE.md`](../../apps/web/CLAUDE.md) + [`docs/PRD/ARCHITECTURE_PRD.md §5`](../../docs/PRD/ARCHITECTURE_PRD.md)
+- DB shapes the snapshots mirror (`menus`, `menu_slots`, `meal_frequency`) → [`packages/supabase/CLAUDE.md`](../../packages/supabase/CLAUDE.md)
+- Scope a menu/grocery change before coding → `menu-generation-impact-review` skill.

@@ -61,6 +61,19 @@ The pipeline at [`apps/web/app/api/workspaces/[id]/menus/route.ts`](../../apps/w
 
 See [`ARCHITECTURE_PRD.md §5`](../../docs/PRD/ARCHITECTURE_PRD.md) for the canonical flow and [`PRODUCT_PRD.md §4.1`](../../docs/PRD/PRODUCT_PRD.md) for draft/accept semantics.
 
+## Member-writable menu/grocery mutations (v1.8)
+
+The menu pipeline is otherwise service-role-managed, but v1.8 opens **two narrow member-writable mutations** — any workspace member (not just creator/admin) may call them. Treat them as exceptions, not a loosening of the pipeline:
+
+- `PATCH …/menus/[menuId]/slots/[slotId]/cooked` — toggle `menu_slots.cooked_at` / `cooked_by` (Cook mode "Mark as cooked"). Only valid on an **accepted** menu. See [PRODUCT_PRD.md §13.2](../../docs/PRD/PRODUCT_PRD.md).
+- `PATCH …/grocery/items/[itemId]` — set/clear `grocery_items.note` (free-text shopper note). See [PRODUCT_PRD.md §7.2](../../docs/PRD/PRODUCT_PRD.md).
+
+Rules for both:
+1. **Authorize on membership, not role** — `getUserWorkspaceRole` returning any of `creator | admin | member` passes; reject only non-members (403). This is the one place "member is enough" is correct.
+2. **Write only the narrow column set.** The handler (or its `SECURITY DEFINER` RPC — `sys_set_slot_cooked`) touches *only* `cooked_at`/`cooked_by` or `note`. It must never become a back door to edit recipe, slot assignment, quantities, or the plan. See [DATABASE_PRD.md §8](../../docs/PRD/DATABASE_PRD.md).
+3. **No engine, no recompute, no determinism impact.** These columns are progress/annotation only. Marking cooked or noting a substitution must not trigger `recomputeGroceryListsForMenu` or alter `accepted_seed`.
+4. **Note preservation is the recompute path's job, not these handlers'** — when an *unrelated* recompute rebuilds `grocery_items`, it re-applies notes keyed by `(list scope, ingredient_id)` (see [ARCHITECTURE_PRD.md §7](../../docs/PRD/ARCHITECTURE_PRD.md)). These PATCH handlers just set the current value.
+
 ## Structured errors
 
 `generation_runs.error_payload` shape:
@@ -80,12 +93,13 @@ Valid `failed_constraint` values: `empty_workspace`, `no_valid_recipe`, `calorie
 
 ## Server-side helpers
 
-- Workspace-context reads: prefer the modules under [`packages/supabase/src/module/*.ts`](../../packages/supabase/src/module/) — they keep CRUD shape consistent and toast where appropriate.
+- Workspace-context reads: prefer the modules under [`packages/supabase/src/module/*.ts`](../../packages/supabase/src/module/) — they keep CRUD shape consistent and toast where appropriate. You **consume** these modules; authoring or reshaping them is `supabase-module-author`'s job (hand off rather than hand-rolling new CRUD inline).
 - Role lookup: `fn_user_workspace_role(user_id, workspace_id)` in SQL, mirrored by a TS helper. Don't re-query workspace_members directly inside a route handler.
 
 ## When to hand off
 
 - New column, table, RLS policy, function, trigger, index → `supabase-migration-author`.
+- New or reshaped data-layer module / hooks the handler needs → `supabase-module-author`.
 - Engine implementation change → `constraint-engine-engineer`.
 - Integration test covering the handler you just edited → `vitest-integration-author`.
 
@@ -93,7 +107,7 @@ Valid `failed_constraint` values: `empty_workspace`, `no_valid_recipe`, `calorie
 
 When the parent session asks you to build or modify a handler, return:
 
-1. The handler file(s), Zod schema, and any new module helpers under `packages/supabase/src/module/`.
+1. The handler file(s) and Zod schema. If it needs a CRUD helper that doesn't exist yet, name the module function it expects and hand the authoring to `supabase-module-author` rather than inlining the query.
 2. A short note explaining which Supabase client(s) you used and why.
 3. The error codes / statuses the handler can return.
 4. A pointer to the integration test that should cover it (or a stub if it doesn't exist yet).

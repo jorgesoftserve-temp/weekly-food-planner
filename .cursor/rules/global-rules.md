@@ -141,64 +141,14 @@ npx shadcn@latest add button
   - Add context.
   - Otherwise, use a global handler.
 
-### Meta Functions
+### Pattern & decision documentation
 
-These functions define how the AI agent interacts with project documentation and tracking.
+Reusable patterns and toolchain decisions live in the repo's actual docs, not an ad-hoc `_learnings/` tree:
 
-### Pattern Documentation Guidelines
-
-When documenting patterns in `_learnings/patterns/[pattern-name].md`:
-
-````markdown
-# {Pattern Name}
-
-Brief description of what this pattern accomplishes and when to use it.
-
-## Key Components
-
-1. **{Component Name}**
-   ```typescript
-   // Code example
-   ```
-````
-
-Description of the component's purpose
-
-1. **{Another Component}**
-
-   ```typescript
-   // Another example
-   ```
-
-## Benefits
-
-- List of benefits
-- Why this pattern is useful
-- Problems it solves
-
-## Example Implementation
-
-```typescript
-// Complete working example
-```
-
-## Important Notes
-
-- List of crucial implementation details
-- Gotchas and best practices
-- Things to watch out for
-
-````
-
-Guidelines for Pattern Documentation:
-- Place patterns in `_learnings/patterns/`
-- Use kebab-case for filenames
-- Include working TypeScript examples
-- Document all key components separately
-- List concrete benefits
-- Provide a complete implementation example
-- Include important notes and gotchas
-- Link to official documentation when relevant
+- Agent/skill/MCP conventions and dated decisions → [`docs/agentic/`](mdc:docs/agentic/) (+ `changelog/`).
+- Product / architecture / database / technical specs → [`docs/PRD/`](mdc:docs/PRD/).
+- Visual design language → [`docs/design/`](mdc:docs/design/).
+- Per-area orientation → the nearest `CLAUDE.md`.
 
 ### React Query Patterns
 
@@ -248,14 +198,7 @@ Guidelines for Pattern Documentation:
 
 ### Security Patterns
 
-- Never store sensitive data in client-side storage
-- Implement proper CSRF protection
-- Use proper Content Security Policy headers
-- Implement proper input sanitization
-- Use proper authentication and authorization
-- Implement proper rate limiting
-- Monitor for security vulnerabilities
-- Regular security audits
+Security in this app is concrete, not generic: **RLS first** on every table (read policies filter `is_deleted = false`), **server-side role/membership re-checks** in route handlers for a clear 403 (never trust the client), the **three Supabase clients only** (admin client bypasses RLS only for documented privileged paths), and **no secrets in client storage or committed files** (env vars only — e.g. `${FIGMA_API_KEY}`). See the `route-handler-engineer` agent and [DATABASE_PRD §8](mdc:docs/PRD/DATABASE_PRD.md).
 
 ### Testing Patterns
 
@@ -281,159 +224,12 @@ Guidelines for Pattern Documentation:
 
 ### Data Mutation Best Practices
 
-1. **Unique Resource Creation**:
-   ```typescript
-   // GOOD: Generate unique IDs for new resources
-   const newResourceId = uuidv4();
-   await createResource({ id: newResourceId, ...data });
+These reflect the actual Supabase data layer (not generic ORM patterns):
 
-   // BAD: Relying on database to generate IDs
-   await createResource(data); // Could lead to race conditions
-   ```
-
-2. **Safe Updates**:
-   - Always include version/timestamp checks
-   - Use optimistic locking where possible
-   ```typescript
-   // GOOD: Include version in update
-   const updateResource = async ({
-     id,
-     version,
-     data
-   }: UpdateParams): Promise<Result> => {
-     const result = await db.update()
-       .match({ id, version })
-       .set({ ...data, version: version + 1 });
-
-     if (!result.count) {
-       throw new StaleDataError('Resource was updated by another process');
-     }
-     return result;
-   };
-   ```
-
-3. **Deletion Safety**:
-   - Always use unique IDs for deletion
-   - Verify ownership before deletion
-   - Use soft deletes when possible
-   ```typescript
-   // GOOD: Safe deletion with ownership check
-   const deleteResource = async ({
-     id,
-     organizationId
-   }: DeleteParams) => {
-     const result = await db.update()
-       .match({
-         id,
-         organization_id: organizationId // Ownership check
-       })
-       .set({
-         deleted_at: new Date(),
-         active: false
-       });
-
-     if (!result.count) {
-       throw new NotFoundError('Resource not found or unauthorized');
-     }
-   };
-   ```
-
-4. **Race Condition Prevention**:
-   - Use database transactions for multi-step operations
-   - Implement proper locking mechanisms
-   - Always verify preconditions before mutations
-   ```typescript
-   // GOOD: Transaction with precondition checks
-   const transferCredits = async ({
-     fromId,
-     toId,
-     amount
-   }: TransferParams) => {
-     return await db.transaction(async (trx) => {
-       const [from] = await trx
-         .from('accounts')
-         .select('balance')
-         .match({ id: fromId })
-         .for('update'); // Row-level lock
-
-       if (from.balance < amount) {
-         throw new InsufficientFundsError();
-       }
-
-       await trx.from('accounts')
-         .match({ id: fromId })
-         .update({ balance: from.balance - amount });
-
-       await trx.from('accounts')
-         .match({ id: toId })
-         .update({
-           balance: db.raw('balance + ?', [amount])
-         });
-     });
-   };
-   ```
-
-5. **Idempotency**:
-   - Use idempotency keys for client operations
-   - Implement proper request deduplication
-   ```typescript
-   // GOOD: Idempotent operation
-   const processPayment = async ({
-     idempotencyKey,
-     amount,
-     userId
-   }: PaymentParams) => {
-     const existing = await db
-       .from('payments')
-       .match({ idempotency_key: idempotencyKey })
-       .single();
-
-     if (existing) {
-       return existing; // Return cached result
-     }
-
-     return await db.transaction(async (trx) => {
-       // Process payment and store result
-       const result = await processPaymentLogic();
-
-       await trx.from('payments').insert({
-         idempotency_key: idempotencyKey,
-         result
-       });
-
-       return result;
-     });
-   };
-   ```
-
-6. **Testing Considerations**:
-   - Always test race conditions
-   - Use unique test data
-   - Clean up test resources
-   ```typescript
-   describe('Resource Management', () => {
-     // GOOD: Using unique IDs for test isolation
-     const testId = uuidv4();
-
-     beforeEach(async () => {
-       await createTestResource({ id: testId });
-     });
-
-     afterEach(async () => {
-       await cleanupTestResource(testId);
-     });
-
-     it('should handle concurrent updates', async () => {
-       const [result1, result2] = await Promise.allSettled([
-         updateResource({ id: testId, version: 1 }),
-         updateResource({ id: testId, version: 1 })
-       ]);
-
-       expect(result1).toBe('success');
-       expect(result2).toBe('stale_data_error');
-     });
-   });
-   ```
+- **Soft delete + ownership scoping.** Where a table supports it (`workspaces`, `workspace_members`, `recipes`, `menus`), delete by setting `is_deleted = true`. Always scope a mutation by workspace ownership — verify the row belongs to the caller's workspace before writing. RLS is the safety net; the route handler re-checks role/membership for a clear 403.
+- **Preconditions before mutation.** Validate state first (role, membership, draft-vs-accepted, participant set, member-writable column set), then write.
+- **Determinism boundary.** Menu/grocery writes flow through the single recompute path (`recomputeGroceryListsForMenu`); never mutate `accepted_seed`/`accepted_at` out of band. Member-writable columns (`menu_slots.cooked_at`, `grocery_items.note`) never trigger the engine or recompute.
+- This repo does **not** use idempotency-key tables, `db.transaction` row-locking, or optimistic-`version` columns — those generic examples were removed. Concurrency safety comes from partial unique constraints + RLS. See the `route-handler-engineer` agent and [`packages/supabase/CLAUDE.md`](mdc:packages/supabase/CLAUDE.md).
 
 ### Test File Organization
 
@@ -505,22 +301,6 @@ Guidelines for Pattern Documentation:
    - Multi-step workflows
    - Cross-feature interactions
 
-### Monitoring and Analytics
-
-- Implement proper metrics collection:
-  - Use prom-client for Node.js/Next.js
-  - Create custom metrics for business logic
-  - Track HTTP requests via middleware
-- Configure monitoring stack:
-  - Set up Prometheus scraping
-  - Configure Grafana dashboards
-  - Use proper data retention policies
-- Implement type-safe analytics:
-  - Define strongly typed event interfaces
-  - Use proper type inference in hooks
-  - Avoid type assertions
-  - Document analytics events
-
 ### Documentation Patterns
 
 - Maintain clear documentation structure:
@@ -551,157 +331,27 @@ export default async function Page({
 }
 ````
 
-For Supabase never use the next-auth-helpers package, we are using supabase from the apps/web/utils/supabase folder. There are 3 clients:
+For Supabase never use the `@supabase/auth-helpers-nextjs` package — we use the three clients in the `apps/web/utils/supabase` folder:
 
 - supabaseAdminClient - `apps/web/utils/supabase/admin.ts`
 - supabaseClient - `apps/web/utils/supabase/client.ts`
 - supabaseServerClient - `apps/web/utils/supabase/server.ts`
 
-Always use the above, and never generate a hook for Supabase. The above files contain the proper way to use Supabase in the apps/web folder.
+Never inline ad-hoc Supabase calls in components and never use Supabase's own auth-helper hooks. Data access goes through these three clients and the per-table data layer: `packages/supabase/src/module/<table>.ts` (CRUD) + `<table>.react.ts` (TanStack Query hooks), scaffolded by the `add-module-and-hooks` skill / `supabase-module-author` agent. Modules **throw** on error; the component/feature layer surfaces feedback via `apps/web/lib/toast.ts` (`notifySuccess` / `notifyError`).
 
-Always use the types from [database-functions.types.ts](mdc:packages/supabase/src/types/database-functions.types.ts) and [database.types.ts](mdc:packages/supabase/src/database.types.ts) for the types for the above client.
-
-When you are using types from the CRUD patterns. They are all exported from @repo/supabase, so you don't need to do this @repo/supabase/src/chat.hooks.tsx for example. You can just do this:
+Always use the generated types from [database.types.ts](mdc:packages/supabase/src/database.types.ts) (and `database-functions.types.ts`) — imported through the package **barrel**, never a deep path:
 
 ```tsx
-import { someHook } from "@repo/supabase"
-const { chat} = someHook() 
+import { someHook } from "@weekly-food-planner/supabase"
+const { data } = someHook()
 ```
 
-My job depends on this task being done well,
-I am a start up founder and I need to ship fast, and well.
-Please never be lazy, and always try to do your best.
-It's critical that I succeed in this project. Be awesome.
-If I don't do tasks well I will loose my job.
+### SQL Migration Style Guide (summary)
 
-### SQL Migration Style Guide
+The full guide with worked examples lives in [`packages/supabase/CLAUDE.md`](mdc:packages/supabase/CLAUDE.md) — don't duplicate it here. The always-on invariants:
 
-#### File Naming Conventions
-
-- Use timestamps in format: `YYYYMMDDHHMMSS_` as prefix
-- Use snake_case for all file names
-- Follow the pattern: `[timestamp]_[type]_[action]_[subject]_[modifier].sql`
-
-Types and Prefixes:
-
-- `sys_` - System RPCs and functions (e.g., `sys_create_user`)
-- `enum_` - Enumerations (e.g., `enum_create_role_types`)
-- `tbl_` - Tables (e.g., `tbl_create_users_with_trigger`)
-- `trg_` - Standalone triggers (e.g., `trg_auto_team_membership`)
-- `rls_` - RLS policies (e.g., `rls_enable_tables`)
-- `fn_` - Utility functions (e.g., `fn_create_updated_at_trigger`)
-- `idx_` - Standalone indexes (e.g., `idx_add_users_email`)
-
-Modifiers:
-
-- `_with_trigger` - When table includes its triggers
-- `_with_index` - When table includes its indexes
-- `_with_policy` - When including RLS policies
-
-#### Migration Organization
-
-When you are creating Supabase migration files for Postgres, you must always use this command to generate the migration file by going into packages/supabase and running `npx supabase migration new <<file_name>>`
-
-1. **Function/RPC Migrations**
-
-   - Include RLS policies in the same file as the function/RPC (REQUIRED)
-   - All function-specific RLS policies must be defined in the same file as the function
-   - Prefix system RPCs with `sys_`
-   - Group related functions together
-   - Include all necessary GRANTs in the same file
-
-   ```sql
-   -- Example: 20240124000001_sys_create_user.sql
-   -- Create the function
-   CREATE OR REPLACE FUNCTION sys_create_user() ...
-
-   -- Grant permissions
-   GRANT EXECUTE ON FUNCTION sys_create_user TO authenticated;
-
-   -- Define RLS policies specific to this function
-   CREATE POLICY "Users can execute sys_create_user" ON ...
-   ```
-
-2. **Enum Migrations**
-
-   - Always prefix with `enum_`
-   - One enum type per file unless tightly coupled
-
-   ```sql
-   -- Example: 20240124000002_enum_create_role_types.sql
-   CREATE TYPE role_type AS ENUM (...);
-   ```
-
-3. **Table Migrations**
-
-   - Include indexes in table creation file
-   - Include triggers in same file if using `_with_trigger` suffix
-   - Follow dependency order
-
-   ```sql
-   -- Example: 20240124000003_tbl_create_users_with_trigger.sql
-   CREATE TABLE users (...);
-   CREATE INDEX idx_users_email ON users(email);
-   CREATE TRIGGER update_users_timestamp ...
-   ```
-
-4. **RLS Migrations**
-   - Separate enable RLS from policies unless part of RPC
-   - Group related policies together
-   ```sql
-   -- Example: 20240124000004_rls_enable_tables.sql
-   ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-   ```
-
-#### Best Practices
-
-1. **Order of Operations**
-
-   - Functions/RPCs first (they may be needed by triggers)
-   - Enums second (they may be needed by tables)
-   - Tables with indexes and triggers
-   - RLS enablement
-   - RLS policies (unless part of RPC)
-
-2. **Naming Conventions**
-
-   - Tables: plural nouns (users, organizations)
-   - Columns: singular descriptive names
-   - Functions: verb_noun format
-   - Triggers: describe_action format
-   - Indexes: idx_table_column format
-
-3. **Code Organization**
-
-   - Group related operations
-   - Include clear comments
-   - Use consistent indentation
-   - Order columns logically
-
-   ```sql
-   CREATE TABLE examples (
-     -- Primary key first
-     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-     -- Required fields
-     name TEXT NOT NULL,
-     -- Optional fields
-     description TEXT,
-     -- Foreign keys
-     user_id UUID REFERENCES users(id),
-     -- Timestamps last
-     created_at TIMESTAMPTZ DEFAULT now(),
-     updated_at TIMESTAMPTZ DEFAULT now()
-   );
-   ```
-
-4. **Security Practices**
-
-   - Always set `search_path` in functions
-   - Use `SECURITY DEFINER` judiciously
-   - Grant minimum necessary permissions
-   - Document security implications
-
-5. **Dependency Management**
-   - Use `CASCADE` with caution
-   - Document dependencies in comments
-   - Follow logical ordering in timestamps
+- **Always generate the file via the CLI** — `cd packages/supabase && npx supabase migration new <file_name>`. Never hand-create the filename or its timestamp.
+- **Naming**: `[timestamp]_[type]_[action]_[subject]_[modifier].sql`, type ∈ `sys_` / `enum_` / `tbl_` / `trg_` / `rls_` / `fn_` / `idx_`; modifiers `_with_trigger` / `_with_index` / `_with_policy`.
+- **Order** (within and across files): functions/RPCs → enums → tables (with their indexes + triggers) → RLS enable → RLS policies. Function-specific RLS + GRANTs live in the **same file** as the function.
+- `SECURITY DEFINER` functions always `SET search_path = public`. Soft-delete tables (`workspaces`, `workspace_members`, `recipes`, `menus`) use partial unique indexes `WHERE is_deleted = false`.
+- Regenerate types after a migration: `pnpm --filter @weekly-food-planner/supabase db:gen:types`.

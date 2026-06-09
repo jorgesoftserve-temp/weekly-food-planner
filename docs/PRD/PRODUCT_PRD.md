@@ -69,6 +69,7 @@ Members who are recipients only (e.g. a child) do not need an authenticated user
 - Ingredient dislikes
 - Daily calorie target
 - Meal frequency
+- Accent color (v1.8) — a per-member visual identity used wherever the member is named in a shared workspace; see [§12.2](#122-per-member-accent-color)
 
 ---
 
@@ -359,6 +360,16 @@ Once a menu is accepted and the grocery list is on the page, the user can narrow
 - **State lives in the URL** (`?shop_for=uuid,uuid`) so refreshing or sharing the link keeps the same scope. Absent param = "whole household".
 - **Exports honour the filter.** Markdown and CSV downloads pick up the picker's current selection via the same `?shop_for=` query param on the export endpoint — the downloaded file reflects whatever the user is looking at on screen. Absent param = full unfiltered household list.
 
+## 7.2 Per-item notes & substitutions (v1.8)
+
+Every grocery line carries an optional **free-text note** — a no-metadata field where the shopper jots a substitution, a brand preference, or a reminder (e.g. *"Replace with oat-based crema"*, *"the big bag is cheaper"*). It is shown as a small comment on a half-width row under the item, with a **Replace** affordance that focuses the same field.
+
+Rules:
+- The note is **purely presentational text** — it never feeds the engine, never changes quantities/units, and never affects determinism. It is a human annotation on an already-computed list.
+- Notes are **workspace-shared**, attached to the accepted menu's grocery line, so the whole household sees the same annotation.
+- **Notes survive a grocery recompute.** The grocery list is regenerated from the accepted menu (slot edits, shop-for changes upstream). A recompute that rebuilds `grocery_items` rows must **re-apply** any existing note keyed by `(list scope, ingredient)` so a user's annotation isn't silently lost when the list is rebuilt. A note whose ingredient no longer appears on the recomputed list is dropped. See [DATABASE_PRD.md §6.14](./DATABASE_PRD.md) and [ARCHITECTURE_PRD.md §7](./ARCHITECTURE_PRD.md).
+- Any workspace member may add/edit/clear a note (it's a shopping aid, not an admin-gated mutation).
+
 ---
 
 # 8. Grocery Freshness Rules
@@ -389,10 +400,11 @@ The system should support:
 The in-app menu and grocery list pages are first-class deliverables in MVP.
 
 ## Menu view
-- Displays all 7 days of the generated week.
+- Displays all days of the generated window.
 - Shows every meal slot per member, with recipe titles and images.
 - Visually distinguishes shared slots from member-specific slots.
 - Surfaces the **effective** per-menu overlay used (if any) so users can see what extra constraints shaped this week.
+- **(v1.8) Day × meal grid + member selector.** On wide screens the week renders as a grid — one row per day, one column per meal slot (Breakfast / Lunch / Dinner / snacks) — so every meal of every day is visible at once, matching the underlying day × `meal_key` model (not one dish per day). A **member selector** ("Everyone" + a chip per member, tinted with that member's accent — see [§12.2](#122-per-member-accent-color)) scopes the grid to whose plan you're viewing. Empty slots offer an inline "Add meal"; a filled slot opens [Cook mode](#13-cook-mode--cooking-progress-v18).
 
 ## Grocery list view
 - Shared grocery list plus one section per member with member-specific items.
@@ -432,3 +444,67 @@ To make this visible to users:
 
 - When the user types an allergy that isn't an official value, the save form displays an inline note: *"This allergen isn't yet tagged on any ingredient. Recipes won't be filtered for it until ingredients are tagged."*
 - The save still proceeds — the user owns their content. The note exists so the user understands the engine's matching boundary.
+
+---
+
+# 12. Personalization & appearance (v1.8)
+
+v1.8 introduces a warm strawberry-branded visual system with light/dark theming and two distinct accent mechanisms. None of these touch the engine, the menu/grocery contracts, or determinism — they are presentation + per-account/per-member preference only. Visual language is owned by the `design-system-architect`; tokens live in [`docs/design/color-palette.md`](../design/color-palette.md) and [`docs/design/user-accent-colors.md`](../design/user-accent-colors.md).
+
+## 12.1 Per-user accent color (already shipped in v1.8 Phase 1)
+
+Each **authenticated account** picks an accent color that **follows the user across every workspace** (Google-Drive / Monday style). It recolors a constrained, safe surface set — active nav item, focus rings, selected chips, links, the avatar, and the header gradient wash — and **never** recolors primary CTAs (stay brand strawberry) or destructive actions (stay crimson), so brand and safety stay consistent.
+
+- Curated set: `strawberry` (default), `moss`, `teal`, `amber`, `ocean`, `plum`. Adding a color is a migration, not a free-text label.
+- Persisted on the `profiles` table (one row per `auth.users` id), self-only RLS, created at signup. See [DATABASE_PRD.md §6.0](./DATABASE_PRD.md).
+- Set SSR via `data-accent` on the shell (no FOUC), with optimistic client preview from the Appearance card in Settings.
+
+## 12.2 Per-member accent color (v1.8)
+
+Distinct from the per-user accent: every **workspace member** (including recipient-only members who have no login) carries an accent used as a **visual identity wherever that member is named in a shared workspace** — the member selector chips on the dashboard and menu grid, role/identity badges on the Members page, and a small dot/ring by their name. It answers *"whose plan / whose meal is this?"* at a glance without flooding the UI with color.
+
+- Used **only** on member-tied surfaces (selectors, badges, dots, the active member's chip). It is not the user's global accent and does not recolor the chrome.
+- Stored on `workspace_members.accent_color` (nullable). When null, the UI derives a stable accent deterministically from the member id so existing members look intentional without a backfill; an admin (or the member) can set an explicit one. See [DATABASE_PRD.md §6.2](./DATABASE_PRD.md).
+
+## 12.3 Light / dark / system theme
+
+A theme toggle (Light / Dark / System) is available in the app header and in Settings. Every brand token, gradient, and accent has a dark-tuned variant. Theme is class-based (`next-themes`) and respects the OS preference under "System"; reduced-motion is honored for any hover/transition affordances.
+
+---
+
+# 13. Cook mode & cooking progress (v1.8)
+
+A recipe now has two distinct views: the **detail** view (read-only reference — ingredients and steps shown for reading) and a **Cook mode** view (the hands-on cooking checklist). Cook mode is opened from a filled slot in the weekly menu or from the recipe detail's **Cook** button.
+
+## 13.1 Cook mode view
+- Both **ingredients and instructions are checkable** (unlike the read-only detail view), with an "N of M checked" progress header, so a cook can track where they are while cooking.
+- Checking off **every instruction step** reveals an enabled **"Mark as cooked"** action that completes the dish for that slot and returns to the menu. Before all steps are checked the action is disabled with an explanatory label.
+- Cook mode is a **presentation of existing recipe data** — it adds no recipe fields and has no engine impact.
+
+## 13.2 Cooking progress ("Mark as cooked")
+"Mark as cooked" records that a specific **menu slot** (a meal occurrence on a given day) was cooked.
+
+- Recorded as a timestamp on the slot — `menu_slots.cooked_at` (and `cooked_by`) — set when the slot is completed and cleared if the user un-marks it. See [DATABASE_PRD.md §6.12](./DATABASE_PRD.md).
+- **Any workspace member** may mark a slot cooked (it's a shared household action, not admin-gated), which requires a member-scoped write path on the otherwise service-role-managed `menu_slots` table — see [DATABASE_PRD.md §8](./DATABASE_PRD.md).
+- It is **progress tracking only** — it never edits the recipe, the menu plan, or the grocery list, and has no effect on the engine or determinism.
+
+## 13.3 "Meals cooked today" dashboard stat
+The dashboard's old "recipes in your pool" tile (inventory trivia) is replaced with an actionable **"X / N meals cooked today"** stat: of the meal slots scheduled for today across the active menu (optionally scoped to the selected member), how many are marked cooked. It reads directly from `menu_slots.cooked_at` against today's day-of-week for the active menu — no new aggregate storage.
+
+---
+
+# 14. Global search (v1.8)
+
+Cross-module search delivered in **two tiers** so the common case is one keystroke and power users still get precision. Search is **read-only** over existing workspace data (recipes, members, menus); it adds no new entities and respects RLS / workspace scoping.
+
+## 14.1 Tier 1 — topbar instant search
+- A keyword field in the app-shell header, available on every screen.
+- Typing shows **grouped results inline** (Recipes / People / Menus …), each a thumbnail + name + meta, with a **"See all results"** footer that hands off to Tier 2.
+- Results render **only once the user types** — an empty field shows a short hint, never a dump of everything.
+- **Mobile-first:** under `sm` the header shows a search *icon* that opens a full-width top sheet with a large input (not a shrunken desktop pill).
+
+## 14.2 Tier 2 — advanced search screen
+- One bar split into dropdown segments: **which module** (Recipes / Weekly menu / Grocery / Members) + **per-module filters** (recipes: meal, cuisine, difficulty, dietary) + a **keyword**, for fine-tuning a query (cf. Airbnb's segmented query builder).
+- Backed by a workspace-scoped search endpoint — see [ARCHITECTURE_PRD.md §9](./ARCHITECTURE_PRD.md).
+
+No AI / semantic search — this is deterministic keyword + filter matching over existing tables. AI-assisted features remain out of scope until v3.0.

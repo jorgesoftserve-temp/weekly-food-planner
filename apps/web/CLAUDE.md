@@ -51,7 +51,7 @@ Detailed pattern in [`.cursor/rules/query-patterns.md`](../../.cursor/rules/quer
 - **Client `useQuery`** uses the function-form key from the catalogue under [`lib/react-query/`](./lib/react-query/).
 - Hooks return the **full** `useQuery` / `useMutation` result so callers can read `isFetching`, `error`, `refetch`.
 - Wrap hydrated client components in `HydrationBoundary` with `dehydrate(queryClient)`.
-- Mutations live in [`packages/supabase/src/module/`](../../packages/supabase/src/module/) and handle their own toast — components don't add `react-hot-toast`.
+- Mutations live in [`packages/supabase/src/module/`](../../packages/supabase/src/module/) and **throw** on error (no toast at the data layer); the component/feature layer surfaces feedback via [`lib/toast.ts`](./lib/toast.ts) (`notifySuccess` / `notifyError`) — never inline `toast(...)` or `react-hot-toast`.
 
 ## Zustand
 
@@ -83,3 +83,11 @@ See [`apps/web/CLAUDE.md` → Route Handlers](#) — actually delegated: use the
 - No `next-auth-helpers`; the three clients above are the only Supabase entry points.
 - No client-side authorization decisions — UI hides controls based on role, but the server re-checks before mutating.
 - No PDF export yet (post-MVP). The menu and grocery views are designed PDF-ready so the future export reuses the template.
+
+## Related areas (load only what your task needs)
+
+- Root non-negotiables + agent/skill/MCP index → [`CLAUDE.md`](../../CLAUDE.md)
+- Data layer this app consumes (modules, hooks, migrations, RLS) → [`packages/supabase/CLAUDE.md`](../../packages/supabase/CLAUDE.md)
+- The deterministic generator behind menu pages → [`packages/constraint-engine/CLAUDE.md`](../../packages/constraint-engine/CLAUDE.md)
+- TanStack Query specifics → [`.cursor/rules/query-patterns.md`](../../.cursor/rules/query-patterns.md); design tokens → [`docs/design/`](../../docs/design/)
+- Specialist agents for this area: `ui-component-builder`, `route-handler-engineer`, `design-system-architect`, `ux-reviewer`, `accessibility-auditor` (see [`docs/agentic/agents.md`](../../docs/agentic/agents.md)).

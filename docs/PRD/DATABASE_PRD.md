@@ -36,6 +36,7 @@ Per the cursor SQL style guide:
 
 ```
 auth.users (Supabase)
+    ├── profiles (1—1)                        // per-account UI prefs (accent); v1.8, see §6.0
     └── workspaces (1—N)
             ├── workspace_members (1—N)               // includes the creator
             │       ├── member_dietary_restrictions   (M—N → dietary_restriction label)
@@ -77,8 +78,9 @@ Backed by native Postgres enums. Values can only be added via migration. Used wh
 | `day_of_week` | `monday`, `tuesday`, `wednesday`, `thursday`, `friday`, `saturday`, `sunday` |
 | `unit` | `g`, `kg`, `ml`, `l`, `tsp`, `tbsp`, `cup`, `piece`, `slice`, `pinch`, `clove`, `can`, `pack` |
 | `menu_type` | `weekly`, `custom` |
+| `accent_color` (v1.8) | `strawberry`, `moss`, `teal`, `amber`, `ocean`, `plum` |
 
-No user-suggestion path for these in MVP — a new value requires a migration.
+No user-suggestion path for these in MVP — a new value requires a migration. The `accent_color` set is a deliberately curated, contrast-safe palette (see [`docs/design/user-accent-colors.md`](../design/user-accent-colors.md)); it backs both the per-user accent (`profiles.accent_color`, §6.0) and the per-member accent (`workspace_members.accent_color`, §6.2).
 
 ## 5.2 Extensible labels (user-suggestable)
 
@@ -102,6 +104,16 @@ The constraint engine filters allergy-unsafe recipes by string-matching a member
 # 6. Tables
 
 Sketches only — exact SQL lives in migration files. Every mutable table receives an `updated_at` trigger from `fn_create_updated_at_trigger`. Tables that support soft delete carry an `is_deleted boolean NOT NULL DEFAULT false` column (see §6.16).
+
+## 6.0 `profiles` (v1.8)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | FK → `auth.users.id` ON DELETE CASCADE. The row **is** the user — no separate `user_id` |
+| `accent_color` | `accent_color` NOT NULL DEFAULT `'strawberry'` | Per-account UI accent that follows the user across workspaces (see [PRODUCT_PRD.md §12.1](./PRODUCT_PRD.md)) |
+| `created_at`, `updated_at` | timestamptz | `updated_at` via `set_updated_at` trigger |
+
+One row per `auth.users` row, holding per-account UI preferences. **No soft delete** — the row is tied to the auth user and disappears via `ON DELETE CASCADE` on account deletion. The row is created automatically at signup by `sys_create_workspace_on_signup` (the same `SECURITY DEFINER` trigger that bootstraps the user's individual workspace + creator member); there is **no authenticated INSERT path** — that SECURITY DEFINER context is the only authorized creator. RLS is **self-only** (read + update where `id = auth.uid()`); see §8. This is the only new server-writable surface v1.8 adds for the per-user accent.
 
 ## 6.1 `workspaces`
 
@@ -127,6 +139,7 @@ Sketches only — exact SQL lives in migration files. Every mutable table receiv
 | `age_category` | `age_category` NOT NULL | |
 | `daily_calorie_target` | int NULL | |
 | `meal_frequency` | jsonb NULL | Per-member override; see §7 |
+| `accent_color` | `accent_color` NULL | **(v1.8)** Per-member visual identity shown wherever the member is named in a shared workspace (selector chips, badges, dots). NULL = derive a stable accent from the member id in the UI; an admin or the member may set an explicit value. Distinct from the per-user accent on `profiles` (§6.0). See [PRODUCT_PRD.md §12.2](./PRODUCT_PRD.md) |
 | `is_deleted` | boolean NOT NULL DEFAULT false | Soft delete flag (§6.16) |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -325,8 +338,12 @@ Backfill: every pre-existing menu gets one row per active workspace member, so l
 | `target_member_id` | uuid NULL | FK → `workspace_members.id`. NULL = shared |
 | `is_overridden` | boolean NOT NULL DEFAULT false | TRUE when the user replaced the engine's pick during draft review. `recipe_id` holds the user-chosen recipe; `original_recipe_id` holds the engine's. Always FALSE for `custom` menus (user picked everything from the start, so "override" is not meaningful) |
 | `original_recipe_id` | uuid NULL | FK → `recipes.id`. Engine's original pick before any user override. NULL on pristine slots and on `custom` menus |
+| `cooked_at` | timestamptz NULL | **(v1.8)** Set when a member marks this slot cooked in [Cook mode](./PRODUCT_PRD.md) (NULL = not yet cooked / un-marked). Progress tracking only — never affects the recipe, the plan, the grocery list, the engine, or determinism. Only meaningful on **accepted** menus (you cook what's accepted, not a draft) |
+| `cooked_by` | uuid NULL | **(v1.8)** FK → `workspace_members.id`. Who marked it cooked; NULL when not cooked |
 
 UNIQUE NULLS NOT DISTINCT `(menu_id, day_of_week, meal_key, target_member_id)`. No own `is_deleted` — visibility follows the parent menu.
+
+`cooked_at` / `cooked_by` are the only **member-writable** columns on `menu_slots` — the rest of the table is service-role-managed (engine pipeline). The cooked-toggle therefore needs a narrow member-scoped write path (a `SECURITY DEFINER` RPC `sys_set_slot_cooked(slot_id, cooked)` that re-checks workspace membership, or a tightly-scoped RLS UPDATE policy restricted to these two columns). See §8 and [PRODUCT_PRD.md §13.2](./PRODUCT_PRD.md).
 
 ## 6.13 `grocery_lists`
 
@@ -348,6 +365,9 @@ UNIQUE `(menu_id, target_member_id)`.
 | `quantity` | numeric NOT NULL | |
 | `unit` | `unit` NOT NULL | |
 | `scheduled_purchase_day` | `day_of_week` NULL | engine output for freshness scheduling |
+| `note` | text NULL | **(v1.8)** Optional free-text shopper annotation (substitution / brand / reminder). Presentation-only — never feeds the engine or scaling. Any workspace member may set it. See [PRODUCT_PRD.md §7.2](./PRODUCT_PRD.md) and the recompute-preservation rule below |
+
+**Recompute preservation (v1.8).** Grocery items are derived from the accepted menu and rebuilt by `recomputeGroceryListsForMenu` whenever the underlying menu changes. Because a recompute deletes-and-reinserts `grocery_items` rows, a naive rebuild would discard user `note`s. The recompute must therefore **snapshot existing notes keyed by `(list scope, ingredient_id)` and re-apply them** to the matching rebuilt rows; a note whose ingredient no longer appears on the recomputed list is dropped. (If preservation proves fragile against the delete/reinsert cycle, the alternative is a sibling `grocery_item_notes(grocery_list_id, ingredient_id, note)` table that survives independently — decided at implementation time; see [ARCHITECTURE_PRD.md §7](./ARCHITECTURE_PRD.md).)
 
 ## 6.15 `generation_runs`
 
@@ -446,12 +466,13 @@ Policy summary:
 
 | Table | Read | Write |
 |---|---|---|
+| `profiles` (v1.8) | self only (`id = auth.uid()`) | self only; **no INSERT** for `authenticated` — created by the `SECURITY DEFINER` signup trigger; DELETE via `auth.users` cascade |
 | `workspaces` | any member of the workspace (active rows) | `creator` or `admin` |
 | `workspace_members` | any member of the workspace (active rows) | `creator`/`admin` for other members; self can edit own profile fields |
 | `member_dietary_restrictions`, `member_allergies`, `member_ingredient_dislikes` | any member of the workspace | self, or `creator`/`admin` |
 | `recipes`, `recipe_ingredients`, `recipe_instructions`, `recipe_dietary_tags` | any member of the workspace (active recipes) | `creator` or `admin` |
 | `ingredients`, `ingredient_allergens` | any authenticated user (global catalog) | service-role only |
-| `menus`, `menu_slots`, `grocery_lists`, `grocery_items`, `generation_runs` | any member of the workspace (active menus for the read; runs are always visible) | service-role (engine pipeline) |
+| `menus`, `menu_slots`, `grocery_lists`, `grocery_items`, `generation_runs` | any member of the workspace (active menus for the read; runs are always visible) | service-role (engine pipeline). **(v1.8)** Two narrow member-scoped exceptions: `menu_slots.cooked_at`/`cooked_by` (Cook mode — see §6.12) and `grocery_items.note` (shopper note — see §6.14), both gated to workspace membership via a `SECURITY DEFINER` RPC or a column-scoped policy |
 | `enum_metadata` | any authenticated user | service-role for official rows; users may insert pending rows via `sys_save_label` and delete their own pending rows via `sys_delete_enum_suggestion` (§10) |
 
 A helper SQL function `fn_user_workspace_role(user_id, workspace_id) RETURNS workspace_role` centralizes role lookups so policies stay simple.

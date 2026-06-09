@@ -5,27 +5,12 @@ alwaysApply: true
 ---
 # Agentic Rules
 
-## Agentic engineering requirements
+This project supports Claude Code / Cursor agentic workflows. The **authoritative catalog** of sub-agents, skills, MCP servers, and the CLAUDE.md hierarchy lives in [`docs/agentic/`](../../docs/agentic/) and the root [`CLAUDE.md`](../../CLAUDE.md). Consult those before adding or invoking, and route specialist work to the right agent/skill rather than doing it inline.
 
-The project must support Calude Code/Cursor workflows.
+## Conventions that always hold
 
-## Required Agent files
-
-/prompts
-/agent-log
-/docs
-
-## Agent Log Requirements
-Each major genration step should include:
-
-- Prompt used
-- Context files provided
-- Expected output
-- Observed issue
-- Follow-up fixes
-
-## Prompt File Format
-Raw prompts must be stored as .txt
-
-## Documentation Format
-PRDs, specs, arquitecture docs, and rules must be stored as .md
+- **Route to specialists.** Schema → `supabase-migration-author`; data-layer modules/hooks → `supabase-module-author`; route handlers → `route-handler-engineer`; engine → `constraint-engine-engineer`; UI → `ui-component-builder`; tokens → `design-system-architect`. Pre-PR reviews: `ux-reviewer`, `accessibility-auditor`, `prd-aligner`. See [`docs/agentic/agents.md`](../../docs/agentic/agents.md).
+- **Agent log.** Each major generation step gets an entry under [`/agent-log`](../../agent-log/): prompt used, context files provided, expected output, observed issue, follow-up fixes.
+- **Prompts** are stored as raw `.txt` under [`/prompts`](../../prompts/).
+- **Docs** — PRDs, specs, architecture docs, and rules are `.md` (under [`/docs`](../../docs/) or `.cursor/rules/`).
+- **Extending the toolchain** — follow [`docs/agentic/extending.md`](../../docs/agentic/extending.md) when adding an agent, skill, or CLAUDE.md, and add a dated [`docs/agentic/changelog/`](../../docs/agentic/changelog/) entry.

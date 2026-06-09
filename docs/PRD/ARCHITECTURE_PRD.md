@@ -237,6 +237,7 @@ Greedy + local search is fast, deterministic, and easy to reason about. It does 
   - `ingredients.requires_fresh` (forces a same-week purchase)
   - `ingredients.same_day_cook` (purchase day == cook day)
 - Outputs are deterministic given the same seed.
+- **(v1.8) Note preservation across recompute.** `grocery_items.note` (the free-text shopper annotation, [PRODUCT_PRD.md §7.2](./PRODUCT_PRD.md)) is user-entered, not engine-derived. Since `recomputeGroceryListsForMenu` deletes-and-reinserts rows, it must snapshot existing notes keyed by `(grocery_list scope, ingredient_id)` before the rebuild and re-apply them to matching rows afterward; notes for ingredients that drop off the recomputed list are discarded. The note is never an engine input and never affects scaling, scheduling, or determinism.
 
 ---
 
@@ -302,10 +303,16 @@ Resource-oriented under `app/api/`:
 /api/workspaces/:id/menus/:menuId/slots     → POST (add a new slot to a draft; server validates hard constraints + participant membership)
 /api/workspaces/:id/menus/:menuId/slots/:slotId → PATCH (replace a slot's recipe in a draft; server re-validates hard constraints)
 /api/workspaces/:id/grocery         → GET (derived from the workspace's accepted menu)
+/api/workspaces/:id/grocery/items/:itemId  → PATCH (v1.8 — set/clear a grocery item's free-text note; any workspace member)
+/api/workspaces/:id/menus/:menuId/slots/:slotId/cooked → PATCH (v1.8 — mark/un-mark a slot cooked; any workspace member; accepted menus only)
+/api/workspaces/:id/search          → GET (v1.8 — workspace-scoped cross-module search: ?q=, ?module=, per-module filters. Read-only over recipes/members/menus; backs both topbar instant search and the advanced search screen)
 /api/uploads/images                 → POST (signed-URL flow to Supabase Storage)
 /api/labels/search                  → GET (debounced autocomplete over enum_metadata)
 /api/labels/suggestions             → DELETE (a user removes their own pending label)
+/api/profile                        → GET, PATCH (v1.8 — the caller's own profile; PATCH sets accent_color. Self-scoped, see DATABASE_PRD §6.0)
 ```
+
+> The per-member accent (`workspace_members.accent_color`) is set through the existing `PATCH /api/workspaces/:id/members` path (it's a member field), not a new endpoint. The two member-writable menu/grocery mutations above are the only deviations from the otherwise service-role-managed menu pipeline — each re-checks workspace membership server-side and writes only its narrow column set.
 
 Server actions are used for form-driven mutations where the App Router idiom favours them.
 
@@ -361,6 +368,16 @@ The menu generation form includes an "additional constraints for this week only"
 - As the user types or pastes a value into the dietary/allergy fields, the form annotates any entry that duplicates a member-profile constraint with an inline note — *"Already on Alice — will be skipped"*. The note is informational only; the field stays editable and submission proceeds either way.
 - On submit, the route handler performs **silent dedup** server-side (drops values already on any member's matching profile) before invoking the engine. Defense in depth: even if the client misses an annotation, the server still produces the correct effective overlay.
 - The persisted `menus.generation_options` reflects only the values that actually took effect (post-dedup), so the menu view shows the effective overlay rather than the user's raw input.
+
+## 10.5 v1.8 presentation features
+
+All additive and presentation-scoped — none change the engine, the determinism boundary, or the menu/grocery contracts.
+
+- **Theme + accents.** Class-based light/dark via `next-themes` (toggle in the header + Settings). The per-user accent is applied SSR through `data-accent` on the `(app)` shell (no FOUC) with an optimistic client `AccentProvider`; the per-member accent is applied inline only on member-tied surfaces (selector chips, badges, dots) and is theme-safe in both modes. Tokens are owned by `design-system-architect` in `globals.css` + the Tailwind theme; **no hex literals in components**. See [PRODUCT_PRD.md §12](./PRODUCT_PRD.md).
+- **Menu day × meal grid.** The week view renders day-rows × meal-columns with a member selector, reading the existing `menu_slots` (day × `meal_key`) shape — no data change, a presentation of what the engine already emits. See [PRODUCT_PRD.md §10](./PRODUCT_PRD.md).
+- **Cook mode.** A distinct route/view presenting an accepted slot's recipe as a checkable ingredient + step list with an "N of M" header; the "Mark as cooked" action calls `PATCH …/slots/:slotId/cooked`. React Query invalidates the menu + the dashboard "meals cooked today" stat on success. Cook-state is server data (React Query), not Zustand. See [PRODUCT_PRD.md §13](./PRODUCT_PRD.md).
+- **Global search.** Tier-1 topbar instant search (grouped results, render-on-type, mobile collapses to an icon → full-width sheet) and Tier-2 advanced search screen (segmented module + filter query builder) both hit `GET /api/workspaces/:id/search`, debounced. Results are workspace-scoped and RLS-bounded. See [PRODUCT_PRD.md §14](./PRODUCT_PRD.md).
+- **Single-overlay rule.** Recipes (detail vs edit) and the menu page (generate / replace / add) render at most one overlay at a time via `useExclusiveOverlay`; dialogs become bottom-sheets under `md`. (Shipped in v1.8 Phase 1.)
 
 ---
 

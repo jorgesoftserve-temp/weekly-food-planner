@@ -112,12 +112,12 @@ const { data } = useQuery({
 
 Both patterns generate the same array structure, allowing React Query to match prefetched data between server and client.
 
-We have CRUD layer and custom hooks like this:
-[teams.react.ts](mdc:packages/supabase/src/module/teams.react.ts)
-[teams.ts](mdc:packages/supabase/src/module/teams.ts)
+We have CRUD layer and custom hooks like this (the `teams` names above are illustrative — the real canonical examples are `recipes` and `members`):
+[recipes.react.ts](mdc:packages/supabase/src/module/recipes.react.ts)
+[recipes.ts](mdc:packages/supabase/src/module/recipes.ts)
 
-Each postgres table has custom hooks within the packages/supabase/module folder.
+Each postgres table has custom hooks within the packages/supabase/module folder. New module pairs are scaffolded by the `add-module-and-hooks` skill / `supabase-module-author` agent.
 
-You should avoid adding react-hot-toast for within React components as this should always be handled at the CRUD layer (albeit for the most part, unless otherwise told).
+**Error + toast convention (matches the live code):** the data-layer `module/<table>.ts` functions **throw** on error (`throw new Error(error.message)`) and never import a toast library. The `<table>.react.ts` hooks return the raw query/mutation result. User-facing success/error toasts are the **component/feature layer's** job, via `notifySuccess` / `notifyError` from `apps/web/lib/toast.ts` (a `sonner` wrapper) — never inline `toast(...)`, never `react-hot-toast`, never toast at the data layer.
 
 

@@ -133,7 +133,7 @@ import { recipesKeys } from "@weekly-food-planner/supabase/src/module/recipes.re
 
 Each table has a paired module:
 
-- `<table>.ts` — pure CRUD against Supabase (`getRecipes`, `createRecipe`, …). Toasts at this layer if appropriate. Returns plain promises.
+- `<table>.ts` — pure CRUD against Supabase (`getRecipes`, `createRecipe`, …). **Throws** on error; never toasts. Toasting is the app/component layer's job (`apps/web/lib/toast.ts`). Returns plain promises.
 - `<table>.react.ts` — TanStack Query wrappers (`useRecipes`, `useCreateRecipe`). Return the full query/mutation object. Use the static-key catalogue for server prefetching.
 
 Detailed pattern: [`.cursor/rules/query-patterns.md`](../../.cursor/rules/query-patterns.md).
@@ -141,4 +141,13 @@ Detailed pattern: [`.cursor/rules/query-patterns.md`](../../.cursor/rules/query-
 ## Delegate to
 
 - `supabase-migration-author` — anything that creates, modifies, or drops a schema object.
+- `supabase-module-author` — authoring or reshaping a `module/<table>.ts` + `.react.ts` pair.
 - `route-handler-engineer` — anything that consumes these modules from a route handler.
+- Skills: `supabase-add-column` (add a column to an existing module), `add-module-and-hooks` (scaffold a new module pair for an already-migrated table).
+
+## Related areas (load only what your task needs)
+
+- Root non-negotiables + agent/skill/MCP index → [`CLAUDE.md`](../../CLAUDE.md)
+- App that consumes these modules (hooks, route handlers, toast convention) → [`apps/web/CLAUDE.md`](../../apps/web/CLAUDE.md)
+- The engine that reads these table shapes → [`packages/constraint-engine/CLAUDE.md`](../../packages/constraint-engine/CLAUDE.md)
+- Query-key + hydration patterns → [`.cursor/rules/query-patterns.md`](../../.cursor/rules/query-patterns.md); schema spec → [`docs/PRD/DATABASE_PRD.md`](../../docs/PRD/DATABASE_PRD.md).

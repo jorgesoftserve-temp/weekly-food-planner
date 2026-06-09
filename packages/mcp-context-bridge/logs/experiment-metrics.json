@@ -1,0 +1,47 @@
+{
+  "config": {
+    "runsPerFlow": 3,
+    "maxIterations": 8,
+    "agentSeeds": [
+      1,
+      2,
+      3
+    ]
+  },
+  "baseline": {
+    "flow": "baseline-module1",
+    "runs": 3,
+    "iterationsPerRun": [
+      8,
+      8,
+      5
+    ],
+    "refinementsPerRun": [
+      7,
+      8,
+      4
+    ],
+    "meanIterations": 7,
+    "iterationVariance": 2,
+    "passRate": 0.67,
+    "distinctDiffSignatures": 3
+  },
+  "mcp": {
+    "flow": "mcp-bridge",
+    "runs": 3,
+    "iterationsPerRun": [
+      4,
+      4,
+      4
+    ],
+    "refinementsPerRun": [
+      3,
+      3,
+      3
+    ],
+    "meanIterations": 4,
+    "iterationVariance": 0,
+    "passRate": 1,
+    "distinctDiffSignatures": 1
+  }
+}

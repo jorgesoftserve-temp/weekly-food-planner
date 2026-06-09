@@ -1,0 +1,88 @@
+{
+  "kind": "menu-generation",
+  "intent": "Plan a feasible breakfast+dinner week; start over-constrained and refine to green.",
+  "payload": {
+    "workspace": {
+      "id": "w1",
+      "type": "individual",
+      "name": "Home",
+      "sharedMealFrequency": [
+        {
+          "key": "breakfast",
+          "title": "Breakfast",
+          "mealType": "breakfast",
+          "defaultHour": 7
+        },
+        {
+          "key": "dinner",
+          "title": "Dinner",
+          "mealType": "dinner",
+          "defaultHour": 19
+        }
+      ]
+    },
+    "members": [
+      {
+        "id": "m1",
+        "name": "Alice",
+        "role": "creator",
+        "ageCategory": "adult",
+        "dietaryRestrictions": [],
+        "allergies": [],
+        "ingredientDislikes": []
+      }
+    ],
+    "recipes": [
+      {
+        "id": "r-bf-1",
+        "name": "Recipe r-bf-1",
+        "mealType": "breakfast",
+        "difficulty": "easy",
+        "servings": 2,
+        "ingredients": [],
+        "dietaryTags": []
+      },
+      {
+        "id": "r-bf-2",
+        "name": "Recipe r-bf-2",
+        "mealType": "breakfast",
+        "difficulty": "easy",
+        "servings": 2,
+        "ingredients": [],
+        "dietaryTags": []
+      },
+      {
+        "id": "r-dn-1",
+        "name": "Recipe r-dn-1",
+        "mealType": "dinner",
+        "difficulty": "easy",
+        "servings": 2,
+        "ingredients": [],
+        "dietaryTags": []
+      },
+      {
+        "id": "r-dn-2",
+        "name": "Recipe r-dn-2",
+        "mealType": "dinner",
+        "difficulty": "easy",
+        "servings": 2,
+        "ingredients": [],
+        "dietaryTags": []
+      }
+    ],
+    "ingredients": [],
+    "weekStartDate": "2026-06-01",
+    "seed": 42,
+    "options": {
+      "additionalDietaryRestrictions": [
+        "gluten-free",
+        "keto",
+        "vegan"
+      ]
+    }
+  },
+  "meta": {
+    "createdBy": "experiment",
+    "note": "seeded infeasible scenario (3 unsatisfiable required tags)"
+  }
+}

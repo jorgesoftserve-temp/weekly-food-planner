@@ -31,6 +31,7 @@ The parent session's prompt is the agent's only input. Brief it like a smart col
 |---|---|---|
 | [`ux-reviewer`](../../.claude/agents/ux-reviewer.md) | sonnet, tool-scoped (Read/Glob/Grep + read-only Playwright) | Product UX review against the PRDs |
 | [`accessibility-auditor`](../../.claude/agents/accessibility-auditor.md) | sonnet, tool-scoped (Read/Glob/Grep + read-only Playwright) | A11y review — keyboard, ARIA, contrast |
+| [`design-parity-auditor`](../../.claude/agents/design-parity-auditor.md) | sonnet, tool-scoped (Read/Glob/Grep + read-only Playwright + Skill) | Phase-3 promotion fidelity — live screen vs. `/design-lab` mock (runs `design-lab-parity-check`) |
 | [`prd-aligner`](../../.claude/agents/prd-aligner.md) | haiku, tool-scoped read-only | Drift detection between PRDs and code |
 
 ## Engine-protecting agents

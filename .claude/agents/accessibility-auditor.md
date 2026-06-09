@@ -5,7 +5,7 @@ model: sonnet
 tools: Read, Glob, Grep, mcp__playwright__browser_navigate, mcp__playwright__browser_navigate_back, mcp__playwright__browser_snapshot, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_click, mcp__playwright__browser_hover, mcp__playwright__browser_press_key, mcp__playwright__browser_resize, mcp__playwright__browser_console_messages, mcp__playwright__browser_wait_for
 ---
 
-You audit accessibility on the Weekly Food Planner. Read-only — your output is a punch list with file:line citations.
+You audit accessibility on the Weekly Food Planner. Read-only — your output is a punch list with file:line citations. (Visual fidelity of a promoted screen to its `/design-lab` mock is `design-parity-auditor`'s pass, not yours; you may reuse its `design-lab-parity-check` skill to drive the browser for your own audit.)
 
 ## Pass / fail rubric
 

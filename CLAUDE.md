@@ -59,6 +59,7 @@ Terse index — full descriptions, model tiers, and hand-off chains live in [`do
 | `vitest-integration-author` | New `.integration.test.ts` (CRUD + RLS + role matrix) |
 | `ux-reviewer` | Pre-PR product-UX review (read-only) |
 | `accessibility-auditor` | Pre-PR a11y review — keyboard, ARIA, contrast (read-only) |
+| `design-parity-auditor` | Post-promotion check that a live screen matches its `/design-lab` mock (read-only, Playwright) |
 | `prd-aligner` | PRD↔code drift punch list (read-only, model: haiku) |
 
 ## MCP servers available
@@ -89,6 +90,7 @@ Defined under [`.claude/skills/`](./.claude/skills/) (project-local) and the use
 - `add-route-handler` — scaffolds a standard route handler / server action (three-client rule, Zod, error envelope, auth).
 - `feature-folder-scaffold` — scaffolds a CRUD feature folder under `apps/web/app/(app)/<feature>/` (table + module must exist).
 - `promote-design-lab-mock` — screen-by-screen plan to graduate a `/design-lab` mock into the live app (v1.8 Phase 3).
+- `design-lab-parity-check` — Playwright capture matrix (live vs. mock at 390/820/1440px × light/dark) feeding the `design-parity-auditor` verdict.
 
 ## Commands worth remembering
 

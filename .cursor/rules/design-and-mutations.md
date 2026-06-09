@@ -22,3 +22,11 @@ A small, fixed set of menu/grocery columns are writable by **any workspace membe
 - everything else that mutates a menu or grocery list stays creator/admin-gated.
 
 Mechanics are scaffolded by the `add-route-handler` skill. See [DATABASE_PRD §8](mdc:docs/PRD/DATABASE_PRD.md) and [PRODUCT_PRD §§7.2/13](mdc:docs/PRD/PRODUCT_PRD.md).
+
+## Design-lab promotion (Phase 3)
+
+When a `/design-lab` mock is graduated into a live `(app)/` screen, the promotion is **not done until parity is verified**:
+
+- A promoted screen must pass the `design-parity-auditor` (it runs the `design-lab-parity-check` skill: live vs. mock at 390/820/1440px × light/dark, structural + token fidelity) **before its mock is retired** from `(design)/design-lab/`. The mock is the fallback reference until the live screen is signed off.
+- Verify visual fidelity (cozy radii/shadow/spacing + the promoted tokens), structural equivalence (live-only loading/empty/error/role-gated states are expected additions, not gaps), and light + dark + reduced-motion parity.
+- The cozy token move is **one coordinated `design-system-architect` step**, not re-derived per screen. See [`promote-design-lab-mock`](mdc:.claude/skills/promote-design-lab-mock/SKILL.md) and [docs/design/cozy-restyle-spec.md](mdc:docs/design/cozy-restyle-spec.md).

@@ -9,7 +9,7 @@ This project supports Claude Code / Cursor agentic workflows. The **authoritativ
 
 ## Conventions that always hold
 
-- **Route to specialists.** Schema → `supabase-migration-author`; data-layer modules/hooks → `supabase-module-author`; route handlers → `route-handler-engineer`; engine → `constraint-engine-engineer`; UI → `ui-component-builder`; tokens → `design-system-architect`. Pre-PR reviews: `ux-reviewer`, `accessibility-auditor`, `prd-aligner`. See [`docs/agentic/agents.md`](../../docs/agentic/agents.md).
+- **Route to specialists.** Schema → `supabase-migration-author`; data-layer modules/hooks → `supabase-module-author`; route handlers → `route-handler-engineer`; engine → `constraint-engine-engineer`; UI → `ui-component-builder`; tokens → `design-system-architect`. Pre-PR reviews: `ux-reviewer`, `accessibility-auditor`, `prd-aligner`; design-lab→live promotion fidelity → `design-parity-auditor`. See [`docs/agentic/agents.md`](../../docs/agentic/agents.md).
 - **Agent log.** Each major generation step gets an entry under [`/agent-log`](../../agent-log/): prompt used, context files provided, expected output, observed issue, follow-up fixes.
 - **Prompts** are stored as raw `.txt` under [`/prompts`](../../prompts/).
 - **Docs** — PRDs, specs, architecture docs, and rules are `.md` (under [`/docs`](../../docs/) or `.cursor/rules/`).

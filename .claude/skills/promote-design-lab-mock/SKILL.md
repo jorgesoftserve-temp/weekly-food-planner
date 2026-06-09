@@ -161,7 +161,7 @@ Numbered. Each: one-line title + 1–3 sentences + concrete resolution + owning 
 
 ### Verification
 - `pnpm typecheck && pnpm test`.
-- Visual at 390 / 820 / 1440px (Playwright MCP) — live screen matches the approved mock.
+- **`design-parity-auditor` sign-off** (runs the [`design-lab-parity-check`](../design-lab-parity-check/SKILL.md) skill): live vs. mock at 390 / 820 / 1440px × light/dark — structural + token fidelity. This gates retiring the mock.
 - Light + dark + reduced-motion parity preserved.
 - `accessibility-auditor` AA sign-off; `ux-reviewer` flow check.
 
@@ -179,7 +179,7 @@ Mock-only functionality with no schema yet (grocery per-line note, Cook-mode dat
 - **Promote screen-by-screen; never regress live styling mid-flight.** One mock per plan. While a mock is mid-promotion the other live screens keep working — the scoped `[data-skin="cozy"]` lab and the live app coexist until the last screen lands.
 - **Dark-mode + reduced-motion parity must survive promotion.** Every promoted surface keeps its `.dark` token values and its `motion-reduce:` guards (the `cozy-lift` hover especially). No light-only or motion-only regressions.
 - **Per-member accent stays only on member-tied surfaces.** Selectors, role badges, dots, member-card rings — never CTAs, never destructive, never global chrome. Promotion must not spread accent beyond where the mock used it.
-- **Retire the mock only after the live screen is verified.** Delete `_components/<name>-mock.tsx` + its `/design-lab` registry entry only once typecheck + test + the three-width visual pass are green. The lab is the fallback reference until then.
+- **Retire the mock only after the live screen is verified.** Delete `_components/<name>-mock.tsx` + its `/design-lab` registry entry only once typecheck + test + the `design-parity-auditor` three-width × light/dark pass are green. The lab is the fallback reference until then.
 - **No new data hooks, no new tokens authored here.** This skill sequences and targets; it does not write `globals.css` tokens (→ `design-system-architect`) or `<table>.react.ts` hooks (→ data-layer skill/agent). If either is missing, it is a prerequisite, not part of this plan.
 - **No code.** Like `menu-generation-impact-review`, the skill emits a plan + concrete targets, not the component file. The owning agents write the code.
 

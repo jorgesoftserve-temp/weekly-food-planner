@@ -138,6 +138,7 @@ Subagent definitions live under [`.claude/agents/`](./.claude/agents/) and can b
 | [`determinism-snapshot-curator`](./.claude/agents/determinism-snapshot-curator.md) | Engine golden snapshots and regression suite |
 | [`ux-reviewer`](./.claude/agents/ux-reviewer.md) | Pre-PR review of UI flows against product UX expectations |
 | [`accessibility-auditor`](./.claude/agents/accessibility-auditor.md) | Pre-PR a11y review (keyboard nav, ARIA, contrast) |
+| [`design-parity-auditor`](./.claude/agents/design-parity-auditor.md) | Post-promotion check that a live screen matches its `/design-lab` mock (Playwright, read-only) |
 | [`prd-aligner`](./.claude/agents/prd-aligner.md) | Cross-check code state against the PRDs, flag drift |
 
 ### Skills
@@ -148,6 +149,7 @@ Custom skills live under [`.claude/skills/`](./.claude/skills/) and are auto-dis
 - **[`menu-generation-impact-review`](./.claude/skills/menu-generation-impact-review/SKILL.md)** — given a proposed menu-generation feature, produces a structured impact review (no code): which layers change, what could break, snapshot drift risk, tests to add, PRD sections to update, and the agent-by-agent implementation order. Invoke when scoping a new feature, evaluating an architecture change, or pre-flighting a refactor. Worked example: [`docs/examples/max-budget-per-week.md`](./.claude/skills/menu-generation-impact-review/docs/examples/max-budget-per-week.md).
 - **[`supabase-add-column`](./.claude/skills/supabase-add-column/SKILL.md)** — emit the full multi-artifact change set for adding a column (migration with `COMMENT ON COLUMN`, soft-delete-aware partial-index handling, optional backfill, types regen command, and the list of TypeScript files that need to update in lockstep). Worked example: [`docs/examples/ingredients-cost-per-unit.md`](./.claude/skills/supabase-add-column/docs/examples/ingredients-cost-per-unit.md).
 - **[`feature-folder-scaffold`](./.claude/skills/feature-folder-scaffold/SKILL.md)** — scaffold a CRUD feature folder under `apps/web/app/(app)/<feature>/` matching the canonical shape (client list page + create/edit drawer + soft-delete confirm + Zod schema + integration test + middleware/sidebar patches). Reuses hooks from `@weekly-food-planner/supabase/react`; never generates app-level hooks. Worked example: [`docs/examples/shopping-templates.md`](./.claude/skills/feature-folder-scaffold/docs/examples/shopping-templates.md).
+- **[`design-lab-parity-check`](./.claude/skills/design-lab-parity-check/SKILL.md)** — drive Playwright over a promoted live screen and its `/design-lab` mock at 390/820/1440px × light/dark, snapshot the DOM/a11y tree + screenshots, and tabulate the structural + token deltas. Capture-and-tabulate only — the PASS/BLOCK verdict is the [`design-parity-auditor`](./.claude/agents/design-parity-auditor.md)'s. Worked example: [`docs/examples/members-parity-check.md`](./.claude/skills/design-lab-parity-check/docs/examples/members-parity-check.md).
 
 ### MCP servers
 

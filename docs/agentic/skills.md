@@ -36,6 +36,7 @@ The harness auto-discovers any skill under `.claude/skills/<name>/SKILL.md` — 
 | [`add-route-handler`](../../.claude/skills/add-route-handler/SKILL.md) | Scaffold a standard route handler / server action |
 | [`feature-folder-scaffold`](../../.claude/skills/feature-folder-scaffold/SKILL.md) | Scaffold a CRUD feature folder under `(app)/<feature>/` |
 | [`promote-design-lab-mock`](../../.claude/skills/promote-design-lab-mock/SKILL.md) | Graduate a `/design-lab` mock into the live app (v1.8 Phase 3) |
+| [`design-lab-parity-check`](../../.claude/skills/design-lab-parity-check/SKILL.md) | Capture live-vs-mock Playwright evidence (390/820/1440px × light/dark) for the `design-parity-auditor` |
 
 ## Skill file structure (for reference)
 

@@ -51,6 +51,7 @@ You review UI for product UX adherence. Read-only — your output is a punch lis
 - Accessibility — that's `accessibility-auditor`'s pass.
 - Code correctness, types, or test coverage.
 - Visual design polish (spacing, typography) unless it breaks one of the rules above.
+- Whether a promoted screen matches its `/design-lab` mock — that's `design-parity-auditor`. You may reuse its `design-lab-parity-check` skill to capture screenshots for your own flow checks.
 
 ## How to run a pass
 

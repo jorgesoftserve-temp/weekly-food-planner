@@ -20,6 +20,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
+import { cn } from '@/lib/utils'
 import { useActiveWorkspace } from '@/components/workspace-provider'
 
 const NAV_LINKS = [
@@ -61,12 +62,19 @@ export const AppSidebar = () => {
             <SidebarMenu>
               {NAV_LINKS.map((link) => {
                 const Icon = link.icon
+                const active = isActive(link.href)
                 return (
                   <SidebarMenuItem key={link.href}>
                     <SidebarMenuButton
                       asChild
-                      isActive={isActive(link.href)}
+                      isActive={active}
                       tooltip={link.label}
+                      // Active item reflects the user's chosen accent (tint bg +
+                      // strong text) — see docs/design/user-accent-colors.md.
+                      className={cn(
+                        active &&
+                          'bg-accent-tint text-accent-strong hover:bg-accent-tint hover:text-accent-strong data-[active=true]:bg-accent-tint data-[active=true]:text-accent-strong',
+                      )}
                     >
                       <Link href={link.href}>
                         <Icon />

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import {
   CalendarRange,
   Check,
@@ -30,6 +30,7 @@ import { EmptyState } from '@/components/empty-state'
 import { PageHeader } from '@/components/page-header'
 import { useActiveWorkspace } from '@/components/workspace-provider'
 import { useSupabase } from '@/lib/hooks/use-supabase'
+import { useExclusiveOverlay } from '@/hooks/use-exclusive-overlay'
 import {
   downloadMenuExport,
   type ExportFormat,
@@ -43,6 +44,13 @@ import { AddSlotDialog } from './_components/add-slot-dialog'
 import { GenerateMenuDialog } from './_components/generate-menu-dialog'
 import { MenuView } from './_components/menu-view'
 import { ReplaceSlotDialog } from './_components/replace-slot-dialog'
+
+// Exactly one menu overlay is open at a time (generate / replace-slot /
+// add-slot) — see hooks/use-exclusive-overlay.ts.
+type MenuOverlay =
+  | { kind: 'generate' }
+  | { kind: 'replace'; slot: MenuSlotRecord }
+  | { kind: 'addSlot'; day: string }
 
 const MenuPage = () => {
   const supabase = useSupabase()
@@ -75,9 +83,7 @@ const MenuPage = () => {
     workspaceId: workspace?.id ?? '',
   })
 
-  const [generateOpen, setGenerateOpen] = useState(false)
-  const [replaceSlot, setReplaceSlot] = useState<MenuSlotRecord | null>(null)
-  const [addSlotDay, setAddSlotDay] = useState<string | null>(null)
+  const { overlay, open, onOpenChange } = useExclusiveOverlay<MenuOverlay>()
   const isLoading =
     workspaceLoading || activeMenuQuery.isLoading || draftQuery.isLoading
 
@@ -163,7 +169,7 @@ const MenuPage = () => {
               </DropdownMenu>
             ) : null}
             <Button
-              onClick={() => setGenerateOpen(true)}
+              onClick={() => open({ kind: 'generate' })}
               disabled={!workspace}
             >
               <Sparkles className="size-4" />
@@ -247,8 +253,8 @@ const MenuPage = () => {
             recipeNamesById={recipeNamesById}
             memberNamesById={memberNamesById}
             editable
-            onReplaceSlot={(slot) => setReplaceSlot(slot)}
-            onAddSlot={(day) => setAddSlotDay(day)}
+            onReplaceSlot={(slot) => open({ kind: 'replace', slot })}
+            onAddSlot={(day) => open({ kind: 'addSlot', day })}
           />
         </div>
       ) : null}
@@ -267,7 +273,10 @@ const MenuPage = () => {
           title="No active menu yet"
           description="Click Generate menu above to build a draft for the week. You can review and edit it before accepting."
           action={
-            <Button onClick={() => setGenerateOpen(true)} disabled={!workspace}>
+            <Button
+              onClick={() => open({ kind: 'generate' })}
+              disabled={!workspace}
+            >
               <Sparkles className="size-4" />
               Generate menu
             </Button>
@@ -278,8 +287,8 @@ const MenuPage = () => {
       {workspace ? (
         <GenerateMenuDialog
           workspaceId={workspace.id}
-          open={generateOpen}
-          onOpenChange={setGenerateOpen}
+          open={overlay?.kind === 'generate'}
+          onOpenChange={onOpenChange}
           mode={isReviewingDraft || activeMenu ? 'regenerate' : 'create'}
         />
       ) : null}
@@ -288,11 +297,9 @@ const MenuPage = () => {
         <ReplaceSlotDialog
           workspaceId={workspace.id}
           menuId={draft.id}
-          slot={replaceSlot}
-          open={!!replaceSlot}
-          onOpenChange={(open) => {
-            if (!open) setReplaceSlot(null)
-          }}
+          slot={overlay?.kind === 'replace' ? overlay.slot : null}
+          open={overlay?.kind === 'replace'}
+          onOpenChange={onOpenChange}
         />
       ) : null}
 
@@ -300,12 +307,10 @@ const MenuPage = () => {
         <AddSlotDialog
           workspaceId={workspace.id}
           menu={draft}
-          dayOfWeek={addSlotDay}
+          dayOfWeek={overlay?.kind === 'addSlot' ? overlay.day : null}
           memberNamesById={memberNamesById}
-          open={!!addSlotDay}
-          onOpenChange={(open) => {
-            if (!open) setAddSlotDay(null)
-          }}
+          open={overlay?.kind === 'addSlot'}
+          onOpenChange={onOpenChange}
         />
       ) : null}
     </div>

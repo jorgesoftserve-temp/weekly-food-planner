@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
 import {
   ChefHat,
   Eye,
@@ -36,6 +35,7 @@ import { EmptyState } from '@/components/empty-state'
 import { PageHeader } from '@/components/page-header'
 import { useActiveWorkspace } from '@/components/workspace-provider'
 import { useSupabase } from '@/lib/hooks/use-supabase'
+import { useExclusiveOverlay } from '@/hooks/use-exclusive-overlay'
 import { DeleteRecipeDialog } from './_components/delete-recipe-dialog'
 import { EditRecipeDrawer } from './_components/edit-recipe-drawer'
 import {
@@ -43,10 +43,13 @@ import {
   type RecipeDetailSection,
 } from './_components/recipe-detail-dialog'
 
-type DetailTarget = {
-  recipeId: string
-  section: RecipeDetailSection
-}
+// One overlay at a time — opening any of these implicitly closes the others, so
+// the detail dialog and edit drawer can never co-exist. See
+// hooks/use-exclusive-overlay.ts.
+type RecipeOverlay =
+  | { kind: 'detail'; recipeId: string; section: RecipeDetailSection }
+  | { kind: 'edit'; recipeId: string }
+  | { kind: 'delete'; recipe: RecipeRecord }
 
 const RecipesPage = () => {
   const supabase = useSupabase()
@@ -57,12 +60,10 @@ const RecipesPage = () => {
     enabled: !!workspace,
   })
 
-  const [pendingDelete, setPendingDelete] = useState<RecipeRecord | null>(null)
-  const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null)
-  const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null)
+  const { overlay, open, onOpenChange } = useExclusiveOverlay<RecipeOverlay>()
 
   const openDetail = (recipeId: string, section: RecipeDetailSection) =>
-    setDetailTarget({ recipeId, section })
+    open({ kind: 'detail', recipeId, section })
 
   const isLoading = workspaceLoading || recipesQuery.isLoading
   const recipes = recipesQuery.data ?? []
@@ -113,7 +114,7 @@ const RecipesPage = () => {
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-md border border-border">
+        <div className="overflow-x-auto rounded-md border border-border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -138,7 +139,7 @@ const RecipesPage = () => {
                     <TableCell className="font-medium">
                       <button
                         type="button"
-                        onClick={() => setEditingRecipeId(recipe.id)}
+                        onClick={() => open({ kind: 'edit', recipeId: recipe.id })}
                         className="text-left hover:underline underline-offset-4"
                       >
                         {recipe.name}
@@ -223,7 +224,7 @@ const RecipesPage = () => {
                           <DropdownMenuItem
                             onSelect={(event) => {
                               event.preventDefault()
-                              setEditingRecipeId(recipe.id)
+                              open({ kind: 'edit', recipeId: recipe.id })
                             }}
                           >
                             <Pencil className="mr-2 size-4" />
@@ -234,7 +235,7 @@ const RecipesPage = () => {
                             className="text-destructive focus:bg-destructive/10 focus:text-destructive"
                             onSelect={(event) => {
                               event.preventDefault()
-                              setPendingDelete(recipe)
+                              open({ kind: 'delete', recipe })
                             }}
                           >
                             <Trash2 className="mr-2 size-4" />
@@ -251,38 +252,34 @@ const RecipesPage = () => {
         </div>
       )}
 
-      {workspace && pendingDelete ? (
+      {workspace && overlay?.kind === 'delete' ? (
         <DeleteRecipeDialog
           workspaceId={workspace.id}
-          recipeId={pendingDelete.id}
-          recipeName={pendingDelete.name}
-          open={!!pendingDelete}
-          onOpenChange={(open) => {
-            if (!open) setPendingDelete(null)
-          }}
+          recipeId={overlay.recipe.id}
+          recipeName={overlay.recipe.name}
+          open
+          onOpenChange={onOpenChange}
         />
       ) : null}
 
       {workspace ? (
         <EditRecipeDrawer
           workspaceId={workspace.id}
-          recipeId={editingRecipeId}
-          open={!!editingRecipeId}
-          onOpenChange={(open) => {
-            if (!open) setEditingRecipeId(null)
-          }}
+          recipeId={overlay?.kind === 'edit' ? overlay.recipeId : null}
+          open={overlay?.kind === 'edit'}
+          onOpenChange={onOpenChange}
         />
       ) : null}
 
       {workspace ? (
         <RecipeDetailDialog
           workspaceId={workspace.id}
-          recipeId={detailTarget?.recipeId ?? null}
-          initialSection={detailTarget?.section ?? 'ingredients'}
-          open={!!detailTarget}
-          onOpenChange={(open) => {
-            if (!open) setDetailTarget(null)
-          }}
+          recipeId={overlay?.kind === 'detail' ? overlay.recipeId : null}
+          initialSection={
+            overlay?.kind === 'detail' ? overlay.section : 'ingredients'
+          }
+          open={overlay?.kind === 'detail'}
+          onOpenChange={onOpenChange}
         />
       ) : null}
     </div>

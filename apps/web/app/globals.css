@@ -5,64 +5,92 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --popover-foreground: 0 0% 12%;
+    --primary: 359 79% 56%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 159 30% 43%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 339 60% 97%;
+    --muted-foreground: 0 0% 42%;
+    --accent: 114 35% 51%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 41%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 359 79% 56%;
+    --radius: 0.65rem;
+    --sidebar-background: 0 0% 99%;
+    --sidebar-foreground: 0 0% 26%;
+    --sidebar-primary: 359 79% 56%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 339 60% 96%;
+    --sidebar-accent-foreground: 0 0% 18%;
+    --sidebar-border: 0 0% 91%;
+    --sidebar-ring: 359 79% 56%;
+
+    /* Per-user accent — default (strawberry). Overridden by [data-accent="…"] below.
+       Strawberry tracks the brand hue 351 (#fb4b66); --primary stays 359. */
+    --user-accent: 351 79% 56%;
+    --user-accent-strong: 351 70% 45%;
+    --user-accent-tint: 351 90% 96%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --background: 20 6% 10%;
+    --foreground: 0 0% 96%;
+    --card: 20 6% 13%;
+    --card-foreground: 0 0% 96%;
+    --popover: 20 6% 13%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 359 84% 64%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 159 28% 42%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 20 6% 16%;
+    --muted-foreground: 0 0% 64%;
+    --accent: 114 32% 48%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 359 84% 64%;
+    --sidebar-background: 20 6% 12%;
+    --sidebar-foreground: 0 0% 88%;
+    --sidebar-primary: 359 84% 64%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 20 6% 18%;
+    --sidebar-accent-foreground: 0 0% 92%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 359 84% 64%;
+
+    --user-accent: 351 84% 66%;
+    --user-accent-strong: 351 85% 75%;
+    --user-accent-tint: 351 40% 22%;
   }
+
+  /* ── Per-user accent palette ──────────────────────────────────────────────
+     Light values: solid (ring/link), strong (text on tint), tint (soft bg).
+     Dark values:  solid lighter, strong = light text, tint = dark surface.
+     See docs/design/user-accent-colors.md. */
+  [data-accent='strawberry'] { --user-accent: 351 79% 56%; --user-accent-strong: 351 70% 45%; --user-accent-tint: 351 90% 96%; }
+  [data-accent='moss']       { --user-accent: 114 38% 45%; --user-accent-strong: 114 40% 32%; --user-accent-tint: 114 40% 95%; }
+  [data-accent='teal']       { --user-accent: 159 35% 40%; --user-accent-strong: 159 38% 28%; --user-accent-tint: 159 35% 94%; }
+  [data-accent='amber']      { --user-accent: 38 80% 44%;  --user-accent-strong: 34 75% 33%;  --user-accent-tint: 42 90% 94%; }
+  [data-accent='ocean']      { --user-accent: 205 75% 43%; --user-accent-strong: 205 70% 33%; --user-accent-tint: 205 80% 95%; }
+  [data-accent='plum']       { --user-accent: 285 45% 48%; --user-accent-strong: 285 45% 36%; --user-accent-tint: 290 50% 96%; }
+
+  .dark [data-accent='strawberry'] { --user-accent: 351 84% 66%; --user-accent-strong: 351 85% 75%; --user-accent-tint: 351 40% 22%; }
+  .dark [data-accent='moss']       { --user-accent: 114 45% 58%; --user-accent-strong: 114 45% 68%; --user-accent-tint: 114 28% 20%; }
+  .dark [data-accent='teal']       { --user-accent: 159 42% 52%; --user-accent-strong: 159 42% 64%; --user-accent-tint: 159 28% 18%; }
+  .dark [data-accent='amber']      { --user-accent: 42 88% 60%;  --user-accent-strong: 42 90% 70%;  --user-accent-tint: 38 45% 20%; }
+  .dark [data-accent='ocean']      { --user-accent: 205 80% 62%; --user-accent-strong: 205 80% 72%; --user-accent-tint: 205 45% 20%; }
+  .dark [data-accent='plum']       { --user-accent: 288 55% 66%; --user-accent-strong: 288 55% 76%; --user-accent-tint: 288 35% 22%; }
 }
 
 @layer base {
@@ -71,5 +99,59 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-serif), var(--font-sans), ui-serif, Georgia, serif;
+  }
+}
+
+@layer utilities {
+  /* Subtle gradient tints — see docs/design/color-palette.md §3.
+     ≤12% color opacity (light) / handled per-mode. Never heavy. */
+  .bg-gradient-hero {
+    background-image: linear-gradient(
+      135deg,
+      hsl(351 96% 64% / 0.08),
+      hsl(42 86% 63% / 0.08)
+    );
+  }
+  .dark .bg-gradient-hero {
+    background-image: linear-gradient(
+      135deg,
+      hsl(351 84% 64% / 0.06),
+      hsl(42 86% 63% / 0.05)
+    );
+  }
+  .bg-gradient-empty {
+    background-image: linear-gradient(
+      135deg,
+      hsl(114 35% 51% / 0.08),
+      hsl(159 30% 43% / 0.06)
+    );
+  }
+  .dark .bg-gradient-empty {
+    background-image: linear-gradient(
+      135deg,
+      hsl(114 35% 51% / 0.06),
+      hsl(159 30% 43% / 0.05)
+    );
+  }
+  /* Per-user accent helpers. */
+  .bg-accent-tint {
+    background-color: hsl(var(--user-accent-tint));
+  }
+  .text-accent-strong {
+    color: hsl(var(--user-accent-strong));
+  }
+  .ring-user-accent {
+    --tw-ring-color: hsl(var(--user-accent));
+  }
+  .bg-gradient-accent {
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--user-accent) / 0.1),
+      transparent
+    );
   }
 }

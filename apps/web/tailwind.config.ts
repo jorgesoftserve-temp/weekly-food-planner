@@ -17,7 +17,16 @@ const config: Config = {
   		}
   	},
   	extend: {
+  		fontFamily: {
+  			sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+  			serif: ['var(--font-serif)', 'ui-serif', 'Georgia', 'serif']
+  		},
   		colors: {
+  			'user-accent': {
+  				DEFAULT: 'hsl(var(--user-accent))',
+  				strong: 'hsl(var(--user-accent-strong))',
+  				tint: 'hsl(var(--user-accent-tint))'
+  			},
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',

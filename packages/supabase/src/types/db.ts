@@ -7,6 +7,13 @@ export type AgeCategory = 'infant' | 'toddler' | 'child' | 'teen' | 'adult' | 's
 export type Difficulty = 'easy' | 'medium' | 'hard'
 export type WorkspaceRole = 'creator' | 'admin' | 'member'
 export type WorkspaceType = 'individual' | 'group'
+export type AccentColor =
+  | 'strawberry'
+  | 'moss'
+  | 'teal'
+  | 'amber'
+  | 'ocean'
+  | 'plum'
 export type Unit =
   | 'g'
   | 'kg'
@@ -123,6 +130,13 @@ export type GroceryItemRow = {
   quantity: string | number
   unit: Unit
   scheduled_purchase_day: string | null
+}
+
+export type ProfileRow = {
+  id: string
+  accent_color: AccentColor
+  created_at: string
+  updated_at: string
 }
 
 export type EnumMetadataRow = {

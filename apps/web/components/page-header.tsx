@@ -17,7 +17,9 @@ export const PageHeader = ({
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 border-b border-border pb-4 sm:flex-row sm:items-end sm:justify-between',
+        // Subtle brand wash — one gradient band per screen, top only.
+        // See docs/design/color-palette.md §3.
+        'flex flex-col gap-2 rounded-xl bg-gradient-hero px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5',
         className,
       )}
     >

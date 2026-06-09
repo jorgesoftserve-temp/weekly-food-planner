@@ -1,0 +1,126 @@
+/* Cozy skin — SCOPED to the design lab only (data-skin="cozy").
+   Demonstrates docs/design/cozy-restyle-spec.md without touching the live app.
+   Phase 3 promotes these into globals.css. */
+
+/* Preview-local LIGHT theme. The root layout runs next-themes with
+   defaultTheme="system", so when the OS is dark the <html> element carries
+   `.dark` and its dark token values cascade into everything below — including
+   the lab's "light" preview, which previously only *added* `.dark` and could
+   never cancel the ancestor one. `.theme-light` re-asserts the full light token
+   set locally so the preview is self-contained regardless of the OS/app theme.
+   Mirrors globals.css :root — keep in sync (dev-only, Phase 3 retires the lab). */
+[data-skin='cozy'] .theme-light {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 12%;
+  --primary: 359 79% 56%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 159 30% 43%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 339 60% 97%;
+  --muted-foreground: 0 0% 42%;
+  --accent: 114 35% 51%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 41%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+  --ring: 359 79% 56%;
+  --sidebar-background: 0 0% 99%;
+  --sidebar-foreground: 0 0% 26%;
+  --sidebar-primary: 359 79% 56%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 339 60% 96%;
+  --sidebar-accent-foreground: 0 0% 18%;
+  --sidebar-border: 0 0% 91%;
+  --sidebar-ring: 359 79% 56%;
+  --user-accent: 351 79% 56%;
+  --user-accent-strong: 351 70% 45%;
+  --user-accent-tint: 351 90% 96%;
+}
+
+/* The gradient utilities switch via a `.dark` ANCESTOR selector (globals.css),
+   so an OS-dark <html> would force the dark gradient even inside the light
+   preview. Re-assert the light gradients locally; specificity (0,3,0) beats
+   the global `.dark .bg-gradient-*` (0,2,0). */
+[data-skin='cozy'] .theme-light .bg-gradient-hero {
+  background-image: linear-gradient(135deg, hsl(351 96% 64% / 0.08), hsl(42 86% 63% / 0.08));
+}
+[data-skin='cozy'] .theme-light .bg-gradient-empty {
+  background-image: linear-gradient(135deg, hsl(114 35% 51% / 0.08), hsl(159 30% 43% / 0.06));
+}
+
+[data-skin='cozy'] {
+  --shadow-sm: 0 1px 2px hsl(20 30% 12% / 0.04), 0 1px 3px hsl(20 30% 12% / 0.06);
+  --shadow-md: 0 2px 6px hsl(20 30% 12% / 0.05), 0 6px 16px hsl(20 30% 12% / 0.08);
+  --shadow-lg: 0 8px 24px hsl(20 30% 12% / 0.1), 0 16px 40px hsl(20 30% 12% / 0.1);
+
+  /* Status palette (light) — moss = success/accepted, tuscan = warning/draft.
+     Scoped to the lab so we can demonstrate the fuller palette WITHOUT promoting
+     it into globals.css yet (Phase 3). Tokens only — never inline hex. */
+  --success: 114 40% 32%;
+  --success-tint: 114 40% 94%;
+  --warning: 34 70% 30%;
+  --warning-tint: 42 90% 90%;
+}
+
+[data-skin='cozy'] .dark {
+  --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.3);
+  --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.35);
+  --shadow-lg: 0 12px 32px hsl(0 0% 0% / 0.45);
+
+  /* Status palette (dark) — lighter for dark-surface contrast. */
+  --success: 114 45% 68%;
+  --success-tint: 114 28% 20%;
+  --warning: 42 90% 70%;
+  --warning-tint: 38 45% 20%;
+}
+
+/* Cozy card: large radius + soft layered shadow + roomy padding. */
+[data-skin='cozy'] .cozy-card {
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-md);
+}
+[data-skin='cozy'] .cozy-shadow-sm {
+  box-shadow: var(--shadow-sm);
+}
+[data-skin='cozy'] .cozy-shadow-lg {
+  box-shadow: var(--shadow-lg);
+}
+
+/* Subtle hover lift on interactive cards (reduced-motion-safe). */
+[data-skin='cozy'] .cozy-lift {
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+[data-skin='cozy'] .cozy-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-skin='cozy'] .cozy-lift {
+    transition: none;
+  }
+  [data-skin='cozy'] .cozy-lift:hover {
+    transform: none;
+  }
+}
+
+/* Status badge helpers — consume the scoped --success / --warning tokens above.
+   Used for Accepted / Draft / Modified affordances in the menu + grocery mocks. */
+.bg-success-tint {
+  background-color: hsl(var(--success-tint));
+}
+.text-success {
+  color: hsl(var(--success));
+}
+.bg-warning-tint {
+  background-color: hsl(var(--warning-tint));
+}
+.text-warning {
+  color: hsl(var(--warning));
+}

@@ -11,6 +11,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { useActiveWorkspace } from '@/components/workspace-provider'
+import { ThemeToggle } from './theme-toggle'
 import { UserMenu } from './user-menu'
 
 const PAGE_TITLES: Record<string, string> = {
@@ -57,6 +58,7 @@ export const AppHeader = () => {
         </BreadcrumbList>
       </Breadcrumb>
       <div className="ml-auto flex items-center gap-2">
+        <ThemeToggle />
         <UserMenu />
       </div>
     </header>

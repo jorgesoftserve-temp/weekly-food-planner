@@ -338,12 +338,12 @@ Backfill: every pre-existing menu gets one row per active workspace member, so l
 | `target_member_id` | uuid NULL | FK → `workspace_members.id`. NULL = shared |
 | `is_overridden` | boolean NOT NULL DEFAULT false | TRUE when the user replaced the engine's pick during draft review. `recipe_id` holds the user-chosen recipe; `original_recipe_id` holds the engine's. Always FALSE for `custom` menus (user picked everything from the start, so "override" is not meaningful) |
 | `original_recipe_id` | uuid NULL | FK → `recipes.id`. Engine's original pick before any user override. NULL on pristine slots and on `custom` menus |
-| `cooked_at` | timestamptz NULL | **(v1.8)** Set when a member marks this slot cooked in [Cook mode](./PRODUCT_PRD.md) (NULL = not yet cooked / un-marked). Progress tracking only — never affects the recipe, the plan, the grocery list, the engine, or determinism. Only meaningful on **accepted** menus (you cook what's accepted, not a draft) |
-| `cooked_by` | uuid NULL | **(v1.8)** FK → `workspace_members.id`. Who marked it cooked; NULL when not cooked |
+| `cooked_at` | timestamptz NULL | **(v1.9)** Set when a member marks this slot cooked in [Cook mode](./PRODUCT_PRD.md) (NULL = not yet cooked / un-marked). Progress tracking only — never affects the recipe, the plan, the grocery list, the engine, or determinism. Only meaningful on **accepted** menus (you cook what's accepted, not a draft) |
+| `cooked_by` | uuid NULL | **(v1.9)** FK → `workspace_members.id` ON DELETE SET NULL. Who marked it cooked; NULL when not cooked |
 
 UNIQUE NULLS NOT DISTINCT `(menu_id, day_of_week, meal_key, target_member_id)`. No own `is_deleted` — visibility follows the parent menu.
 
-`cooked_at` / `cooked_by` are the only **member-writable** columns on `menu_slots` — the rest of the table is service-role-managed (engine pipeline). The cooked-toggle therefore needs a narrow member-scoped write path (a `SECURITY DEFINER` RPC `sys_set_slot_cooked(slot_id, cooked)` that re-checks workspace membership, or a tightly-scoped RLS UPDATE policy restricted to these two columns). See §8 and [PRODUCT_PRD.md §13.2](./PRODUCT_PRD.md).
+`cooked_at` / `cooked_by` are the only **member-writable** columns on `menu_slots` — the rest of the table is service-role-managed (engine pipeline). **As shipped (v1.9):** a **row-scoped RLS UPDATE policy** `menu_slots_cook_mode_update` lets an authenticated workspace member update a slot whose parent menu is **accepted** (`accepted_at IS NOT NULL`, membership via `fn_user_workspace_role`). Postgres RLS cannot restrict *which columns* an UPDATE touches, so the **column restriction (only `cooked_at`/`cooked_by`) is enforced in the route handler** (`POST …/slots/[slotId]/cook`), which is the only write path and sets the timestamp server-side. (No `sys_set_slot_cooked` RPC was needed.) See §8 and [PRODUCT_PRD.md §13.2](./PRODUCT_PRD.md).
 
 ## 6.13 `grocery_lists`
 
@@ -472,7 +472,7 @@ Policy summary:
 | `member_dietary_restrictions`, `member_allergies`, `member_ingredient_dislikes` | any member of the workspace | self, or `creator`/`admin` |
 | `recipes`, `recipe_ingredients`, `recipe_instructions`, `recipe_dietary_tags` | any member of the workspace (active recipes) | `creator` or `admin` |
 | `ingredients`, `ingredient_allergens` | any authenticated user (global catalog) | service-role only |
-| `menus`, `menu_slots`, `grocery_lists`, `grocery_items`, `generation_runs` | any member of the workspace (active menus for the read; runs are always visible) | service-role (engine pipeline). **(v1.8)** Two narrow member-scoped exceptions: `menu_slots.cooked_at`/`cooked_by` (Cook mode — see §6.12) and `grocery_items.note` (shopper note — see §6.14), both gated to workspace membership via a `SECURITY DEFINER` RPC or a column-scoped policy |
+| `menus`, `menu_slots`, `grocery_lists`, `grocery_items`, `generation_runs` | any member of the workspace (active menus for the read; runs are always visible) | service-role (engine pipeline). Two narrow member-scoped exceptions: **(v1.9)** `menu_slots.cooked_at`/`cooked_by` (Cook mode) via the row-scoped `menu_slots_cook_mode_update` UPDATE policy with column discipline enforced in the route handler — see §6.12; and **(v1.8)** `grocery_items.note` (shopper note — see §6.14), gated to workspace membership |
 | `enum_metadata` | any authenticated user | service-role for official rows; users may insert pending rows via `sys_save_label` and delete their own pending rows via `sys_delete_enum_suggestion` (§10) |
 
 A helper SQL function `fn_user_workspace_role(user_id, workspace_id) RETURNS workspace_role` centralizes role lookups so policies stay simple.

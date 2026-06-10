@@ -404,7 +404,7 @@ The in-app menu and grocery list pages are first-class deliverables in MVP.
 - Shows every meal slot per member, with recipe titles and images.
 - Visually distinguishes shared slots from member-specific slots.
 - Surfaces the **effective** per-menu overlay used (if any) so users can see what extra constraints shaped this week.
-- **(v1.8) Day × meal grid + member selector.** On wide screens the week renders as a grid — one row per day, one column per meal slot (Breakfast / Lunch / Dinner / snacks) — so every meal of every day is visible at once, matching the underlying day × `meal_key` model (not one dish per day). A **member selector** ("Everyone" + a chip per member, tinted with that member's accent — see [§12.2](#122-per-member-accent-color)) scopes the grid to whose plan you're viewing. Empty slots offer an inline "Add meal"; a filled slot opens [Cook mode](#13-cook-mode--cooking-progress-v18).
+- **(v1.8) Day × meal grid + member selector.** On wide screens the week renders as a grid — one row per day, one column per meal slot (Breakfast / Lunch / Dinner / snacks) — so every meal of every day is visible at once, matching the underlying day × `meal_key` model (not one dish per day). A **member selector** ("Everyone" + a chip per member, tinted with that member's accent — see [§12.2](#122-per-member-accent-color)) scopes the grid to whose plan you're viewing. Empty slots offer an inline "Add meal"; a filled slot opens [Cook mode](#13-cook-mode--cooking-progress-v19).
 
 ## Grocery list view
 - Shared grocery list plus one section per member with member-specific items.
@@ -472,13 +472,13 @@ A theme toggle (Light / Dark / System) is available in the app header and in Set
 
 ---
 
-# 13. Cook mode & cooking progress (v1.8)
+# 13. Cook mode & cooking progress (v1.9)
 
-A recipe now has two distinct views: the **detail** view (read-only reference — ingredients and steps shown for reading) and a **Cook mode** view (the hands-on cooking checklist). Cook mode is opened from a filled slot in the weekly menu or from the recipe detail's **Cook** button.
+A recipe now has two distinct views: the **detail** view (read-only reference — ingredients and steps shown for reading) and a **Cook mode** view (the hands-on cooking checklist). Cook mode opens as a **full-screen Sheet from a filled slot in the weekly menu** (the SlotCard's "Cook" action). _Deferred:_ a "Cook" entry point on the recipe detail view.
 
 ## 13.1 Cook mode view
-- Both **ingredients and instructions are checkable** (unlike the read-only detail view), with an "N of M checked" progress header, so a cook can track where they are while cooking.
-- Checking off **every instruction step** reveals an enabled **"Mark as cooked"** action that completes the dish for that slot and returns to the menu. Before all steps are checked the action is disabled with an explanatory label.
+- Both **ingredients and instructions are checkable** (unlike the read-only detail view), with an "N of M steps done" progress header, so a cook can track where they are while cooking. The checklist is an ephemeral per-cook aid — it is not persisted.
+- **"Mark as cooked"** is always available (it does not require checking every step first); it completes the dish for that slot and closes the Sheet. An already-cooked slot can be un-marked ("Mark as not cooked").
 - Cook mode is a **presentation of existing recipe data** — it adds no recipe fields and has no engine impact.
 
 ## 13.2 Cooking progress ("Mark as cooked")
@@ -488,23 +488,22 @@ A recipe now has two distinct views: the **detail** view (read-only reference �
 - **Any workspace member** may mark a slot cooked (it's a shared household action, not admin-gated), which requires a member-scoped write path on the otherwise service-role-managed `menu_slots` table — see [DATABASE_PRD.md §8](./DATABASE_PRD.md).
 - It is **progress tracking only** — it never edits the recipe, the menu plan, or the grocery list, and has no effect on the engine or determinism.
 
-## 13.3 "Meals cooked today" dashboard stat
-The dashboard's old "recipes in your pool" tile (inventory trivia) is replaced with an actionable **"X / N meals cooked today"** stat: of the meal slots scheduled for today across the active menu (optionally scoped to the selected member), how many are marked cooked. It reads directly from `menu_slots.cooked_at` against today's day-of-week for the active menu — no new aggregate storage.
+## 13.3 "Meals cooked" dashboard stat
+The dashboard gains an actionable **"N of M — Meals cooked"** stat: across the **active menu's** slots, how many are marked cooked (`cooked_at != null`) out of the total slot count. It reads directly from `menu_slots.cooked_at` over the active menu — no new aggregate storage. _Deferred:_ scoping the count to today's day-of-week or to the selected member.
 
 ---
 
-# 14. Global search (v1.8)
+# 14. Global search (v1.9)
 
-Cross-module search delivered in **two tiers** so the common case is one keystroke and power users still get precision. Search is **read-only** over existing workspace data (recipes, members, menus); it adds no new entities and respects RLS / workspace scoping.
+A dedicated **`/search` route** delivers **recipes-first** search, with the surface built to extend to the other modules later. Search is **read-only** over existing workspace data; it adds no new entities and respects RLS / workspace scoping.
 
-## 14.1 Tier 1 — topbar instant search
-- A keyword field in the app-shell header, available on every screen.
-- Typing shows **grouped results inline** (Recipes / People / Menus …), each a thumbnail + name + meta, with a **"See all results"** footer that hands off to Tier 2.
-- Results render **only once the user types** — an empty field shows a short hint, never a dump of everything.
-- **Mobile-first:** under `sm` the header shows a search *icon* that opens a full-width top sheet with a large input (not a shrunken desktop pill).
+## 14.1 Shipped (v1.9) — recipes search screen
+- One **segmented module bar** (Recipes / Weekly menu / Grocery / Members). **Recipes is active**; the other three render as **disabled "Soon" tabs** so the cross-module shape is visible without promising behaviour.
+- **Recipe facets:** keyword + meal + difficulty + cuisine + dietary tag (cuisine/dietary options derived from the loaded recipes). Matching is **client-side over the existing recipes query** — no new search endpoint or cross-entity query layer. Results reuse the recipe card + the recipes detail/edit/delete overlays.
+- Reached from a **sidebar nav entry**; `/search` is an authenticated route (middleware-protected).
 
-## 14.2 Tier 2 — advanced search screen
-- One bar split into dropdown segments: **which module** (Recipes / Weekly menu / Grocery / Members) + **per-module filters** (recipes: meal, cuisine, difficulty, dietary) + a **keyword**, for fine-tuning a query (cf. Airbnb's segmented query builder).
-- Backed by a workspace-scoped search endpoint — see [ARCHITECTURE_PRD.md §9](./ARCHITECTURE_PRD.md).
+## 14.2 Deferred (post-v1.9)
+- **Topbar instant search** (a header keyword field with grouped inline results on every screen) — the `design-lab/_components/topbar-search.tsx` mock is the reference.
+- **Cross-module search** over Weekly menu / Grocery / Members (the "Soon" tabs), which would introduce a workspace-scoped search endpoint — see [ARCHITECTURE_PRD.md §9](./ARCHITECTURE_PRD.md).
 
 No AI / semantic search — this is deterministic keyword + filter matching over existing tables. AI-assisted features remain out of scope until v3.0.

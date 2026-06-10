@@ -74,7 +74,7 @@ export SUPABASE_ACCESS_TOKEN=sbp_xxxx
 
 **System impact** — the introspection surface for the **hosted** deployment. `--read-only` is
 enforced; any schema change still goes through `supabase-migration-author`. This is the server
-v3's hosted-deploy phase finally activates.
+the **v2.3 hosting & deployment** phase finally activates.
 
 ---
 

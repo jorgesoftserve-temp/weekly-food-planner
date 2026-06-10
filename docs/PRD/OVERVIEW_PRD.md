@@ -164,10 +164,32 @@ The project is accepted when:
 
 ---
 
-# 9. Future Expansion ideas
-- PDF export (next MVP)
-- AI-assisted recipe suggestions
-- Smart leftovers optimization
-- Pantry inventory management
-- Mobile app
-- Shopping expenses tracking/optimization
+# 9. Post-MVP roadmap
+
+> The 26-Jun-2026 MVP boundary (§6) is unchanged. The items below are **planned**, not shipped; each
+> release is specified in its own plan under [`.claude/plans/`](../../.claude/plans/) and PRD'd
+> section-by-section as it is built. This list is the release line, not feature detail.
+
+**Committed release line**
+- **v2 — Execution & Pantry + platform readiness** ([v2 epic](../../.claude/plans/v2.md)):
+  - **v2.0** — inventory/pantry, shopping confirmation + completeness, cook-status, leftovers, menu-level
+    ingredient substitution, all-members/per-member views, food groups.
+  - **v2.1** — smarter generation (inclusive preferences + per-generation overrides, multi-timeframe
+    recipes), addons + on-the-fly cook mode, and the **bulk recipe-create primitive**.
+  - **v2.2** — Extras (manual / non-food grocery lines).
+  - **v2.3** — **Hosting & Deployment** (managed Supabase + Vercel + CI) so v2 + v3 ship deployable for beta.
+- **v3 — AI menu & recipe import + i18n** ([v3](../../.claude/plans/v3.md)): hand the app a nutritionist's
+  list / weekly plan (ES or EN, via a fillable template or pasted text); it reviews the workspace, dedups,
+  and generates a menu + the backing recipes (AI suggests, the human confirms; the engine stays
+  deterministic). Includes full ES/EN app localization.
+- **v4 — Community recipes** ([v4 epic](../../.claude/plans/v4.md)): share → import-duplicate → reviews/voting
+  → discovery page; copy-semantics, never shared-mutable.
+- **v5 — Native mobile app** ([v5](../../.claude/plans/v5.md)): a phased Expo client on shared code
+  (deferred — the responsive web already serves mobile/tablet for beta).
+- **v6 — Deeper/ambient AI** ([v6](../../.claude/plans/v6.md)): voice capture, receipt/OCR import, leftover
+  suggestions, an ambient assistant — gated on net-new tooling.
+
+**Still future (not yet scheduled)**
+- PDF export of menus and grocery lists (next MVP).
+- Shopping expenses tracking / budget optimization.
+- Calendar synchronization.

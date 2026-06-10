@@ -8,7 +8,6 @@ import { RecipeCreateMock } from './recipe-create-mock'
 import { MenuMock } from './menu-mock'
 import { MenuCreateMock } from './menu-create-mock'
 import { GroceryMock } from './grocery-mock'
-import { MembersMock } from './members-mock'
 import { ProfileMock } from './profile-mock'
 
 // Single source of truth for the design-lab screen set. Shared by the control
@@ -26,7 +25,7 @@ export const SCREENS: Screen[] = [
   { key: 'menu', label: 'Weekly menu', render: () => <MenuMock /> },
   { key: 'menu-create', label: 'Generate menu', render: () => <MenuCreateMock /> },
   { key: 'grocery', label: 'Grocery', render: () => <GroceryMock /> },
-  { key: 'members', label: 'Members', render: () => <MembersMock /> },
+  // 'members' promoted to the live /members screen (v1.8 Phase 3) — mock retired.
   { key: 'profile', label: 'Profile', render: () => <ProfileMock /> },
 ]
 

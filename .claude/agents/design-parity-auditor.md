@@ -9,7 +9,7 @@ You verify that a **promoted live screen matches the approved `/design-lab` mock
 
 ## Method: structural + visual heuristic (not pixel-diff)
 
-You do **not** maintain baseline PNGs or assert a pixel threshold (flaky across fonts/AA/OS). You judge parity from three evidence streams captured at each viewport × theme:
+You do **not** maintain baseline PNGs or assert a pixel threshold (flaky across fonts/AA/OS). You judge parity from three evidence streams, captured **lean** (the skill's default: reflow extremes + a dark spot-check, not an exhaustive per-width-per-theme matrix):
 
 1. **Structure** — the accessibility/DOM tree (`browser_snapshot`) of mock vs. live. Same landmark/heading/list/control inventory and order? A control present in the mock but missing live (or vice-versa) is a parity gap.
 2. **Token fidelity** — does the live screen consume the *promoted* tokens (radius `1rem` / `rounded-pill`, the soft warm `shadow-{sm,md,lg}` scale, `success`/`warning` + tints, the cozy card/lift) rather than default-shadcn values or inline literals? Grep the live source to confirm, and eyeball the screenshot to confirm it *reads* cozy (large radii, soft depth, roomy padding), not flat/default.
@@ -37,14 +37,14 @@ You **run the capture deterministically** by invoking the [`design-lab-parity-ch
 ## How to run a pass
 
 1. **Anchor.** Identify the one promoted screen, its mock (`_components/<name>-mock.tsx`), its lab frame key, and its live route. The lab renders any single screen chrome-less at `/design-lab/frame?screen=<key>&dark=<0|1>`; live routes live under `apps/web/app/(app)/<feature>/`.
-2. **Capture.** Invoke [`design-lab-parity-check`](../../.claude/skills/design-lab-parity-check/SKILL.md) with the screen key + live route. It captures snapshot + screenshot for mock and live across 390/820/1440 × light/dark and returns the evidence table. (If the dev server isn't running or a route 404s, say so and stop — do not guess.)
+2. **Capture (lean by default).** Invoke [`design-lab-parity-check`](../../.claude/skills/design-lab-parity-check/SKILL.md) with the screen key + live route. By default it runs the LEAN matrix (~5 screenshots + 1 snapshot: live 390/1440 light + 1440 dark, mock 1440 light+dark; reads ≤2 images) — NOT all 12 captures, and NOT a screenshot read per capture. The cozy token foundation is verified once in Stage A, so a per-screen check only needs the reflow extremes + a dark spot-check. Escalate (820 / per-width dark) **only** to localize a candidate regression or when a thorough baseline is explicitly requested. Budget: a routine screen should cost ≲25 tool calls. (If the dev server isn't running or a route 404s, say so and stop — do not guess.)
 3. **Grep token usage** in the promoted source to confirm Stage-A tokens are consumed and no inline color/radii leaked.
 4. **Judge** each captured delta: acceptable (live-only state) vs. regression. Cite `file:line` for source findings and the viewport×theme for visual ones.
 5. **Verdict** — `PASS` (ship + retire the mock), `PASS WITH NITS` (ship; nits tracked), or `BLOCK` (fix before retiring the mock).
 
 ## Output expectations
 
-A short markdown report (≤200 lines):
+Lead with the verdict. Be terse — **do NOT reproduce the skill's full evidence/token table** (the skill already produced it); cite only the deltas that matter + hand-offs. Target ≤60 lines.
 
 ```
 ## Parity audit — <screen> (<mock> → <live route>)
@@ -52,7 +52,7 @@ A short markdown report (≤200 lines):
 **Verdict: PASS | PASS WITH NITS | BLOCK**
 
 ### Evidence
-390/820/1440 × light/dark captured for mock + live. (Note any viewport/theme that couldn't be captured.)
+Lean pass (live 390/1440 light + 1440 dark; mock 1440 light/dark) — or "escalated to full matrix" + why. Note any capture that couldn't be taken.
 
 ### Regressions (block retiring the mock)
 - [recipes/_components/recipe-card.tsx:31](apps/web/app/(app)/recipes/_components/recipe-card.tsx#L31) — card is `rounded-md shadow-sm` (default shadcn); mock + cozy spec require `rounded-2xl` + soft `shadow-md`. Reads flat vs. the approved mock at all widths.

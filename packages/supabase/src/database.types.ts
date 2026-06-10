@@ -670,6 +670,7 @@ export type Database = {
       }
       workspace_members: {
         Row: {
+          accent_color: Database["public"]["Enums"]["accent_color"] | null
           age_category: Database["public"]["Enums"]["age_category"]
           created_at: string
           daily_calorie_target: number | null
@@ -683,6 +684,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          accent_color?: Database["public"]["Enums"]["accent_color"] | null
           age_category: Database["public"]["Enums"]["age_category"]
           created_at?: string
           daily_calorie_target?: number | null
@@ -696,6 +698,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          accent_color?: Database["public"]["Enums"]["accent_color"] | null
           age_category?: Database["public"]["Enums"]["age_category"]
           created_at?: string
           daily_calorie_target?: number | null

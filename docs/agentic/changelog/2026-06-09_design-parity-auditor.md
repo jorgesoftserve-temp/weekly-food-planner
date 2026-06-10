@@ -53,3 +53,11 @@ flaky baseline-PNG store; the auditor's judgment absorbs sub-pixel/font noise th
 - This unblocks v1.8 **Phase 3** (promote approved mocks into the live app): each promoted screen now has a defined fidelity gate before its mock is retired.
 - If a future change moves to committed visual baselines (pixel-diff), the skill's "No baselines" non-negotiable and the auditor's method section must be revised together.
 - The capture matrix is pinned to 390/820/1440 to match the other reviewers + the v1.8 plan; the lab control surface's own device presets (430/834) are intentionally not used for parity so lab and live compare at identical widths.
+
+## Tuning (same day, after first real use on Members)
+
+The first live run (Members) cost ~101 tool calls / ~96k tokens because the skill ran a **fixed 12-capture matrix**, took a screenshot *and* an a11y snapshot per capture, and **read every screenshot** back into context (image reads dominated the tokens). Fixes applied to [`design-lab-parity-check`](../../../.claude/skills/design-lab-parity-check/SKILL.md) + [`design-parity-auditor`](../../../.claude/agents/design-parity-auditor.md):
+
+- **Lean default matrix** (~5 screenshots + 1 snapshot: live 390/1440 light + 1440 dark, mock 1440 light/dark) — the cozy token foundation is verified once in Stage A, so per-screen checks only need the reflow extremes + one dark spot-check. The full 12-matrix / extra widths are **escalation-only** (localize a regression, or an explicit thorough/baseline pass).
+- **Screenshot economy**: capture to disk, **read ≤2 images**; use the a11y snapshot *text* (one per surface) for structure. Toggle live dark once via `localStorage`, not per width.
+- **Verdict-first, terse output**: the auditor leads with PASS/NITS/BLOCK and cites only deltas + hand-offs — it does not re-emit the skill's evidence table. Budget target ≲25 tool calls for a routine screen.

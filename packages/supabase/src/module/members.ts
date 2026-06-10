@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { AgeCategory, WorkspaceRole } from '../types/db.js'
+import type { AccentColor, AgeCategory, WorkspaceRole } from '../types/db.js'
 import type { MealFrequencyEntry } from './workspaces.js'
 
 export type MemberRecord = {
@@ -8,6 +8,7 @@ export type MemberRecord = {
   name: string
   role: WorkspaceRole
   age_category: AgeCategory
+  accent_color: AccentColor | null
   daily_calorie_target: number | null
   meal_frequency: MealFrequencyEntry[] | null
   member_dietary_restrictions: Array<{ restriction: string }>
@@ -19,6 +20,7 @@ export type CreateMemberPayload = {
   name: string
   role: WorkspaceRole
   age_category: AgeCategory
+  accent_color?: AccentColor | null
   daily_calorie_target?: number | null
   meal_frequency?: MealFrequencyEntry[] | null
   user_id?: string | null
@@ -31,6 +33,7 @@ export type UpdateMemberPatch = Partial<{
   name: string
   role: WorkspaceRole
   age_category: AgeCategory
+  accent_color: AccentColor | null
   daily_calorie_target: number | null
   meal_frequency: MealFrequencyEntry[] | null
 }>
@@ -47,7 +50,7 @@ export const memberKeys = {
     ['members', 'detail', workspaceId, memberId] as const,
 }
 
-const MEMBER_SELECT = `id, user_id, name, role, age_category, daily_calorie_target, meal_frequency,
+const MEMBER_SELECT = `id, user_id, name, role, age_category, accent_color, daily_calorie_target, meal_frequency,
   member_dietary_restrictions (restriction),
   member_allergies (allergy),
   member_ingredient_dislikes (ingredient_id)`
@@ -106,6 +109,7 @@ export const createMember = async ({
       name: payload.name,
       role: payload.role,
       age_category: payload.age_category,
+      accent_color: payload.accent_color ?? null,
       daily_calorie_target: payload.daily_calorie_target ?? null,
       meal_frequency: payload.meal_frequency ?? null,
     })

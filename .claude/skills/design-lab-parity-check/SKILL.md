@@ -46,28 +46,28 @@ Read these before capturing. If a referenced file's shape differs from this skil
 | [apps/web/app/(app)/](../../../apps/web/app/(app)/) | The live routes. The promotion target captured as "live". |
 | [.claude/skills/promote-design-lab-mock/SKILL.md](../promote-design-lab-mock/SKILL.md) | The promotion plan whose mock-element → live mapping this check verifies landed. |
 
-## The capture matrix (fixed — do not improvise)
+## The capture matrix — LEAN by default, escalate only on a finding
 
-Three viewports × two themes = **six captures per surface**, for **two surfaces** (mock + live) = up to 12 captures.
+The cozy **token foundation is verified once** (Stage A: tokens + restyled primitives, app-wide). A per-screen parity check does **not** re-prove dark tokens at every width — it confirms the screen's *structural + responsive deltas* against the mock. So the default is small. Budget target: **≤ ~25 tool calls and ≤ 2 screenshot reads** for a routine screen.
 
-| Viewport | Width × height | Why |
-|---|---|---|
-| Phone | 390 × 844 | v1.8 phone floor; confirms card-list / bottom-sheet reflow + no horizontal scroll. |
-| Tablet | 820 × 1180 | mid-breakpoint; confirms the grid transitions, not just the extremes. |
-| Desktop | 1440 × 900 | full layout. |
+**Default lean pass (do this first, always):**
+1. **Source grep** (no browser) — token fidelity + inline-color/raw-radius leaks. This catches most token issues with zero capture cost.
+2. **Live screenshots:** `390` (light) and `1440` (light) — the two extremes catch the reflow. Plus **`1440` dark** — one dark spot-check confirms dark parity.
+3. **Mock screenshots:** `1440` light **and** `1440` dark — the side-by-side reference.
+4. **One a11y `browser_snapshot` of the live screen at `1440`** for the structural inventory (structure barely changes across widths — don't snapshot per width).
 
-Themes: **light** and **dark** (mock via `?dark=0|1`; live via the app's `next-themes` toggle — set theme to `light` then `dark`).
+That's ~5 screenshots + 1 snapshot. **Escalate to the full matrix** (add `820`, and dark at `390`/`820`) **only when**: the lean pass surfaces a candidate regression you must localize, OR the invoker explicitly asks for a "thorough" / first-of-redesign baseline pass. Say in the report whether you ran lean or full.
 
-> Use `browser_resize` to the exact width and `browser_navigate` straight to the frame URL (don't capture the lab control page's scaled iframe — navigate to `/design-lab/frame` directly so Tailwind breakpoints evaluate against the real viewport). The lab control surface's own device presets are 430/834px; this parity check standardizes on **390/820/1440** to match `ux-reviewer`, `accessibility-auditor`, and the v1.8 plan.
+> Mechanics: `browser_resize` to the exact width, then `browser_navigate` straight to `/design-lab/frame?screen=<key>` (NOT the lab control page's scaled iframe — its breakpoints key off the iframe and it carries a control bar). Toggle the live app to dark **once** via `localStorage.theme='dark'` + reload (or the header toggle) — don't re-toggle per width. Widths standardize on 390/1440 (+820 on escalation) to match `ux-reviewer` / `accessibility-auditor` / the v1.8 plan.
 
 ## Steps
 
 1. **Anchor.** Restate the screen key + lab frame URL + live route in one line. If vague, ask one batched clarification.
 2. **Read** the cozy spec token checklist + the mock component source + the live page source. Note the live-only states the mock lacks (skeleton, `EmptyState`, error, role-gating) so they aren't later mistaken for parity gaps.
 3. **Token grep.** In the live promoted source, grep for the promoted tokens (e.g. `rounded-2xl`, `rounded-pill`, `shadow-md`, `bg-success-tint`, `text-warning`, `.cozy-card`) AND for leak patterns (`#`, `rgb(`, `hsl(`, raw `rounded-[`, inline `style={`). Record which are present.
-4. **Capture the lab mock.** For each viewport × theme: `browser_resize` → `browser_navigate` to `/design-lab/frame?screen=<key>&dark=<0|1>` → `browser_wait_for` settle → `browser_snapshot` (structure) + `browser_take_screenshot`.
-5. **Capture the live screen.** Same six combos against the live route (set `next-themes` to light/dark via the header toggle or `localStorage`). Capture `browser_console_messages` once on the live screen.
-6. **Tabulate.** Build the structural inventory diff (sections/headings/primary actions/list semantics, mock vs live) and the token-usage table. Flag each delta as `structural`, `token`, `responsive`, `theme`, `motion`, or `console`. Do **not** verdict — label severity-candidates (`likely-regression` / `likely-acceptable`) and hand to the auditor.
+4. **Capture the lab mock (reference, 2 shots).** `browser_resize` 1440 → `browser_navigate` `/design-lab/frame?screen=<key>&dark=0` → `browser_wait_for` settle → `browser_take_screenshot` to disk; then navigate `&dark=1` → screenshot to disk.
+5. **Capture the live screen (3 shots + 1 snapshot + console).** Resize 390 → navigate live route → wait → screenshot to disk. Resize 1440 → screenshot. Toggle dark ONCE (`localStorage.theme='dark'` + reload) → screenshot @1440. Take **one** `browser_snapshot` at 1440 (structure) and `browser_console_messages` once. **Read at most ~2 screenshots into context** (live 1440 light + a live-vs-mock dark) — reason about the rest from the a11y snapshot text + the on-disk filenames. Reading every screenshot is the main token sink; don't.
+6. **Tabulate (terse).** Build the structural inventory diff (sections/headings/primary actions/list semantics, mock vs live) and the token-usage table. Flag each delta as `structural`, `token`, `responsive`, `theme`, `motion`, or `console`. Do **not** verdict — label severity-candidates (`likely-regression` / `likely-acceptable`) and hand to the auditor. If a candidate regression needs localizing, *then* escalate to the extra widths/themes (step note above) — only for the affected area.
 7. **Report** in the structure below.
 
 ## Report structure
@@ -109,8 +109,9 @@ Evidence ready for `design-parity-auditor` to verdict. Open questions: <list or 
 
 - **Capture, don't verdict.** This skill produces the evidence table and labels candidates; the PASS/BLOCK call is the [`design-parity-auditor`](../../agents/design-parity-auditor.md)'s. Never declare the promotion done.
 - **Read-only.** No code edits, no token edits, no committing. Drive the browser; read source; tabulate.
-- **The matrix is fixed.** Always 390/820/1440 × light/dark for BOTH mock and live. Don't drop dark, don't drop a width "because it looked fine" — a skipped capture is a silent gap; if one genuinely can't be captured, say so explicitly in Capture status.
-- **Navigate to the frame URL directly.** Capture the mock at `/design-lab/frame?screen=<key>` resized to the real width — not the control page's scaled-down iframe (its breakpoints key off the iframe, and it carries a control bar that pollutes the structural snapshot).
+- **Lean by default; escalate only on a finding.** The default pass is ~5 screenshots + 1 snapshot (see the matrix section): live 390/1440 light + 1440 dark, mock 1440 light+dark, one live snapshot. Do NOT run all 12 captures routinely — the token foundation is verified once, so a per-screen check only needs the reflow extremes + one dark spot-check. Expand to 820 / per-width dark **only** to localize a candidate regression or when explicitly asked for a thorough pass. State which mode you ran.
+- **Screenshot economy.** Screenshot to disk; **read ≤2 images into context.** Use the a11y snapshot *text* (one per surface) for structure — it's far cheaper than reading images. Image reads are the dominant token cost; a routine parity check that reads a dozen screenshots is a process failure, not thoroughness.
+- **Navigate to the frame URL directly.** Capture the mock at `/design-lab/frame?screen=<key>` resized to the real width — not the control page's scaled-down iframe (its breakpoints key off the iframe, and it carries a control bar that pollutes the structural snapshot). Toggle live dark once via `localStorage`, not per width.
 - **Live-only states are expected, not gaps.** Skeleton / `EmptyState` / error / role-gated controls exist live and not in the static mock. Label them `likely-acceptable`, never `regression`.
 - **Honest failure.** If the dev server is down, a route 404s, or auth blocks the live route, report it and stop — never fabricate a screenshot or a "looks fine".
 - **No baselines.** This is structural + visual heuristic capture, not pixel-diff; do not write baseline PNGs into the repo.

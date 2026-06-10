@@ -1,5 +1,10 @@
 # Cozy restyle spec (v1.8 Phase 2 → Phase 3 contract)
 
+> **Stage A — PROMOTED** (2026-06-09). The shape/depth/density/status tokens now live in
+> `apps/web/app/globals.css` (`:root` + `.dark`) and `apps/web/tailwind.config.ts`. The per-primitive
+> deltas are applied to the shadcn `ui/*.tsx` variant strings. The `/design-lab` scoped
+> `[data-skin="cozy"]` block **stays** as the reference until every screen promotion lands.
+>
 > The visual language that breaks the app out of the default-shadcn look: **Airbnb-warm, card-forward,
 > soft-rounded "cozy."** Owned by `design-system-architect`. **Demonstrated live in
 > [`/design-lab`](../../apps/web/app/(design)/design-lab)** with the tokens scoped to `[data-skin="cozy"]`
@@ -47,7 +52,7 @@ CLI output**; restyle through the variant definitions and tokens.
 | Primitive | Default shadcn | Cozy target |
 |---|---|---|
 | `button` | `rounded-md`, flat | `rounded-pill`, `shadow-sm`, slightly taller (`h-10`), softer focus ring (brand) |
-| `card` | `rounded-lg border`, no shadow | `rounded-2xl`, `--card-padding`, `shadow-md`, hairline border, hover-lift `shadow-lg` (reduced-motion-safe) |
+| `card` | `rounded-lg border`, no shadow | `rounded-2xl`, `--card-padding`, `shadow-md`, hairline border. Base card is **calm**; the hover-lift to `shadow-lg` is **opt-in** via the `.hover-lift` utility on *interactive* cards only (reduced-motion-safe) — never on static info cards (UX rule: no hover affordance without an action) |
 | `input` / `textarea` / `select` | `rounded-md` | `rounded-xl`, `shadow-sm`, calmer border, larger touch height |
 | `dialog` / `sheet` / `popover` | `rounded-lg` | `rounded-2xl`, `shadow-lg` |
 | `badge` / chips | `rounded-full` already | keep pill; warm tint fills; use accent tint for "selected" |

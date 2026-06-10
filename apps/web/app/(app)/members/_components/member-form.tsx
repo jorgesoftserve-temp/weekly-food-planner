@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Check, Plus, Trash2 } from 'lucide-react'
 import { useFieldArray, useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -13,6 +13,7 @@ import {
   useUpdateMember,
 } from '@weekly-food-planner/supabase/react'
 import type {
+  AccentColor,
   CreateMemberPayload,
   MealFrequencyEntry,
   MemberRecord,
@@ -40,6 +41,7 @@ import { MealFrequencyFields } from '@/components/forms/meal-frequency-fields'
 import { MultiLabelCombobox } from '@/components/forms/multi-label-combobox'
 import { useSupabase } from '@/lib/hooks/use-supabase'
 import { notifyError, notifySuccess } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 
 const AGE_CATEGORIES = [
   'infant',
@@ -50,6 +52,19 @@ const AGE_CATEGORIES = [
   'senior',
 ] as const
 const ASSIGNABLE_ROLES = ['admin', 'member'] as const
+
+// Mirror of the swatch list in appearance-card.tsx — light-mode HSL solids.
+// The admin sets a member's accent here; the card subtree renders via tokens.
+const ACCENT_SWATCHES: Array<{ value: AccentColor; label: string; swatch: string }> = [
+  { value: 'strawberry', label: 'Strawberry', swatch: 'hsl(359 79% 56%)' },
+  { value: 'moss',       label: 'Moss',       swatch: 'hsl(114 38% 45%)' },
+  { value: 'teal',       label: 'Teal',       swatch: 'hsl(159 35% 40%)' },
+  { value: 'amber',      label: 'Amber',      swatch: 'hsl(38 80% 44%)'  },
+  { value: 'ocean',      label: 'Ocean',      swatch: 'hsl(205 75% 43%)' },
+  { value: 'plum',       label: 'Plum',       swatch: 'hsl(285 45% 48%)' },
+]
+
+const ACCENT_VALUES = ACCENT_SWATCHES.map((a) => a.value) as [AccentColor, ...AccentColor[]]
 
 const mealFrequencyEntrySchema = z.object({
   key: z.string().trim().min(1),
@@ -64,6 +79,7 @@ const memberFormSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
   role: z.enum(ASSIGNABLE_ROLES),
   age_category: z.enum(AGE_CATEGORIES),
+  accent_color: z.enum(ACCENT_VALUES).nullable().optional(),
   daily_calorie_target: z
     .string()
     .refine(
@@ -98,6 +114,7 @@ const emptyDefaults: MemberFormValues = {
   name: '',
   role: 'member',
   age_category: 'adult',
+  accent_color: null,
   daily_calorie_target: '',
   use_custom_meal_frequency: false,
   meal_frequency: DEFAULT_FREQUENCY,
@@ -115,6 +132,7 @@ const valuesFromRecord = (record: MemberRecord): MemberFormValues => {
     name: record.name,
     role,
     age_category: record.age_category,
+    accent_color: record.accent_color ?? null,
     daily_calorie_target:
       record.daily_calorie_target !== null
         ? record.daily_calorie_target.toString()
@@ -133,6 +151,7 @@ const toCreatePayload = (values: MemberFormValues): CreateMemberPayload => ({
   name: values.name,
   role: values.role,
   age_category: values.age_category,
+  accent_color: values.accent_color ?? null,
   daily_calorie_target:
     values.daily_calorie_target.trim() === ''
       ? null
@@ -218,6 +237,7 @@ export const MemberForm = (props: MemberFormProps) => {
         name: values.name,
         ...(isCreatorMember ? {} : { role: values.role }),
         age_category: values.age_category,
+        accent_color: values.accent_color ?? null,
         daily_calorie_target:
           values.daily_calorie_target.trim() === ''
             ? null
@@ -349,6 +369,60 @@ export const MemberForm = (props: MemberFormProps) => {
                 </FormControl>
                 <FormDescription>
                   Used by the calorie-balancing soft constraint.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="accent_color"
+            render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel>Accent color</FormLabel>
+                <FormControl>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => field.onChange(null)}
+                      aria-pressed={field.value == null}
+                      className={cn(
+                        'inline-flex h-9 items-center gap-1.5 rounded-pill border px-3 text-sm font-medium',
+                        field.value == null
+                          ? 'border-foreground'
+                          : 'border-border text-muted-foreground',
+                      )}
+                    >
+                      {field.value == null ? <Check className="size-3.5" /> : null}
+                      Auto
+                    </button>
+                    {ACCENT_SWATCHES.map((a) => {
+                      const selected = field.value === a.value
+                      return (
+                        <button
+                          key={a.value}
+                          type="button"
+                          onClick={() => field.onChange(a.value)}
+                          aria-pressed={selected}
+                          aria-label={a.label}
+                          title={a.label}
+                          className={cn(
+                            'flex size-9 items-center justify-center rounded-full ring-offset-2 ring-offset-background',
+                            selected ? 'ring-2 ring-foreground' : '',
+                          )}
+                          style={{ backgroundColor: a.swatch }}
+                        >
+                          {selected ? (
+                            <Check className="size-4 text-white" />
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </FormControl>
+                <FormDescription>
+                  Shown on this member&apos;s card, chips, and badges. Auto
+                  derives a stable color from the member.
                 </FormDescription>
                 <FormMessage />
               </FormItem>

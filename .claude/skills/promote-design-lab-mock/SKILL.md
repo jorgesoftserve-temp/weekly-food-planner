@@ -115,7 +115,7 @@ Only **after** the live screen is verified (typecheck + test + visual at the thr
 - Delete `_components/<name>-mock.tsx`.
 - Remove its entry from the lab screen registry ([_components/screens.tsx](../../../apps/web/app/(design)/design-lab/_components/screens.tsx)) and any `lab-nav` key referencing it.
 - Prune any now-unused slice of [mock-data.ts](../../../apps/web/app/(design)/design-lab/_components/mock-data.ts) **only if** no remaining mock uses it.
-- When the **last** mock is promoted, retire the whole `(design)/design-lab/` route + `design-lab.css` and remove the scoped-token block — but that is a final, separate step, not part of a single-screen promotion.
+- **Do NOT retire the `(design)/design-lab/` route, its infra, or `design-lab.css`.** The design lab is a **permanent, reusable mock harness** — future versions stage their mocks there (under their own scoped skin) before promotion. Promoting a screen may remove that screen's now-stale mock from the screen registry (or keep it as reference), but the lab route, `layout.tsx`, `frame/`, `lab-nav`, `screens.tsx`, `mock-data`, `mock-image`, and the scoped-skin mechanism **stay**. There is no "final teardown" step.
 
 ## Report structure
 
@@ -169,7 +169,7 @@ Numbered. Each: one-line title + 1–3 sentences + concrete resolution + owning 
 Numbered. Each step: owning agent, output, what the next depends on. Token move first if outstanding; retire last after verification.
 
 ### Out of scope (deferred)
-Mock-only functionality with no schema yet (grocery per-line note, Cook-mode data model), other screens, the final lab teardown.
+Mock-only functionality with no schema yet (grocery per-line note, Cook-mode data model), other screens. (The `/design-lab` harness is permanent — there is no lab teardown step.)
 ```
 
 ## Non-negotiables

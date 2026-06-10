@@ -35,3 +35,6 @@ supabase/.temp/
 
 # Playwright MCP (browser drive/screenshot artifacts: console logs, page snapshots, screenshots)
 .playwright-mcp/
+# Parity-audit scratch screenshots if a run writes them to the repo root
+/live-*.png
+/mock-*.png

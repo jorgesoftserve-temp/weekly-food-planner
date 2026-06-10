@@ -42,7 +42,16 @@ wrapper) to match the shadcn convention in `globals.css`. Edit `:root` and `.dar
 | `--destructive-foreground` | `0 0% 100%` | |
 | `--border` / `--input` | `0 0% 90%` | |
 | `--ring` | `359 79% 56%` | Focus ring = brand (overridden per-user accent). |
-| `--radius` | `0.65rem` | Slightly softer than stock `0.5rem` for the comfy feel. |
+| `--radius` | `1rem` | Cozy Phase 3 bump (was `0.65rem`). Cascades to `lg/md/sm` border-radius tokens. |
+| `--radius-pill` | `9999px` | Full pill — buttons, chips, badges, segmented controls. |
+| `--shadow-sm` | `0 1px 2px hsl(20 30% 12% / 0.04), 0 1px 3px hsl(20 30% 12% / 0.06)` | Inputs, ghost surfaces. |
+| `--shadow-md` | `0 2px 6px hsl(20 30% 12% / 0.05), 0 6px 16px hsl(20 30% 12% / 0.08)` | Cards default. |
+| `--shadow-lg` | `0 8px 24px hsl(20 30% 12% / 0.10), 0 16px 40px hsl(20 30% 12% / 0.10)` | Modals, popovers, card hover. |
+| `--success` | `114 40% 32%` | Moss — Accepted / done states. |
+| `--success-tint` | `114 40% 94%` | Soft background for success badges. |
+| `--warning` | `34 70% 30%` | Tuscan — Draft / Modified badges. |
+| `--warning-tint` | `42 90% 90%` | Soft background for warning badges. |
+| `--card-padding` | `1.25rem` | Uniform card inner padding (CardHeader / CardContent / CardFooter). |
 
 ### Dark (`.dark`)
 
@@ -64,6 +73,13 @@ wrapper) to match the shadcn convention in `globals.css`. Edit `:root` and `.dar
 | `--destructive-foreground` | `0 0% 100%` | |
 | `--border` / `--input` | `0 0% 20%` | |
 | `--ring` | `359 84% 64%` | |
+| `--shadow-sm` | `0 1px 2px hsl(0 0% 0% / 0.30)` | Dark depth — pure black, higher opacity. |
+| `--shadow-md` | `0 4px 12px hsl(0 0% 0% / 0.35)` | |
+| `--shadow-lg` | `0 12px 32px hsl(0 0% 0% / 0.45)` | |
+| `--success` | `114 45% 68%` | Lightened for dark-surface contrast. |
+| `--success-tint` | `114 28% 20%` | Dark tinted surface. |
+| `--warning` | `42 90% 70%` | Lightened for dark-surface contrast. |
+| `--warning-tint` | `38 45% 20%` | Dark tinted surface. |
 
 The `--sidebar-*` family inherits these (warm-dark sidebar in dark, near-white sidebar in light).
 

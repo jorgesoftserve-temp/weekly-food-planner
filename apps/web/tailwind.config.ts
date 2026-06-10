@@ -27,6 +27,16 @@ const config: Config = {
   				strong: 'hsl(var(--user-accent-strong))',
   				tint: 'hsl(var(--user-accent-tint))'
   			},
+  			success: {
+  				DEFAULT: 'hsl(var(--success))',
+  				foreground: 'hsl(0 0% 100%)',
+  				tint: 'hsl(var(--success-tint))'
+  			},
+  			warning: {
+  				DEFAULT: 'hsl(var(--warning))',
+  				foreground: 'hsl(0 0% 100%)',
+  				tint: 'hsl(var(--warning-tint))'
+  			},
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
@@ -72,9 +82,15 @@ const config: Config = {
   			}
   		},
   		borderRadius: {
+  			pill: 'var(--radius-pill)',
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
+  		},
+  		boxShadow: {
+  			sm: 'var(--shadow-sm)',
+  			md: 'var(--shadow-md)',
+  			lg: 'var(--shadow-lg)'
   		},
   		keyframes: {
   			'accordion-down': {

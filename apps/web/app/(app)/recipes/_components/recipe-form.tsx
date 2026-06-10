@@ -347,166 +347,174 @@ export const RecipeForm = (props: RecipeFormProps) => {
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(handleSubmit)}
-        className="flex flex-col gap-8"
+        className="flex flex-col gap-5"
       >
-        <section className="grid gap-4 sm:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem className="sm:col-span-2">
-                <FormLabel>Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Tomato pasta" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="meal_type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Meal type</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+        {/* ── Section: Basics ───────────────────────────────────────── */}
+        <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-md">
+          <h2 className="font-semibold">Basics</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                  <FormLabel>Name</FormLabel>
                   <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pick a meal type" />
-                    </SelectTrigger>
+                    <Input placeholder="e.g. Tomato pasta" {...field} />
                   </FormControl>
-                  <SelectContent>
-                    {MEAL_TYPES.map((meal) => (
-                      <SelectItem key={meal} value={meal}>
-                        {meal}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="difficulty"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Difficulty</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="meal_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Meal type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pick a meal type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {MEAL_TYPES.map((meal) => (
+                        <SelectItem key={meal} value={meal}>
+                          {meal}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="difficulty"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Difficulty</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pick a difficulty" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {DIFFICULTIES.map((diff) => (
+                        <SelectItem key={diff} value={diff}>
+                          {diff}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="servings"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Servings</FormLabel>
                   <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pick a difficulty" />
-                    </SelectTrigger>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      {...field}
+                    />
                   </FormControl>
-                  <SelectContent>
-                    {DIFFICULTIES.map((diff) => (
-                      <SelectItem key={diff} value={diff}>
-                        {diff}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="servings"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Servings</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="numeric"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="cuisine"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Cuisine</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Italian" {...field} />
-                </FormControl>
-                <FormDescription>
-                  Free text — added to the label catalogue automatically.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="prep_time_minutes"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Prep time (min)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="numeric"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="cook_time_minutes"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Cook time (min)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="numeric"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem className="sm:col-span-2">
-                <FormLabel>Description</FormLabel>
-                <FormControl>
-                  <Textarea
-                    rows={3}
-                    placeholder="One-line note about this recipe (optional)"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="cuisine"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cuisine</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Italian" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Free text — added to the label catalogue automatically.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="prep_time_minutes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Prep time (min)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="cook_time_minutes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cook time (min)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={3}
+                      placeholder="One-line note about this recipe (optional)"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </section>
+
+        {/* ── Section: Dietary ──────────────────────────────────────── */}
+        <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-md">
+          <h2 className="font-semibold">Dietary tags</h2>
           <FormField
             control={form.control}
             name="dietary_tags"
             render={({ field }) => (
-              <FormItem className="sm:col-span-2">
-                <FormLabel>Dietary tags</FormLabel>
+              <FormItem>
                 <FormControl>
                   <MultiLabelCombobox
                     enumType="dietary_tag"
@@ -525,10 +533,11 @@ export const RecipeForm = (props: RecipeFormProps) => {
           />
         </section>
 
-        <section className="flex flex-col gap-3">
+        {/* ── Section: Ingredients ──────────────────────────────────── */}
+        <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-md">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-medium">Ingredients</h2>
+            <div className="flex flex-col gap-0.5">
+              <h2 className="font-semibold">Ingredients</h2>
               <p className="text-sm text-muted-foreground">
                 The constraint engine reads these to build the grocery list.
               </p>
@@ -537,6 +546,7 @@ export const RecipeForm = (props: RecipeFormProps) => {
               type="button"
               variant="outline"
               size="sm"
+              className="border-dashed"
               onClick={() =>
                 ingredientArray.append({
                   ingredient_id: '',
@@ -553,7 +563,7 @@ export const RecipeForm = (props: RecipeFormProps) => {
             {ingredientArray.fields.map((row, index) => (
               <div
                 key={row.id}
-                className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 sm:grid-cols-[1fr_120px_120px_auto]"
+                className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-background p-3 sm:grid-cols-[1fr_120px_120px_auto]"
               >
                 <FormField
                   control={form.control}
@@ -635,10 +645,11 @@ export const RecipeForm = (props: RecipeFormProps) => {
           </div>
         </section>
 
-        <section className="flex flex-col gap-3">
+        {/* ── Section: Instructions ─────────────────────────────────── */}
+        <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-md">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-medium">Instructions</h2>
+            <div className="flex flex-col gap-0.5">
+              <h2 className="font-semibold">Instructions</h2>
               <p className="text-sm text-muted-foreground">
                 Optional. Step order is the order shown below.
               </p>
@@ -647,25 +658,25 @@ export const RecipeForm = (props: RecipeFormProps) => {
               type="button"
               variant="outline"
               size="sm"
+              className="border-dashed"
               onClick={() => instructionArray.append({ description: '' })}
             >
               <Plus className="size-4" />
               Add step
             </Button>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {instructionArray.fields.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No steps yet. Click &ldquo;Add step&rdquo; to write one out.
               </p>
             ) : null}
             {instructionArray.fields.map((row, index) => (
-              <div
-                key={row.id}
-                className="flex items-start gap-2 rounded-md border border-border p-3"
-              >
-                <span className="mt-2 text-sm font-medium text-muted-foreground">
-                  {index + 1}.
+              <div key={row.id} className="flex items-start gap-2">
+                <span className="mt-2.5 flex shrink-0 items-center gap-1 text-muted-foreground">
+                  <span className="flex size-6 items-center justify-center rounded-full bg-accent-tint text-xs font-semibold text-accent-strong">
+                    {index + 1}
+                  </span>
                 </span>
                 <FormField
                   control={form.control}
@@ -698,6 +709,7 @@ export const RecipeForm = (props: RecipeFormProps) => {
           </div>
         </section>
 
+        {/* ── Footer actions ────────────────────────────────────────── */}
         <div className="flex items-center justify-end gap-2">
           <Button
             type="button"

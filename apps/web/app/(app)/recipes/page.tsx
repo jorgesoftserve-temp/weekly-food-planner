@@ -1,36 +1,11 @@
 'use client'
 
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import {
-  ChefHat,
-  Eye,
-  ListChecks,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  Salad,
-  Trash2,
-  Utensils,
-} from 'lucide-react'
+import { ChefHat, Plus } from 'lucide-react'
 import { useRecipesList } from '@weekly-food-planner/supabase/react'
 import type { RecipeRecord } from '@weekly-food-planner/supabase'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { EmptyState } from '@/components/empty-state'
 import { PageHeader } from '@/components/page-header'
 import { useActiveWorkspace } from '@/components/workspace-provider'
@@ -42,10 +17,15 @@ import {
   RecipeDetailDialog,
   type RecipeDetailSection,
 } from './_components/recipe-detail-dialog'
+import { RecipeCard } from './_components/recipe-card'
+import { RecipeGridSkeleton } from './_components/recipe-grid-skeleton'
+import {
+  RecipeFilterBar,
+  type RecipeFilter,
+} from './_components/recipe-filter-bar'
 
 // One overlay at a time — opening any of these implicitly closes the others, so
-// the detail dialog and edit drawer can never co-exist. See
-// hooks/use-exclusive-overlay.ts.
+// the detail dialog and edit drawer can never co-exist.
 type RecipeOverlay =
   | { kind: 'detail'; recipeId: string; section: RecipeDetailSection }
   | { kind: 'edit'; recipeId: string }
@@ -62,11 +42,40 @@ const RecipesPage = () => {
 
   const { overlay, open, onOpenChange } = useExclusiveOverlay<RecipeOverlay>()
 
-  const openDetail = (recipeId: string, section: RecipeDetailSection) =>
-    open({ kind: 'detail', recipeId, section })
+  // Filter + search state (ephemeral UI — Zustand not needed for single-page state)
+  const [search, setSearch] = useState('')
+  const [activeFilter, setActiveFilter] = useState<RecipeFilter>('All')
 
   const isLoading = workspaceLoading || recipesQuery.isLoading
   const recipes = recipesQuery.data ?? []
+
+  // Admin / creator role — matches the existing page's behaviour: admins can
+  // add, edit and delete; plain members see cards but no mutations.
+  const isAdmin =
+    workspace?.role === 'admin' || workspace?.role === 'creator'
+
+  const openDetail = ({
+    recipeId,
+    section,
+  }: {
+    recipeId: string
+    section: RecipeDetailSection
+  }) => open({ kind: 'detail', recipeId, section })
+
+  // Client-side filter — no extra network round-trip needed.
+  const filteredRecipes = useMemo(() => {
+    let result = recipes
+    if (activeFilter !== 'All') {
+      result = result.filter(
+        (r) => r.meal_type.toLowerCase() === activeFilter.toLowerCase(),
+      )
+    }
+    if (search.trim()) {
+      const lower = search.toLowerCase()
+      result = result.filter((r) => r.name.toLowerCase().includes(lower))
+    }
+    return result
+  }, [recipes, activeFilter, search])
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -74,21 +83,19 @@ const RecipesPage = () => {
         title="Recipes"
         description="The pool the menu generator picks from."
         actions={
-          <Button asChild>
-            <Link href="/recipes/new">
-              <Plus className="size-4" />
-              New recipe
-            </Link>
-          </Button>
+          isAdmin ? (
+            <Button asChild>
+              <Link href="/recipes/new">
+                <Plus className="size-4" />
+                New recipe
+              </Link>
+            </Button>
+          ) : undefined
         }
       />
 
       {isLoading ? (
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </div>
+        <RecipeGridSkeleton />
       ) : recipesQuery.error ? (
         <EmptyState
           icon={ChefHat}
@@ -105,153 +112,52 @@ const RecipesPage = () => {
           title="No recipes yet"
           description="Add the first recipe to start building the pool the menu generator picks from."
           action={
-            <Button asChild>
-              <Link href="/recipes/new">
-                <Plus className="size-4" />
-                Add a recipe
-              </Link>
-            </Button>
+            isAdmin ? (
+              <Button asChild>
+                <Link href="/recipes/new">
+                  <Plus className="size-4" />
+                  Add a recipe
+                </Link>
+              </Button>
+            ) : undefined
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead className="hidden sm:table-cell">Meal</TableHead>
-                <TableHead className="hidden sm:table-cell">Difficulty</TableHead>
-                <TableHead className="hidden md:table-cell">Servings</TableHead>
-                <TableHead className="hidden md:table-cell">Cuisine</TableHead>
-                <TableHead className="hidden lg:table-cell">Dietary</TableHead>
-                <TableHead className="hidden lg:table-cell">Ingredients</TableHead>
-                <TableHead className="hidden lg:table-cell">Instructions</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recipes.map((recipe) => {
-                const dietaryCount = recipe.recipe_dietary_tags.length
-                const ingredientCount = recipe.recipe_ingredients.length
-                const instructionCount = recipe.recipe_instructions.length
-                return (
-                  <TableRow key={recipe.id}>
-                    <TableCell className="font-medium">
-                      <button
-                        type="button"
-                        onClick={() => open({ kind: 'edit', recipeId: recipe.id })}
-                        className="text-left hover:underline underline-offset-4"
-                      >
-                        {recipe.name}
-                      </button>
-                    </TableCell>
-                    <TableCell className="hidden capitalize text-muted-foreground sm:table-cell">
-                      {recipe.meal_type}
-                    </TableCell>
-                    <TableCell className="hidden capitalize text-muted-foreground sm:table-cell">
-                      {recipe.difficulty}
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">
-                      {recipe.servings}
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">
-                      {recipe.cuisine ?? '—'}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="-ml-2 h-auto px-2 py-1 text-muted-foreground hover:text-foreground"
-                        onClick={() => openDetail(recipe.id, 'dietary')}
-                        aria-label={`View dietary tags for ${recipe.name}`}
-                        disabled={dietaryCount === 0}
-                      >
-                        <Salad className="size-3.5" />
-                        {dietaryCount === 0 ? 'None' : `${dietaryCount} tags`}
-                      </Button>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="-ml-2 h-auto px-2 py-1 text-muted-foreground hover:text-foreground"
-                        onClick={() => openDetail(recipe.id, 'ingredients')}
-                        aria-label={`View ingredients for ${recipe.name}`}
-                        disabled={ingredientCount === 0}
-                      >
-                        <Utensils className="size-3.5" />
-                        {ingredientCount === 0
-                          ? 'None'
-                          : `${ingredientCount} items`}
-                      </Button>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="-ml-2 h-auto px-2 py-1 text-muted-foreground hover:text-foreground"
-                        onClick={() => openDetail(recipe.id, 'instructions')}
-                        aria-label={`View instructions for ${recipe.name}`}
-                        disabled={instructionCount === 0}
-                      >
-                        <ListChecks className="size-3.5" />
-                        {instructionCount === 0
-                          ? 'None'
-                          : `${instructionCount} steps`}
-                      </Button>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Actions for ${recipe.name}`}
-                          >
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onSelect={(event) => {
-                              event.preventDefault()
-                              openDetail(recipe.id, 'dietary')
-                            }}
-                          >
-                            <Eye className="mr-2 size-4" />
-                            View details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={(event) => {
-                              event.preventDefault()
-                              open({ kind: 'edit', recipeId: recipe.id })
-                            }}
-                          >
-                            <Pencil className="mr-2 size-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                            onSelect={(event) => {
-                              event.preventDefault()
-                              open({ kind: 'delete', recipe })
-                            }}
-                          >
-                            <Trash2 className="mr-2 size-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <>
+          {/* Search + filter chips */}
+          <RecipeFilterBar
+            search={search}
+            activeFilter={activeFilter}
+            onSearch={({ value }) => setSearch(value)}
+            onFilter={({ filter }) => setActiveFilter(filter)}
+          />
+
+          {filteredRecipes.length === 0 ? (
+            <EmptyState
+              icon={ChefHat}
+              title="No matching recipes"
+              description="Try a different search term or filter."
+            />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredRecipes.map((recipe) => (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  isAdmin={isAdmin}
+                  onViewDetail={openDetail}
+                  onEdit={({ recipeId }) => open({ kind: 'edit', recipeId })}
+                  onDelete={({ recipe: r }) =>
+                    open({ kind: 'delete', recipe: r })
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
+      {/* Overlays — identical wiring to the original page */}
       {workspace && overlay?.kind === 'delete' ? (
         <DeleteRecipeDialog
           workspaceId={workspace.id}

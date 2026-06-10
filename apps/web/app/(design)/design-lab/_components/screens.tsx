@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { DashboardMock } from './dashboard-mock'
 import { SearchMock } from './search-mock'
 import { RecipesMock } from './recipes-mock'
 import { RecipeDetailMock } from './recipe-detail-mock'
@@ -16,7 +15,7 @@ import { ProfileMock } from './profile-mock'
 export type Screen = { key: string; label: string; render: () => ReactNode }
 
 export const SCREENS: Screen[] = [
-  { key: 'dashboard', label: 'Dashboard', render: () => <DashboardMock /> },
+  // 'dashboard' promoted to the live /dashboard screen (v1.8 Phase 3) — mock retired.
   { key: 'search', label: 'Search', render: () => <SearchMock /> },
   { key: 'recipes', label: 'Recipes', render: () => <RecipesMock /> },
   { key: 'recipe', label: 'Recipe detail', render: () => <RecipeDetailMock /> },

@@ -1,109 +1,181 @@
 'use client'
 
-import Link from 'next/link'
+import { useMemo, useState } from 'react'
+import { CalendarRange, ShoppingCart } from 'lucide-react'
 import {
-  CalendarRange,
-  ChefHat,
-  ShoppingCart,
-  Sparkles,
-} from 'lucide-react'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { PageHeader } from '@/components/page-header'
+  useActiveMenu,
+  useActiveGroceryLists,
+  useDraftMenu,
+  useMembersList,
+  useRecipesList,
+} from '@weekly-food-planner/supabase/react'
+import type { RecipeRecord } from '@weekly-food-planner/supabase'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveWorkspace } from '@/components/workspace-provider'
-import { MembersCard } from './_components/members-card'
-
-const QUICK_LINKS = [
-  {
-    href: '/recipes',
-    title: 'Recipes',
-    description: 'Build the pool the generator picks from.',
-    icon: ChefHat,
-  },
-  {
-    href: '/menu',
-    title: 'Weekly menu',
-    description: 'Generate a deterministic plan for the week.',
-    icon: CalendarRange,
-  },
-  {
-    href: '/grocery',
-    title: 'Grocery list',
-    description: 'See the aggregated shopping list for the active menu.',
-    icon: ShoppingCart,
-  },
-] as const
+import { useSupabase } from '@/lib/hooks/use-supabase'
+import { HeroCard } from './_components/hero-card'
+import { MemberSelector } from './_components/member-selector'
+import { StatCard } from './_components/stat-card'
+import { WeekPreview } from './_components/week-preview'
+import { DashboardEmpty } from './_components/dashboard-empty'
 
 const DashboardPage = () => {
-  const { workspace, isLoading } = useActiveWorkspace()
+  const supabase = useSupabase()
+  const { workspace, isLoading: workspaceLoading } = useActiveWorkspace()
 
+  // ── Member selector (presentational; deeper per-member filtering is a follow-up) ──
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
+
+  // ── Data queries ─────────────────────────────────────────────────────────────
+  const membersQuery = useMembersList({
+    supabase,
+    workspaceId: workspace?.id ?? null,
+    enabled: !!workspace,
+  })
+
+  const activeMenuQuery = useActiveMenu({
+    supabase,
+    workspaceId: workspace?.id ?? null,
+    enabled: !!workspace,
+  })
+
+  const draftMenuQuery = useDraftMenu({
+    supabase,
+    workspaceId: workspace?.id ?? null,
+    enabled: !!workspace,
+  })
+
+  const groceryQuery = useActiveGroceryLists({
+    supabase,
+    workspaceId: workspace?.id ?? null,
+    enabled: !!workspace && !!activeMenuQuery.data,
+  })
+
+  const recipesQuery = useRecipesList({
+    supabase,
+    workspaceId: workspace?.id ?? null,
+    enabled: !!workspace && !!activeMenuQuery.data,
+  })
+
+  // ── Derived values ────────────────────────────────────────────────────────────
+  const activeMenu = activeMenuQuery.data
+  const hasDraft = !!draftMenuQuery.data
+  const members = membersQuery.data ?? []
+
+  const recipesById = useMemo<Record<string, RecipeRecord>>(() => {
+    const map: Record<string, RecipeRecord> = {}
+    for (const r of recipesQuery.data ?? []) map[r.id] = r
+    return map
+  }, [recipesQuery.data])
+
+  // "Days this menu" — count of distinct days that have at least one slot.
+  const distinctDayCount = useMemo(() => {
+    if (!activeMenu) return null
+    const days = new Set(
+      activeMenu.menu_slots.map((s) => s.day_of_week.toLowerCase()),
+    )
+    return days.size
+  }, [activeMenu])
+
+  // "Items to buy" — total grocery_items across all lists.
+  const groceryItemCount = useMemo(() => {
+    if (!groceryQuery.data) return null
+    return groceryQuery.data.lists.reduce(
+      (acc, list) => acc + list.grocery_items.length,
+      0,
+    )
+  }, [groceryQuery.data])
+
+  // Hero summary is day-based (distinct planned days of the menu's span) so it
+  // stays coherent on multi-member households where slots are per member×day×meal.
+  const durationDays = activeMenu?.duration_days ?? null
+
+  const isLoading =
+    workspaceLoading || activeMenuQuery.isLoading || membersQuery.isLoading
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <PageHeader
-        title={
-          workspace ? `Welcome back to ${workspace.name}` : 'Welcome back'
-        }
-        description={
-          isLoading
-            ? 'Loading your workspace…'
-            : 'Start by adding recipes, then generate a weekly menu and export the grocery list.'
-        }
-      />
+      {/* Hero */}
+      {isLoading ? (
+        <Skeleton className="h-40 w-full rounded-2xl" />
+      ) : (
+        <HeroCard
+          workspaceName={workspace?.name ?? null}
+          isLoading={isLoading}
+          daysPlanned={distinctDayCount}
+          durationDays={durationDays}
+          hasDraft={hasDraft}
+        />
+      )}
 
-      <Card className="border-dashed bg-card/40">
-        <CardHeader className="flex flex-row items-start gap-3">
-          <div className="rounded-full bg-primary/10 p-2 text-primary">
-            <Sparkles className="size-4" />
+      {/* Member selector */}
+      {isLoading ? (
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-8 w-24 rounded-full" />
+          <Skeleton className="h-8 w-20 rounded-full" />
+          <Skeleton className="h-8 w-20 rounded-full" />
+        </div>
+      ) : members.length > 0 ? (
+        <MemberSelector
+          members={members}
+          selectedMemberId={selectedMemberId}
+          onSelect={({ memberId }) => setSelectedMemberId(memberId)}
+        />
+      ) : null}
+
+      {/* Active menu content */}
+      {!isLoading && activeMenu ? (
+        <div className="flex flex-col gap-4">
+          {/* Bento stat cards */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Days this menu */}
+            {distinctDayCount !== null ? (
+              <StatCard
+                icon={CalendarRange}
+                value={distinctDayCount}
+                label="Days this menu"
+                href="/menu"
+                variant="accent"
+              />
+            ) : null}
+
+            {/* Items to buy — only rendered once grocery data has loaded */}
+            {groceryItemCount !== null ? (
+              <StatCard
+                icon={ShoppingCart}
+                value={groceryItemCount}
+                label="Items to buy"
+                href="/grocery"
+                variant="accent"
+              />
+            ) : groceryQuery.isLoading ? (
+              <Skeleton className="h-[130px] w-full rounded-2xl" />
+            ) : null}
+
+            {/* Week preview spans full grid width */}
+            <WeekPreview
+              menu={activeMenu}
+              recipesById={recipesById}
+              isLoadingRecipes={recipesQuery.isLoading}
+            />
           </div>
-          <div className="flex flex-col gap-1">
-            <CardTitle className="text-base">
-              Reproducible weekly plans
-            </CardTitle>
-            <CardDescription>
-              Once your recipes and household are set, the planner builds the
-              same menu every time from the same ingredients — so you can
-              compare weeks, share a plan, and trust what you&apos;re shopping
-              for. Download any menu as Markdown or CSV when it&apos;s time to
-              shop.
-            </CardDescription>
-          </div>
-        </CardHeader>
-      </Card>
+        </div>
+      ) : null}
 
-      <MembersCard />
+      {/* No active menu → cozy onboarding / empty state */}
+      {!isLoading && !activeMenu && !activeMenuQuery.error ? (
+        <DashboardEmpty />
+      ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {QUICK_LINKS.map((link) => {
-          const Icon = link.icon
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="group focus:outline-none"
-            >
-              <Card className="h-full transition-colors group-hover:border-primary/60 group-focus-visible:border-primary">
-                <CardHeader className="flex flex-row items-start gap-3">
-                  <div className="rounded-md bg-muted p-2 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
-                    <Icon className="size-5" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <CardTitle className="text-base">{link.title}</CardTitle>
-                    <CardDescription>{link.description}</CardDescription>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0 text-sm font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-                  Open →
-                </CardContent>
-              </Card>
-            </Link>
-          )
-        })}
-      </div>
+      {/* Error state */}
+      {!isLoading && activeMenuQuery.error ? (
+        <p className="text-sm text-muted-foreground">
+          {activeMenuQuery.error instanceof Error
+            ? activeMenuQuery.error.message
+            : 'Could not load your menu.'}
+        </p>
+      ) : null}
     </div>
   )
 }

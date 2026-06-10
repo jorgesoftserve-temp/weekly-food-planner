@@ -133,4 +133,4 @@ Evaluation criteria (carried from the initial setup):
 2. Does it give the agents capability they currently lack?
 3. What's the security blast radius — does it need a read-only flag, scoped credentials, or both?
 
-If a candidate clears all three, add it to [`.mcp.json`](../../.mcp.json) and write a [`changelog/`](./changelog/) entry.
+If a candidate clears all three, add it to [`.mcp.json`](../../.mcp.json), update the MCP row in [root `CLAUDE.md`](../../CLAUDE.md), and record the rationale in the commit message.

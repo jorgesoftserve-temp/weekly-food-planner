@@ -13,4 +13,4 @@ This project supports Claude Code / Cursor agentic workflows. The **authoritativ
 - **Agent log.** Each major generation step gets an entry under [`/agent-log`](../../agent-log/): prompt used, context files provided, expected output, observed issue, follow-up fixes.
 - **Prompts** are stored as raw `.txt` under [`/prompts`](../../prompts/).
 - **Docs** — PRDs, specs, architecture docs, and rules are `.md` (under [`/docs`](../../docs/) or `.cursor/rules/`).
-- **Extending the toolchain** — follow [`docs/agentic/extending.md`](../../docs/agentic/extending.md) when adding an agent, skill, or CLAUDE.md, and add a dated [`docs/agentic/changelog/`](../../docs/agentic/changelog/) entry.
+- **Extending the toolchain** — follow [`docs/agentic/extending.md`](../../docs/agentic/extending.md) when adding an agent, skill, or CLAUDE.md (two writes: the source file + a one-line row in root [`CLAUDE.md`](../../CLAUDE.md); rationale goes in the commit message — the dated [`changelog/`](../../docs/agentic/changelog/) is frozen).

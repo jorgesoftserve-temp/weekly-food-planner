@@ -45,7 +45,7 @@ Most session pain comes from violating one of these. Re-read before generating c
 
 Defined under [`.claude/agents/`](./.claude/agents/). Delegate work to these instead of doing everything in the parent session:
 
-Terse index — full descriptions, model tiers, and hand-off chains live in [`docs/agentic/agents.md`](./docs/agentic/agents.md).
+Terse index — the source files under [`.claude/agents/`](./.claude/agents/) are authoritative (full scope, model tier, hand-offs); [`docs/agentic/agents.md`](./docs/agentic/agents.md) covers how to invoke + agent-file structure.
 
 | Agent | When |
 |---|---|
@@ -61,12 +61,13 @@ Terse index — full descriptions, model tiers, and hand-off chains live in [`do
 | `accessibility-auditor` | Pre-PR a11y review — keyboard, ARIA, contrast (read-only) |
 | `design-parity-auditor` | Post-promotion check that a live screen matches its `/design-lab` mock (read-only, Playwright) |
 | `prd-aligner` | PRD↔code drift punch list (read-only, model: haiku) |
+| `prd-author` | Write/update the PRDs (docs/PRD/*.md) for shipped or planned features — build-capable counterpart to prd-aligner |
 
 ## MCP servers available
 
 Wired via [`.mcp.json`](./.mcp.json) at the repo root. Claude Code auto-discovers on session start; run `/mcp` to confirm connection.
 
-Terse index — tool lists, setup, and rationale live in [`docs/agentic/mcp-servers.md`](./docs/agentic/mcp-servers.md).
+Terse index — wiring (packages/args/env) lives in [`.mcp.json`](./.mcp.json); boundary conventions + a worked demo in [`docs/agentic/mcp-servers.md`](./docs/agentic/mcp-servers.md) and [`docs/agentic/mcp-demo.md`](./docs/agentic/mcp-demo.md).
 
 | Server | Use for | Auth |
 |---|---|---|
@@ -81,11 +82,12 @@ Prefer these over speculative grepping when the data lives in the database or re
 
 ## Agent skills available
 
-Defined under [`.claude/skills/`](./.claude/skills/) (project-local) and the user's global skills directory. Terse index — full input schemas + worked examples in [`docs/agentic/skills.md`](./docs/agentic/skills.md).
+Defined under [`.claude/skills/`](./.claude/skills/) (project-local) and the user's global skills directory. Terse index — full input schemas + worked examples live in each [`.claude/skills/<name>/SKILL.md`](./.claude/skills/); [`docs/agentic/skills.md`](./docs/agentic/skills.md) covers how to invoke + the skill-vs-agent decision.
 
 - `menu-generation-impact-review` — layered impact plan before any engine/route/persistence/grocery change (no code).
 - `constraint-menu-generator-life-cycle-test` — emits a Vitest + Node ESM flow test from a recipes + constraints spec.
 - `supabase-add-column` — migration + types-regen + module-edit plan for adding column(s) to an existing table.
+- `new-table-migration` — ordered migration set for a NEW table: enums + table (soft-delete, indexes, updated_at trigger) + RLS, types regen, module/PRD hand-offs.
 - `add-module-and-hooks` — emits a new data-layer module pair (`.ts` + `.react.ts` + barrel) for an already-migrated table.
 - `add-route-handler` — scaffolds a standard route handler / server action (three-client rule, Zod, error envelope, auth).
 - `feature-folder-scaffold` — scaffolds a CRUD feature folder under `apps/web/app/(app)/<feature>/` (table + module must exist).

@@ -1,6 +1,14 @@
 # Agentic changelog
 
-Dated entries describing notable changes to the agentic infrastructure: new agents, new skills, CLAUDE.md additions, MCP servers wired up, conventions established. **This is the changelog for the toolchain, not the code.** Code change history lives in git commits and session history in [`agent-log/`](../../../agent-log/).
+> **Frozen as of 2026-06-10.** This hand-written changelog duplicated what `git log` already
+> records, and writing an entry per change was a velocity tax on every toolchain edit. The dated
+> entries below are kept as **historical record** (they hold decision rationale that predates this
+> freeze), but **new agentic changes are no longer logged here** — use `git log` + the commit
+> message. The authoritative state of the toolchain is its source files: [`.claude/agents/`](../../../.claude/agents/),
+> [`.claude/skills/`](../../../.claude/skills/), [`.mcp.json`](../../../.mcp.json), and the catalog/index in
+> [root `CLAUDE.md`](../../../CLAUDE.md).
+
+Dated entries describing notable changes to the agentic infrastructure: new agents, new skills, CLAUDE.md additions, MCP servers wired up, conventions established. **This is the (frozen) changelog for the toolchain, not the code.** Code change history lives in git commits and session history in [`agent-log/`](../../../agent-log/).
 
 ## Entries (newest first)
 
@@ -17,27 +25,12 @@ Dated entries describing notable changes to the agentic infrastructure: new agen
 - [`2026-05-26_mcp-servers.md`](./2026-05-26_mcp-servers.md) — Wires three MCP servers (Supabase read-only, shadcn CLI, Vitest) via repo-root [`.mcp.json`](../../../.mcp.json). Closes the deferred MCP-evaluation item from the initial setup.
 - [`2026-05-26_initial-agentic-setup.md`](./2026-05-26_initial-agentic-setup.md) — Initial agentic foundation: root + per-package CLAUDE.md, 9 sub-agents, 3 skills (impact-review, supabase-add-column, feature-folder-scaffold), and the [`docs/agentic/`](../) reference docs themselves.
 
-## When to add a new entry
+## How toolchain changes are recorded now
 
-Add a new entry when any of these happen:
+No new entries. When you add/change/remove an agent, skill, MCP server, or convention:
 
-- A new agent, skill, or CLAUDE.md file is added.
-- An existing one is significantly restructured or removed.
-- A new MCP server is wired in.
-- A cross-cutting convention is established (e.g. all skills must include at least one worked example).
-- A deferred item from a previous entry is implemented or cancelled.
+1. Edit the **source file** ([`.claude/agents/`](../../../.claude/agents/), [`.claude/skills/`](../../../.claude/skills/), or [`.mcp.json`](../../../.mcp.json)) — it is authoritative.
+2. Add/update its **one-line row** in [root `CLAUDE.md`](../../../CLAUDE.md).
+3. Describe the *why* in the **commit message**. `git log -- docs/agentic .claude .mcp.json` is the audit trail.
 
-## Entry filename convention
-
-`YYYY-MM-DD_<short-kebab-case-slug>.md` — the date is when the change landed, not when it was planned. If multiple entries land the same day, suffix the slug to differentiate (`2026-05-26_initial-agentic-setup.md`, `2026-05-26_mcp-server-evaluation.md`).
-
-## Entry structure
-
-See [`extending.md`](../extending.md) for the full convention. Briefly:
-
-1. **What changed** — file inventory + one-line per file.
-2. **Why** — rationale, especially anything hard to derive from the current state (decision criteria, trade-offs considered).
-3. **Cross-references** — pointers to the reference doc(s) that now describe the change in detail.
-4. **Forward-looking notes** — what this unlocks or blocks; what's deferred for a future entry.
-
-Keep entries focused on **what changed about the agentic setup**. Don't duplicate the catalog content from [`agents.md`](../agents.md), [`skills.md`](../skills.md), or [`claude-md.md`](../claude-md.md) — link to them.
+The rationale for non-obvious decisions belongs in the commit message or, if it's a durable convention, in [`extending.md`](../extending.md) / [`architecture.md`](../architecture.md) — not a dated file that only grows.

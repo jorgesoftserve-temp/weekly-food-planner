@@ -62,12 +62,14 @@ Body sections (in order):
 5. **When to hand off** — adjacent agents/skills the work might need to chain into.
 6. **Output expectations** — exactly what to return to the parent session. The parent doesn't see the agent's tool calls; it sees only the final message.
 
-### Step 4 — Register
+### Step 4 — Register (two writes)
 
-- Add a row to the relevant section in [`agents.md`](./agents.md).
-- Add a row to the agent catalogue in [root `CLAUDE.md`](../../CLAUDE.md).
-- Add a row to the agent table in [root `README.md`](../../README.md).
-- Add a [`changelog/`](./changelog/) entry describing what the agent does and why it was added.
+The source file is authoritative and the harness auto-discovers it from the frontmatter `description`, so registration is deliberately minimal:
+
+1. Add a one-line row to the agent table in [root `CLAUDE.md`](../../CLAUDE.md) — the auto-loaded index.
+2. Put the *why* (scope decision, what it replaces) in the **commit message**.
+
+That's it. [`agents.md`](./agents.md) is a thin pointer (no per-agent table to keep in sync), [root `README.md`](../../README.md) points at CLAUDE.md rather than re-listing agents, and there is no changelog entry to write (see the [frozen changelog](./changelog/README.md)).
 
 ### Step 5 — Test
 
@@ -127,12 +129,12 @@ The example shows either:
 
 Two examples is better than one for complex skills.
 
-### Step 4 — Register
+### Step 4 — Register (two writes)
 
-- Add a row to the relevant section in [`skills.md`](./skills.md).
-- Add a row to the skill catalogue in [root `CLAUDE.md`](../../CLAUDE.md).
-- Add a row to the Skills section in [root `README.md`](../../README.md).
-- Add a [`changelog/`](./changelog/) entry.
+1. Add a one-line bullet to the skill list in [root `CLAUDE.md`](../../CLAUDE.md).
+2. Put the *why* in the **commit message**.
+
+The harness auto-discovers `SKILL.md` from its frontmatter, [`skills.md`](./skills.md) is a thin pointer (no per-skill table), and there is no changelog entry to write.
 
 ### Step 5 — Test
 
@@ -173,9 +175,7 @@ Target < 200 lines. If you need more, split heavy reference material into [`docs
 
 ### Step 3 — Register
 
-- Add a row to the inventory in [`claude-md.md`](./claude-md.md).
-- Reference the new file from the root [`CLAUDE.md`](../../CLAUDE.md) "Where to read more" section.
-- Add a [`changelog/`](./changelog/) entry.
+- Reference the new file from the root [`CLAUDE.md`](../../CLAUDE.md) "Where to read more" section, and add a row to the inventory in [`claude-md.md`](./claude-md.md).
 
 ## Updating a cursor rule
 
@@ -186,7 +186,7 @@ For Claude Code, prefer CLAUDE.md for orientation and cursor rules for **always-
 After updating a cursor rule:
 
 - Check whether any CLAUDE.md, agent file, or skill needs to follow.
-- Add a [`changelog/`](./changelog/) entry if the change affects how agents or skills work.
+- Note the *why* in the commit message if the change affects how agents or skills work.
 
 ## Conventions across all agentic files
 
@@ -220,14 +220,6 @@ Every agent and skill ends with a hand-off section. The chain should be **comple
 
 Every skill needs at least one example. Two for complex skills. Examples are the single most useful artifact when an agent reads the SKILL.md for the first time — they ground the abstract workflow in a concrete shape.
 
-### Updating the changelog
+### Recording why a change was made
 
-Every notable change to the agentic infrastructure gets a [`changelog/`](./changelog/) entry. Entries are dated `YYYY-MM-DD_<slug>.md`. Each entry includes:
-
-- What was added / changed / removed.
-- Why (one-paragraph rationale).
-- File inventory if multiple files landed.
-- Cross-references to the relevant catalog file ([`agents.md`](./agents.md), [`skills.md`](./skills.md), [`claude-md.md`](./claude-md.md)) for navigation.
-- Forward-looking notes if the change unlocks or blocks future work.
-
-Keep changelog entries focused on **what changed about the agentic setup itself**. Code changes go in [`agent-log/`](../../agent-log/) (session history) and git commits.
+The dated [`changelog/`](./changelog/) is **frozen** (see its [README](./changelog/README.md)) — it duplicated `git log`. Record the rationale for a toolchain change in the **commit message** instead. If the change establishes a durable convention (not a one-off), fold it into this file or [`architecture.md`](./architecture.md) so it's discoverable. `git log -- docs/agentic .claude .mcp.json` is the audit trail; per-session history still lives in [`agent-log/`](../../agent-log/).

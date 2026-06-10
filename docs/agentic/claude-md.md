@@ -45,7 +45,7 @@ This **contextual load** model keeps per-package files out of sessions that don'
 | New module CRUD pattern or SQL style | `packages/supabase/CLAUDE.md` |
 | New agent or skill | Root `CLAUDE.md` agent/skill catalogue |
 
-After updating, add a [`changelog/`](./changelog/) entry.
+Record the rationale in the commit message (the dated changelog is [frozen](./changelog/README.md)).
 
 ## When to add a new CLAUDE.md
 

@@ -47,8 +47,8 @@ See [`architecture.md`](./architecture.md) for the full composition model and wh
 
 ## When to update this directory
 
-- After adding a new agent, skill, or CLAUDE.md → update [`agents.md`](./agents.md), [`skills.md`](./skills.md), or [`claude-md.md`](./claude-md.md), and add a [`changelog/`](./changelog/) entry.
-- After a notable change to how the agentic layer composes (e.g. adding an MCP server, restructuring the agent roster) → update [`architecture.md`](./architecture.md) and add a changelog entry.
+- After adding a new agent, skill, or CLAUDE.md → two writes only: the source file (authoritative) + a one-line row in root [`CLAUDE.md`](../../CLAUDE.md). The catalogs here ([`agents.md`](./agents.md), [`skills.md`](./skills.md), [`mcp-servers.md`](./mcp-servers.md)) are thin pointers — no per-item table to keep in sync. Put the *why* in the commit message; the dated [`changelog/`](./changelog/) is frozen.
+- After a notable change to how the agentic layer composes (e.g. adding an MCP server, restructuring the agent roster) → update [`architecture.md`](./architecture.md) and record the rationale in the commit message.
 - After establishing a new convention for writing agents or skills → update [`extending.md`](./extending.md).
 
 See [`extending.md`](./extending.md) for the full playbook.

@@ -124,45 +124,13 @@ A short, token-efficient orientation file lives at the root and at each package 
 - [`packages/constraint-engine/CLAUDE.md`](./packages/constraint-engine/CLAUDE.md) — engine determinism contract.
 - [`packages/supabase/CLAUDE.md`](./packages/supabase/CLAUDE.md) — migrations + SQL style + module hooks.
 
-### Agents
+### Agents, skills & MCP servers
 
-Subagent definitions live under [`.claude/agents/`](./.claude/agents/) and can be invoked via the Agent tool with `subagent_type: "<name>"`. Each agent has a tight scope and a hand-off list so the parent session can delegate without bloat.
+To avoid drift, this README does **not** re-list the agents, skills, or MCP servers — that lineup lives in one place, the catalog tables in [`CLAUDE.md`](./CLAUDE.md) (auto-loaded by Claude Code every session), backed by the authoritative source files:
 
-| Agent | When to use |
-|---|---|
-| [`ui-component-builder`](./.claude/agents/ui-component-builder.md) | New UI under `apps/web/components/` or any feature `_components/` |
-| [`route-handler-engineer`](./.claude/agents/route-handler-engineer.md) | New or modified handlers under `apps/web/app/api/` and server actions |
-| [`supabase-migration-author`](./.claude/agents/supabase-migration-author.md) | Any schema change — tables, columns, enums, RLS, functions, triggers, indexes |
-| [`vitest-integration-author`](./.claude/agents/vitest-integration-author.md) | New `.integration.test.ts` covering CRUD + RLS + role matrix |
-| [`constraint-engine-engineer`](./.claude/agents/constraint-engine-engineer.md) | Any edit inside `packages/constraint-engine/` |
-| [`determinism-snapshot-curator`](./.claude/agents/determinism-snapshot-curator.md) | Engine golden snapshots and regression suite |
-| [`ux-reviewer`](./.claude/agents/ux-reviewer.md) | Pre-PR review of UI flows against product UX expectations |
-| [`accessibility-auditor`](./.claude/agents/accessibility-auditor.md) | Pre-PR a11y review (keyboard nav, ARIA, contrast) |
-| [`design-parity-auditor`](./.claude/agents/design-parity-auditor.md) | Post-promotion check that a live screen matches its `/design-lab` mock (Playwright, read-only) |
-| [`prd-aligner`](./.claude/agents/prd-aligner.md) | Cross-check code state against the PRDs, flag drift |
-
-### Skills
-
-Custom skills live under [`.claude/skills/`](./.claude/skills/) and are auto-discovered.
-
-- **[`constraint-menu-generator-life-cycle-test`](./.claude/skills/constraint-menu-generator-life-cycle-test/SKILL.md)** — given a recipes + dietary-constraints spec, emits a paired life-cycle integration test: a Vitest `*.integration.test.ts` for the engine + DB layer (gated on `INTEGRATION_ENABLED`) and a Node ESM HTTP driver mirroring [`scripts/verify-flow.mjs`](./scripts/verify-flow.mjs) for the full Next.js API walk. Both artifacts come from the same input so the engine and HTTP layers can't drift. Reference inputs live in the skill's [`docs/examples/`](./.claude/skills/constraint-menu-generator-life-cycle-test/docs/examples/).
-- **[`menu-generation-impact-review`](./.claude/skills/menu-generation-impact-review/SKILL.md)** — given a proposed menu-generation feature, produces a structured impact review (no code): which layers change, what could break, snapshot drift risk, tests to add, PRD sections to update, and the agent-by-agent implementation order. Invoke when scoping a new feature, evaluating an architecture change, or pre-flighting a refactor. Worked example: [`docs/examples/max-budget-per-week.md`](./.claude/skills/menu-generation-impact-review/docs/examples/max-budget-per-week.md).
-- **[`supabase-add-column`](./.claude/skills/supabase-add-column/SKILL.md)** — emit the full multi-artifact change set for adding a column (migration with `COMMENT ON COLUMN`, soft-delete-aware partial-index handling, optional backfill, types regen command, and the list of TypeScript files that need to update in lockstep). Worked example: [`docs/examples/ingredients-cost-per-unit.md`](./.claude/skills/supabase-add-column/docs/examples/ingredients-cost-per-unit.md).
-- **[`feature-folder-scaffold`](./.claude/skills/feature-folder-scaffold/SKILL.md)** — scaffold a CRUD feature folder under `apps/web/app/(app)/<feature>/` matching the canonical shape (client list page + create/edit drawer + soft-delete confirm + Zod schema + integration test + middleware/sidebar patches). Reuses hooks from `@weekly-food-planner/supabase/react`; never generates app-level hooks. Worked example: [`docs/examples/shopping-templates.md`](./.claude/skills/feature-folder-scaffold/docs/examples/shopping-templates.md).
-- **[`design-lab-parity-check`](./.claude/skills/design-lab-parity-check/SKILL.md)** — drive Playwright over a promoted live screen and its `/design-lab` mock at 390/820/1440px × light/dark, snapshot the DOM/a11y tree + screenshots, and tabulate the structural + token deltas. Capture-and-tabulate only — the PASS/BLOCK verdict is the [`design-parity-auditor`](./.claude/agents/design-parity-auditor.md)'s. Worked example: [`docs/examples/members-parity-check.md`](./.claude/skills/design-lab-parity-check/docs/examples/members-parity-check.md).
-
-### MCP servers
-
-Four servers wired via [`.mcp.json`](./.mcp.json) at the repo root, auto-discovered by Claude Code on session start. Run `/mcp` inside Claude Code to confirm connection.
-
-| Server | Use for | Auth |
-|---|---|---|
-| `supabase-local` | Generic Postgres MCP (`@modelcontextprotocol/server-postgres`) pointed at the local dev DB on `127.0.0.1:54322`. Exposes a single `query` tool — ad-hoc SQL reads while iterating. Does NOT introspect Supabase-specific state (RLS, migrations, advisors). | None — connection string baked in. Requires `pnpm --filter @weekly-food-planner/supabase db:start`. |
-| `supabase-remote` | `@supabase/mcp-server-supabase --read-only` against the hosted project. Schema introspection, RLS policy listing, migration status, advisors. | `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` env vars |
-| `shadcn` | Component registry browsing (list / demo / source) — backs `ui-component-builder` | None |
-| `menu` | Custom server in [`apps/menu-mcp-server/`](./apps/menu-mcp-server/). Engine tools (`engine_generate_menu`, `engine_compute_inputs_hash`, `engine_validate_input`) wrap the constraint engine directly; workspace tools (`workspace_preview_menu`, `workspace_member_constraints`, `workspace_recipe_usability`, `workspace_recent_menus`) hit the running Next.js app. | `MENU_MCP_USER_JWT` (Supabase user JWT with admin role on a dev workspace) — workspace tools only. Optionally `MENU_MCP_BASE_URL` (default `http://127.0.0.1:3000`). Engine tools work without any env. |
-
-Read-only Supabase keeps schema mutations on the migration-ritual path through [`supabase-migration-author`](./.claude/agents/supabase-migration-author.md). The menu server impersonates a real workspace member via JWT — RLS still applies, bounding blast radius. See [`docs/agentic/changelog/2026-05-26_mcp-servers.md`](./docs/agentic/changelog/2026-05-26_mcp-servers.md), [`docs/agentic/changelog/2026-05-29_menu-mcp-server.md`](./docs/agentic/changelog/2026-05-29_menu-mcp-server.md), and [`docs/agentic/changelog/2026-06-08_mcp-server-smoke-corrections.md`](./docs/agentic/changelog/2026-06-08_mcp-server-smoke-corrections.md) for env-var setup, rationale, and the smoke-driven corrections.
+- **Agents** — [`.claude/agents/`](./.claude/agents/), invoked via the Agent tool with `subagent_type: "<name>"`. Each has a tight scope + hand-off list so the parent session delegates without bloat. Catalog: [`docs/agentic/agents.md`](./docs/agentic/agents.md).
+- **Skills** — [`.claude/skills/`](./.claude/skills/), auto-discovered from each `SKILL.md`. Catalog: [`docs/agentic/skills.md`](./docs/agentic/skills.md).
+- **MCP servers** — wired via [`.mcp.json`](./.mcp.json), auto-discovered on session start (`/mcp` confirms connection). All are read/inspect/drive only — no server mutates the DB; schema changes stay on the migration-ritual path. Conventions + demo: [`docs/agentic/mcp-servers.md`](./docs/agentic/mcp-servers.md), [`docs/agentic/mcp-demo.md`](./docs/agentic/mcp-demo.md).
 
 ### Cursor rules
 

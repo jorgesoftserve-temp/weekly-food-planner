@@ -196,6 +196,33 @@ verify→refine loop against.
 
 ---
 
+## Executed walkthrough — the offline context-bridge demo
+
+The per-server demos above need external state (DB / dev server / tokens). The one part that runs
+**fully offline and reproducibly** is the `mcp-context-bridge` package (pure engine, no DB/network),
+so it's the demo to run when you want real output without setup:
+
+```sh
+pnpm --filter @weekly-food-planner/mcp-context-bridge test        # 16 tests: schema, round-trip, verify→refine, experiment
+pnpm --filter @weekly-food-planner/mcp-context-bridge experiment  # 3 baseline runs vs 3 MCP-bridge runs
+```
+
+The experiment writes deterministic artifacts and prints the comparison (baseline `pass=0.67 meanIters=7`
+vs bridge `pass=1 meanIters=4` — all variance is agent behaviour, since the engine is deterministic):
+[`logs/experiment-metrics.json`](../../packages/mcp-context-bridge/logs/experiment-metrics.json),
+[`docs/comparison-report.md`](../../packages/mcp-context-bridge/docs/comparison-report.md).
+
+The five verbs the bridge advertises over real stdio MCP — `sendContext`, `requestAction`,
+`receiveResult`, `confirm`, `rollback` — wrap the engine in a suggest → verify → confirm/rollback
+protocol **without** feeding model output into the engine's decision path, so the determinism
+contract is untouched:
+
+```
+sendContext(infeasible ctx) → requestAction(generate_menu) → receiveResult → verify: RED (no_valid_recipe)
+   → rollback → [agent relaxes one unsatisfiable required tag] → sendContext(refined) → …
+   → receiveResult → verify: GREEN (14/14 slots) → confirm → acceptedSeed
+```
+
 ## How the set impacts the system (summary)
 
 - **Discovery over grepping** — agents introspect the DB (`supabase-*`), the registry (`shadcn`),

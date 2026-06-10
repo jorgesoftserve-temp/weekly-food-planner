@@ -1,19 +1,8 @@
 # MCP servers
 
-Index only — [`.mcp.json`](../../.mcp.json) at the project root is the authoritative source for server wiring (packages, args, env). Keep entries to one line; tool lists and command args live in the source and the linked changelog entries. Companion to [`agents.md`](./agents.md), [`skills.md`](./skills.md), and [`claude-md.md`](./claude-md.md).
+The **authoritative lineup** (server, use-for, auth) is the MCP table in [root `CLAUDE.md`](../../CLAUDE.md); the **authoritative wiring** (packages, args, env) is [`.mcp.json`](../../.mcp.json) at the project root. This doc is **not** a second catalog — it holds the *boundary conventions* and a worked demo ([`mcp-demo.md`](./mcp-demo.md)). For the list, read the CLAUDE.md table.
 
 Claude Code auto-discovers all servers on session start; `/mcp` confirms connection. Composition rationale: [`architecture.md`](./architecture.md#mcp-servers). Smoke-test every server's JSON-RPC handshake with `node scripts/smoke-mcp.mjs --all`.
-
-## The lineup
-
-| Server | Purpose | Auth |
-|---|---|---|
-| `supabase-local` | Ad-hoc SQL reads against the local dev DB (`127.0.0.1:54322`) | None — needs local Supabase running |
-| `supabase-remote` | Supabase-feature introspection on the hosted project (read-only) | `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` |
-| `shadcn` | Component registry browsing (list / view / demo) | None |
-| `playwright` | Drive / screenshot the running app in a real browser | None — needs `pnpm dev` running |
-| `figma` | Pull Figma frames into context (secondary / dormant) | `FIGMA_API_KEY` (inert without it) |
-| `menu` | Engine + workspace tools for menu generation | `MENU_MCP_USER_JWT` (workspace tools only) |
 
 ## Boundary conventions
 

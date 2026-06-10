@@ -1,6 +1,6 @@
-# Skill catalog
+# Skills — how to invoke
 
-Index only — the linked `SKILL.md` source files under [`.claude/skills/`](../../.claude/skills/) are authoritative. Keep entries to one line; detail (input shape, steps, non-negotiables, examples) lives in the source.
+The **authoritative list** of skills is the skill section of [root `CLAUDE.md`](../../CLAUDE.md) and the `SKILL.md` source files under [`.claude/skills/`](../../.claude/skills/), which the harness auto-discovers from each file's frontmatter `description`. This doc is **not** a second catalog — it covers *how to invoke* a skill, *how skill files are structured*, and the *skill-vs-agent decision*. For the full list, read the CLAUDE.md skill section.
 
 ## Invocation
 
@@ -13,30 +13,9 @@ Skill(
 )
 ```
 
-The harness auto-discovers any skill under `.claude/skills/<name>/SKILL.md` — a new skill is seen next session without manual registration.
+The harness auto-discovers any skill under `.claude/skills/<name>/SKILL.md` — a new skill is seen next session without manual registration (only the one-line bullet in root CLAUDE.md is added, for the human-readable index).
 
-## Lifecycle skills
-
-| Skill | Purpose |
-|---|---|
-| [`constraint-menu-generator-life-cycle-test`](../../.claude/skills/constraint-menu-generator-life-cycle-test/SKILL.md) | Paired life-cycle test: Vitest + Node ESM HTTP driver |
-
-## Planning skills
-
-| Skill | Purpose |
-|---|---|
-| [`menu-generation-impact-review`](../../.claude/skills/menu-generation-impact-review/SKILL.md) | Layered impact review + plan for a menu-gen feature (no code) |
-
-## Mechanical-task skills
-
-| Skill | Purpose |
-|---|---|
-| [`supabase-add-column`](../../.claude/skills/supabase-add-column/SKILL.md) | Add a column: migration + types-regen + module updates |
-| [`add-module-and-hooks`](../../.claude/skills/add-module-and-hooks/SKILL.md) | New data-layer module pair for an already-migrated table |
-| [`add-route-handler`](../../.claude/skills/add-route-handler/SKILL.md) | Scaffold a standard route handler / server action |
-| [`feature-folder-scaffold`](../../.claude/skills/feature-folder-scaffold/SKILL.md) | Scaffold a CRUD feature folder under `(app)/<feature>/` |
-| [`promote-design-lab-mock`](../../.claude/skills/promote-design-lab-mock/SKILL.md) | Graduate a `/design-lab` mock into the live app (v1.8 Phase 3) |
-| [`design-lab-parity-check`](../../.claude/skills/design-lab-parity-check/SKILL.md) | Capture live-vs-mock Playwright evidence (390/820/1440px × light/dark) for the `design-parity-auditor` |
+The CLAUDE.md skill section groups them by type: **lifecycle** (`constraint-menu-generator-life-cycle-test`), **planning** (`menu-generation-impact-review`), and **mechanical-task** (`supabase-add-column`, `new-table-migration`, `add-module-and-hooks`, `add-route-handler`, `feature-folder-scaffold`, `promote-design-lab-mock`, `design-lab-parity-check`).
 
 ## Skill file structure (for reference)
 

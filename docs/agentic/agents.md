@@ -1,6 +1,6 @@
-# Agent catalog
+# Agents — how to invoke
 
-Index only — the linked source files under [`.claude/agents/`](../../.claude/agents/) are authoritative. Keep entries to one line; detail (scope, operating rules, hand-offs, output shape) lives in the source.
+The **authoritative list** of agents (name, model tier, one-line "when") is the agent table in [root `CLAUDE.md`](../../CLAUDE.md) — auto-loaded every session — and the source files under [`.claude/agents/`](../../.claude/agents/), which the harness auto-discovers from each file's frontmatter `description`. This doc is **not** a second catalog (it used to be, and the two drifted): it covers *how to invoke* an agent and *how agent files are structured*. To see the full lineup, read the CLAUDE.md table.
 
 ## Invocation
 
@@ -14,32 +14,15 @@ Agent(
 
 The parent session's prompt is the agent's only input. Brief it like a smart colleague who just walked in: state the goal, what you've ruled out, file paths/line numbers, and the response shape you want.
 
-## Daily-edit agents (cover ~80% of feature work)
+## How the lineup is organized
 
-| Agent | Model | Purpose |
-|---|---|---|
-| [`design-system-architect`](../../.claude/agents/design-system-architect.md) | sonnet | Visual design system — tokens, theme, per-user accent |
-| [`ui-component-builder`](../../.claude/agents/ui-component-builder.md) | sonnet | New components + feature `_components/` |
-| [`route-handler-engineer`](../../.claude/agents/route-handler-engineer.md) | sonnet | Route handlers + server actions |
-| [`supabase-migration-author`](../../.claude/agents/supabase-migration-author.md) | sonnet | Any schema change (DDL, RLS, RPCs) |
-| [`supabase-module-author`](../../.claude/agents/supabase-module-author.md) | sonnet | Data-layer modules + hooks (`module/<table>.ts` + `.react.ts` + barrel) |
-| [`vitest-integration-author`](../../.claude/agents/vitest-integration-author.md) | sonnet | CRUD + RLS + role-matrix integration tests |
+The CLAUDE.md table groups the agents by use pattern — useful for picking the right one:
 
-## Review-pass agents (run pre-PR)
+- **Daily-edit agents** (cover ~80% of feature work): `design-system-architect`, `ui-component-builder`, `route-handler-engineer`, `supabase-migration-author`, `supabase-module-author`, `vitest-integration-author`, `prd-author`.
+- **Review-pass agents** (run pre-PR, read-only/tool-scoped): `ux-reviewer`, `accessibility-auditor`, `design-parity-auditor`, `prd-aligner`.
+- **Engine-protecting agents** (opus): `constraint-engine-engineer`, `determinism-snapshot-curator`.
 
-| Agent | Model | Purpose |
-|---|---|---|
-| [`ux-reviewer`](../../.claude/agents/ux-reviewer.md) | sonnet, tool-scoped (Read/Glob/Grep + read-only Playwright) | Product UX review against the PRDs |
-| [`accessibility-auditor`](../../.claude/agents/accessibility-auditor.md) | sonnet, tool-scoped (Read/Glob/Grep + read-only Playwright) | A11y review — keyboard, ARIA, contrast |
-| [`design-parity-auditor`](../../.claude/agents/design-parity-auditor.md) | sonnet, tool-scoped (Read/Glob/Grep + read-only Playwright + Skill) | Phase-3 promotion fidelity — live screen vs. `/design-lab` mock (runs `design-lab-parity-check`) |
-| [`prd-aligner`](../../.claude/agents/prd-aligner.md) | haiku, tool-scoped read-only | Drift detection between PRDs and code |
-
-## Engine-protecting agents
-
-| Agent | Model | Purpose |
-|---|---|---|
-| [`constraint-engine-engineer`](../../.claude/agents/constraint-engine-engineer.md) | opus | Changes inside `packages/constraint-engine/` |
-| [`determinism-snapshot-curator`](../../.claude/agents/determinism-snapshot-curator.md) | opus | Engine golden-snapshot regression suite |
+Model tiers and exact scopes live in each source file's frontmatter and the CLAUDE.md table — not duplicated here.
 
 ## Agent file structure (for reference)
 

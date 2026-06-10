@@ -168,6 +168,13 @@ const main = async () => {
       ingredients: [{ ingredient_id: milk.id, quantity: 0.25, unit: 'cup' }],
     },
     {
+      name: 'Tomato salad',
+      meal_type: 'lunch',
+      difficulty: 'easy',
+      servings: 1,
+      ingredients: [{ ingredient_id: tomato.id, quantity: 2, unit: 'piece' }],
+    },
+    {
       name: 'Tomato pasta',
       meal_type: 'dinner',
       difficulty: 'easy',
@@ -189,8 +196,8 @@ const main = async () => {
   // 9. List recipes
   const listRes = await app('GET', `/api/workspaces/${workspaceId}/recipes`)
   log(`GET /recipes ->`, listRes.status, 'count:', Array.isArray(listRes.body) ? listRes.body.length : '?')
-  if (listRes.status !== 200 || (Array.isArray(listRes.body) && listRes.body.length < 3)) {
-    fail('expected ≥3 recipes after creation')
+  if (listRes.status !== 200 || (Array.isArray(listRes.body) && listRes.body.length < 4)) {
+    fail('expected ≥4 recipes after creation')
   }
 
   // 10. Exercise the new b340ff7 array-replace endpoints on the first recipe
@@ -253,13 +260,16 @@ const main = async () => {
   }
 
   // 11b. The signup trigger creates a workspace with no shared_meal_frequency.
-  // The engine needs at least one slot template before it can generate, so
-  // set breakfast + dinner (matches the meal_types of the 3 recipes above).
-  // This is a fresh-workspace setup step the UI doesn't yet expose
+  // The engine needs at least one slot template before it can generate, so set
+  // breakfast + lunch + dinner — matching both the 4 recipes' meal_types above
+  // and the per-member default (adults default to breakfast+lunch+dinner via
+  // fn_default_meal_frequency_for_age, so the creator member demands a lunch
+  // slot). This is a fresh-workspace setup step the UI doesn't yet expose
   // (member-management screens were scope-cut in step 16).
   const setFreq = await app('PATCH', `/api/workspaces/${workspaceId}`, {
     shared_meal_frequency: [
       { key: 'breakfast', title: 'Breakfast', mealType: 'breakfast', defaultHour: 8 },
+      { key: 'lunch', title: 'Lunch', mealType: 'lunch', defaultHour: 12 },
       { key: 'dinner', title: 'Dinner', mealType: 'dinner', defaultHour: 18 },
     ],
   })
@@ -281,6 +291,17 @@ const main = async () => {
   )
   log(`POST /menus ->`, genRes.status, JSON.stringify(genRes.body).slice(0, 250))
   if (genRes.status !== 200) fail('menu generation failed')
+
+  // 12b. Accept the draft (generation produces a DRAFT under the draft → accept
+  // lifecycle; only an accepted menu is "active" and drives the grocery list).
+  const draftMenuId = genRes.body.menuId
+  if (!draftMenuId) fail('generation did not return a menuId')
+  const acceptRes = await app(
+    'POST',
+    `/api/workspaces/${workspaceId}/menus/${draftMenuId}/accept`,
+  )
+  log(`POST /menus/:id/accept ->`, acceptRes.status, JSON.stringify(acceptRes.body).slice(0, 150))
+  if (acceptRes.status < 200 || acceptRes.status >= 300) fail('menu accept failed')
 
   // 13. Read the active menu
   const activeMenu = await app('GET', `/api/workspaces/${workspaceId}/menus/active`)

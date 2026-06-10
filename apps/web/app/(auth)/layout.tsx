@@ -1,16 +1,16 @@
 import type { ReactNode } from 'react'
 import { ChefHat } from 'lucide-react'
 
-// Cozy auth shell (v1.9). Two flat surfaces only (no gradient) so light and dark
-// each read as exactly two colors — the muted surround/brand panel and the card:
-//   • Phone (<md): full-bleed — the form fills the whole viewport on bg-card, no
-//     card chrome or outer margin.
-//   • Tablet/desktop (md+): a contained, centered two-pane card that covers more
-//     of the viewport without filling it — a muted brand panel beside the form.
+// Cozy auth shell (v1.9). A SINGLE flat background color (bg-card) across the
+// whole viewport in both light and dark — no surround, no card panel, no
+// gradient. Inputs/buttons are the only foreground surfaces.
+//   • Phone (<md): full-bleed single column.
+//   • Tablet/desktop (md+): a centered two-pane (brand + form) separated only by
+//     a thin divider line — covers more of the viewport without a second color.
 const AuthLayout = ({ children }: { children: ReactNode }) => {
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-card md:items-center md:justify-center md:bg-muted md:p-6 lg:p-10">
-      <div className="flex w-full flex-1 flex-col bg-card md:max-w-2xl md:flex-none md:flex-row md:overflow-hidden md:rounded-2xl md:border md:border-border md:shadow-md lg:max-w-4xl">
+    <div className="flex min-h-[100dvh] flex-col bg-card md:items-center md:justify-center md:p-6 lg:p-10">
+      <div className="flex w-full flex-1 flex-col md:max-w-2xl md:flex-none md:flex-row lg:max-w-4xl">
         {/* Brand panel — part of the single bg-card surface, set off by a divider */}
         <aside className="hidden p-8 md:flex md:w-1/2 md:flex-col md:justify-between md:border-r md:border-border lg:p-10">
           <div className="flex items-center gap-2.5">

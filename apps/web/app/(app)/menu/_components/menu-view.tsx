@@ -124,7 +124,7 @@ const SlotCard = ({
               title="User-overridden slot"
               className="flex items-center gap-0.5 rounded-full bg-warning-tint px-1.5 py-0.5 text-[10px] font-medium uppercase text-warning"
             >
-              <Lock className="size-2.5" />
+              <Lock className="size-2.5" aria-hidden />
               Modified
             </span>
           ) : null}
@@ -144,10 +144,10 @@ const SlotCard = ({
             <Button
               variant="ghost"
               size="icon"
-              className="size-7 shrink-0"
-              aria-label={`Slot actions for ${slot.meal_key}`}
+              className="size-9 shrink-0"
+              aria-label={`Actions for ${recipeName} (${slot.meal_key})`}
             >
-              <MoreHorizontal className="size-4" />
+              <MoreHorizontal className="size-4" aria-hidden />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

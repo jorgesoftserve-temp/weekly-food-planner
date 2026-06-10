@@ -349,46 +349,65 @@ const GroceryPage = () => {
                             >
                               <span className="truncate">{name}</span>
                               {ing?.requires_fresh ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Sparkles
-                                      className="size-3.5 shrink-0 text-sky-600 dark:text-sky-400"
-                                      aria-label="Requires fresh"
-                                    />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    Requires fresh purchase
-                                  </TooltipContent>
-                                </Tooltip>
+                                <>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Sparkles
+                                        className="size-3.5 shrink-0 text-sky-600 dark:text-sky-400"
+                                        aria-hidden
+                                      />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      Requires fresh purchase
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <span className="sr-only">
+                                    — requires fresh purchase
+                                  </span>
+                                </>
                               ) : ing?.is_perishable ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Refrigerator
-                                      className="size-3.5 shrink-0 text-warning"
-                                      aria-label="Perishable"
-                                    />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    Perishable
+                                <>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Refrigerator
+                                        className="size-3.5 shrink-0 text-warning"
+                                        aria-hidden
+                                      />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      Perishable
+                                      {ing.max_storage_days != null
+                                        ? ` — keeps ~${ing.max_storage_days}d`
+                                        : ''}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <span className="sr-only">
+                                    — perishable
                                     {ing.max_storage_days != null
-                                      ? ` — keeps ~${ing.max_storage_days}d`
+                                      ? `, keeps about ${ing.max_storage_days} days`
                                       : ''}
-                                  </TooltipContent>
-                                </Tooltip>
+                                  </span>
+                                </>
                               ) : null}
                               {allergenCount > 0 ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <AlertTriangle
-                                      className="size-3.5 shrink-0 text-destructive"
-                                      aria-label={`${allergenCount} allergen${allergenCount === 1 ? '' : 's'}`}
-                                    />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    {allergenCount} allergen
+                                <>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <AlertTriangle
+                                        className="size-3.5 shrink-0 text-destructive"
+                                        aria-hidden
+                                      />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      {allergenCount} allergen
+                                      {allergenCount === 1 ? '' : 's'} tagged
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <span className="sr-only">
+                                    — {allergenCount} allergen
                                     {allergenCount === 1 ? '' : 's'} tagged
-                                  </TooltipContent>
-                                </Tooltip>
+                                  </span>
+                                </>
                               ) : null}
                             </button>
                             {item.scheduled_purchase_day ? (

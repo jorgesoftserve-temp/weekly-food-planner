@@ -89,9 +89,9 @@ export const MemberCard = ({ member, canManage, onEdit, onDelete }: MemberCardPr
               variant="ghost"
               size="icon"
               aria-label={`Actions for ${member.name}`}
-              className="size-7"
+              className="size-9"
             >
-              <MoreHorizontal className="size-3.5" />
+              <MoreHorizontal className="size-4" aria-hidden />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { RecipeCookMock } from './recipe-cook-mock'
+import { ConfirmEmailMock, LoginMock, SignupMock } from './auth-mock'
 
 // Single source of truth for the design-lab screen set. Shared by the control
 // surface (page.tsx) and the chrome-less render target (frame/page.tsx), so the
@@ -15,6 +16,15 @@ export const SCREENS: Screen[] = [
   // Cook mode is also live (/menu cook Sheet); its mock is kept here only until
   // the live feature is reviewed against it, then it too retires.
   { key: 'recipe-cook', label: 'Cook mode', render: () => <RecipeCookMock /> },
+  // Cozy auth mocks (v1.9 Part C) — the reviewable target before the live
+  // (auth) pages are promoted; retired once each is promoted.
+  { key: 'login', label: 'Login', render: () => <LoginMock /> },
+  { key: 'signup', label: 'Sign up', render: () => <SignupMock /> },
+  {
+    key: 'confirm-email',
+    label: 'Confirm email',
+    render: () => <ConfirmEmailMock />,
+  },
 ]
 
 export const findScreen = (key: string | null): Screen =>

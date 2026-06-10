@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabaseClient } from '@/utils/supabase/client'
+import { authLinkClass, authSecondaryButtonClass } from '../_components/auth-ui'
 
 const PENDING_EMAIL_KEY = 'wfp:pending-verify-email'
 
@@ -46,10 +47,7 @@ export const VerifyEmailPanel = () => {
       <p className="text-sm text-muted-foreground">
         Didn&apos;t get the email? Open this page from the device you signed up
         on, or{' '}
-        <a
-          href="/signup"
-          className="font-medium underline-offset-4 hover:underline"
-        >
+        <a href="/signup" className={authLinkClass}>
           sign up again
         </a>
         .
@@ -63,7 +61,7 @@ export const VerifyEmailPanel = () => {
         Sent to <span className="font-medium text-foreground">{email}</span>.
       </p>
       {status.kind === 'sent' ? (
-        <p className="text-emerald-600 dark:text-emerald-400">
+        <p className="font-medium text-success">
           Verification email re-sent. Check your inbox.
         </p>
       ) : (
@@ -71,7 +69,7 @@ export const VerifyEmailPanel = () => {
           type="button"
           onClick={handleResend}
           disabled={status.kind === 'sending'}
-          className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+          className={authSecondaryButtonClass}
         >
           {status.kind === 'sending' ? 'Sending…' : 'Resend verification email'}
         </button>

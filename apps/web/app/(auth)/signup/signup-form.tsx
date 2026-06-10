@@ -3,6 +3,11 @@
 import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 import { supabaseClient } from '@/utils/supabase/client'
+import {
+  authInputClass,
+  authLinkClass,
+  authPrimaryButtonClass,
+} from '../_components/auth-ui'
 
 type FormState = {
   email: string
@@ -46,7 +51,7 @@ export const SignupForm = () => {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <label className="flex flex-col gap-1.5 text-sm">
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
         Email
         <input
           type="email"
@@ -55,10 +60,10 @@ export const SignupForm = () => {
           onChange={(event) =>
             setForm((prev) => ({ ...prev, email: event.target.value }))
           }
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className={authInputClass}
         />
       </label>
-      <label className="flex flex-col gap-1.5 text-sm">
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
         Password
         <input
           type="password"
@@ -68,24 +73,23 @@ export const SignupForm = () => {
           onChange={(event) =>
             setForm((prev) => ({ ...prev, password: event.target.value }))
           }
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className={authInputClass}
         />
+        <span className="text-xs font-normal text-muted-foreground">
+          At least 8 characters.
+        </span>
       </label>
       {error ? (
         <p className="text-sm text-destructive" role="alert">
           {error}
         </p>
       ) : null}
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
-      >
+      <button type="submit" disabled={isSubmitting} className={authPrimaryButtonClass}>
         {isSubmitting ? 'Creating account…' : 'Create account'}
       </button>
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{' '}
-        <a href="/login" className="font-medium underline-offset-4 hover:underline">
+        <a href="/login" className={authLinkClass}>
           Sign in
         </a>
       </p>

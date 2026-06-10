@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { SearchMock } from './search-mock'
 import { RecipeCookMock } from './recipe-cook-mock'
 
 // Single source of truth for the design-lab screen set. Shared by the control
@@ -12,9 +11,9 @@ export const SCREENS: Screen[] = [
   // retired: dashboard, recipes, recipe (detail), recipe-create, menu,
   // menu-create, grocery, members, profile (→ live /settings).
   //
-  // The two below are NET-NEW features with no live screen yet — they remain
-  // here as the reviewable mocks for v1.9 (cross-module search + cook mode).
-  { key: 'search', label: 'Search', render: () => <SearchMock /> },
+  // Search was promoted to the live /search route (v1.9) and its mock retired.
+  // Cook mode is also live (/menu cook Sheet); its mock is kept here only until
+  // the live feature is reviewed against it, then it too retires.
   { key: 'recipe-cook', label: 'Cook mode', render: () => <RecipeCookMock /> },
 ]
 

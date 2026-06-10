@@ -7,6 +7,7 @@ import {
   CalendarRange,
   ShoppingCart,
   LayoutDashboard,
+  Search,
   Users,
 } from 'lucide-react'
 import {
@@ -25,6 +26,7 @@ import { useActiveWorkspace } from '@/components/workspace-provider'
 
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/search', label: 'Search', icon: Search },
   { href: '/members', label: 'Members', icon: Users },
   { href: '/recipes', label: 'Recipes', icon: ChefHat },
   { href: '/menu', label: 'Weekly menu', icon: CalendarRange },

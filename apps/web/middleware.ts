@@ -12,6 +12,7 @@ const PROTECTED_PREFIXES = [
   '/recipes',
   '/menu',
   '/grocery',
+  '/search',
   '/settings',
 ]
 const AUTH_PUBLIC_PATHS = ['/login', '/signup', '/verify-email']

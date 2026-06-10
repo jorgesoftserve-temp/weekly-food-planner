@@ -19,6 +19,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/recipes': 'Recipes',
   '/menu': 'Weekly menu',
   '/grocery': 'Grocery list',
+  '/search': 'Search',
   '/settings': 'Account settings',
 }
 

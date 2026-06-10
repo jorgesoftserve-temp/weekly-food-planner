@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
 import type { AccentColor } from '@weekly-food-planner/supabase'
@@ -41,6 +42,12 @@ export const AppearanceCard = () => {
   const { data: user } = useAuthUser()
   const { accent, setAccent } = useAccent()
   const { theme, setTheme } = useTheme()
+
+  // next-themes resolves `theme` only on the client, so the server renders with
+  // no selection. Gate the selected state on mount so the first client render
+  // matches the server HTML — otherwise aria-checked/className hydrate-mismatch.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const updateAccent = useUpdateAccentColor({
     supabase,
@@ -118,7 +125,7 @@ export const AppearanceCard = () => {
           >
             {THEMES.map((option) => {
               const Icon = option.icon
-              const selected = theme === option.value
+              const selected = mounted && theme === option.value
               return (
                 <button
                   key={option.value}
@@ -127,7 +134,7 @@ export const AppearanceCard = () => {
                   aria-checked={selected}
                   onClick={() => setTheme(option.value)}
                   className={cn(
-                    'flex min-h-11 items-center gap-2 rounded-md border px-4 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    'flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     selected
                       ? 'border-transparent bg-accent-tint text-accent-strong'
                       : 'border-border text-foreground hover:bg-muted',

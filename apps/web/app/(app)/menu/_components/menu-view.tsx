@@ -1,9 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Lock, MoreHorizontal, Plus, Repeat2 } from 'lucide-react'
+import { Check, ChefHat, Lock, MoreHorizontal, Plus, Repeat2 } from 'lucide-react'
 import type { MenuRecord, MenuSlotRecord } from '@weekly-food-planner/supabase'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
   Card,
   CardContent,
@@ -39,6 +40,9 @@ export type MenuViewProps = {
   editable?: boolean
   onReplaceSlot?: (slot: MenuSlotRecord) => void
   onAddSlot?: (dayOfWeek: string) => void
+  // When provided (active/accepted menu), each slot shows a Cook affordance
+  // that opens the cook sheet for hands-on cooking + marking cooked.
+  onCookSlot?: (slot: MenuSlotRecord) => void
 }
 
 type DayBucket = { day: string; slots: MenuSlotRecord[] }
@@ -98,18 +102,26 @@ const SlotCard = ({
   memberName,
   editable,
   onReplaceSlot,
+  onCookSlot,
 }: {
   slot: MenuSlotRecord
   recipeName: string
   memberName: string | null
   editable: boolean
   onReplaceSlot?: (slot: MenuSlotRecord) => void
+  onCookSlot?: (slot: MenuSlotRecord) => void
 }) => {
   const icon = resolveRecipeIcon({ name: recipeName, meal: slot.meal_key })
+  const cooked = !!slot.cooked_at
   return (
     <div className="flex items-start gap-2 rounded-xl border border-border bg-background p-2">
       <div
-        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-lg"
+        className={cn(
+          'flex size-9 shrink-0 items-center justify-center rounded-lg text-lg',
+          cooked
+            ? 'bg-success-tint ring-2 ring-success ring-offset-1 ring-offset-background'
+            : 'bg-muted',
+        )}
         aria-hidden
       >
         {icon}
@@ -119,6 +131,12 @@ const SlotCard = ({
           <span className="text-xs uppercase tracking-wide text-muted-foreground">
             {slot.meal_key}
           </span>
+          {cooked ? (
+            <span className="flex items-center gap-0.5 rounded-full bg-success-tint px-1.5 py-0.5 text-[10px] font-medium uppercase text-success">
+              <Check className="size-2.5" aria-hidden />
+              Cooked
+            </span>
+          ) : null}
           {slot.is_overridden ? (
             <span
               title="User-overridden slot"
@@ -162,6 +180,17 @@ const SlotCard = ({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      ) : onCookSlot ? (
+        <Button
+          variant={cooked ? 'ghost' : 'outline'}
+          size="sm"
+          className="h-8 shrink-0 gap-1 px-2.5 text-xs"
+          onClick={() => onCookSlot(slot)}
+          aria-label={`Cook ${recipeName} (${slot.meal_key})`}
+        >
+          <ChefHat className="size-3.5" aria-hidden />
+          {cooked ? 'View' : 'Cook'}
+        </Button>
       ) : null}
     </div>
   )
@@ -174,6 +203,7 @@ export const MenuView = ({
   editable = false,
   onReplaceSlot,
   onAddSlot,
+  onCookSlot,
 }: MenuViewProps) => {
   const buckets = useMemo(
     () =>
@@ -313,6 +343,7 @@ export const MenuView = ({
                     memberName={resolveMemberName(slot)}
                     editable={editable}
                     onReplaceSlot={onReplaceSlot}
+                    onCookSlot={onCookSlot}
                   />
                 ))}
                 {editable && onAddSlot ? (
@@ -354,6 +385,7 @@ export const MenuView = ({
                   memberName={resolveMemberName(slot)}
                   editable={editable}
                   onReplaceSlot={onReplaceSlot}
+                  onCookSlot={onCookSlot}
                 />
               ))}
               {editable && onAddSlot ? (

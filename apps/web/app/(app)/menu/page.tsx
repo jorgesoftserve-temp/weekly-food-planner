@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   CalendarRange,
   Check,
@@ -41,6 +41,7 @@ import {
 } from '@/lib/hooks/use-menu-draft'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import { AddSlotDialog } from './_components/add-slot-dialog'
+import { CookSheet } from './_components/cook-sheet'
 import { GenerateMenuDialog } from './_components/generate-menu-dialog'
 import { MenuView } from './_components/menu-view'
 import { ReplaceSlotDialog } from './_components/replace-slot-dialog'
@@ -84,6 +85,9 @@ const MenuPage = () => {
   })
 
   const { overlay, open, onOpenChange } = useExclusiveOverlay<MenuOverlay>()
+  // Cook sheet runs off the active (accepted) menu, independent of the draft
+  // overlays above — so it gets its own slot state, not the overlay union.
+  const [cookSlot, setCookSlot] = useState<MenuSlotRecord | null>(null)
   const isLoading =
     workspaceLoading || activeMenuQuery.isLoading || draftQuery.isLoading
 
@@ -269,6 +273,7 @@ const MenuPage = () => {
           menu={activeMenu}
           recipeNamesById={recipeNamesById}
           memberNamesById={memberNamesById}
+          onCookSlot={(slot) => setCookSlot(slot)}
         />
       ) : null}
 
@@ -316,6 +321,21 @@ const MenuPage = () => {
           memberNamesById={memberNamesById}
           open={overlay?.kind === 'addSlot'}
           onOpenChange={onOpenChange}
+        />
+      ) : null}
+
+      {workspace && activeMenu ? (
+        <CookSheet
+          workspaceId={workspace.id}
+          menuId={activeMenu.id}
+          slot={cookSlot}
+          recipeName={
+            cookSlot ? recipeNamesById[cookSlot.recipe_id] ?? 'Recipe' : 'Recipe'
+          }
+          open={!!cookSlot}
+          onOpenChange={(next) => {
+            if (!next) setCookSlot(null)
+          }}
         />
       ) : null}
     </div>

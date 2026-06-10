@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CalendarRange, ShoppingCart } from 'lucide-react'
+import { CalendarRange, ChefHat, ShoppingCart } from 'lucide-react'
 import {
   useActiveMenu,
   useActiveGroceryLists,
@@ -77,6 +77,13 @@ const DashboardPage = () => {
     return days.size
   }, [activeMenu])
 
+  // "Meals cooked" — slots on the active menu with cooked_at set (v1.9 cook mode).
+  const cookedCount = useMemo(() => {
+    if (!activeMenu) return null
+    return activeMenu.menu_slots.filter((s) => s.cooked_at !== null).length
+  }, [activeMenu])
+  const totalSlotCount = activeMenu?.menu_slots.length ?? 0
+
   // "Items to buy" — total grocery_items across all lists.
   const groceryItemCount = useMemo(() => {
     if (!groceryQuery.data) return null
@@ -151,6 +158,17 @@ const DashboardPage = () => {
               />
             ) : groceryQuery.isLoading ? (
               <Skeleton className="h-[130px] w-full rounded-2xl" />
+            ) : null}
+
+            {/* Meals cooked this week */}
+            {cookedCount !== null && totalSlotCount > 0 ? (
+              <StatCard
+                icon={ChefHat}
+                value={`${cookedCount} of ${totalSlotCount}`}
+                label="Meals cooked"
+                href="/menu"
+                variant="success"
+              />
             ) : null}
 
             {/* Week preview spans full grid width */}

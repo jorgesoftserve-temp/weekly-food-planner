@@ -11,6 +11,9 @@ export type MenuSlotRecord = {
   target_member_id: string | null
   is_overridden: boolean
   original_recipe_id: string | null
+  // Cook-mode runtime state (v1.9). NULL = not cooked. Never an engine input.
+  cooked_at: string | null
+  cooked_by: string | null
 }
 
 export type MenuType = 'weekly' | 'custom'
@@ -75,7 +78,7 @@ export const menuKeys = {
 const MENU_SELECT = `id, week_start_date, seed, inputs_hash, generation_options, generated_at,
   accepted_at, accepted_seed,
   menu_type, duration_days, start_day_of_week, cloned_from_menu_id,
-  menu_slots (id, day_of_week, meal_key, meal_type, recipe_id, target_member_id, is_overridden, original_recipe_id),
+  menu_slots (id, day_of_week, meal_key, meal_type, recipe_id, target_member_id, is_overridden, original_recipe_id, cooked_at, cooked_by),
   menu_participants (member_id)`
 
 // Active = accepted-and-not-deleted, preferring the **soonest upcoming**

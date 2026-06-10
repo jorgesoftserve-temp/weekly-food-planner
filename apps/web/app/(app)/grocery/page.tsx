@@ -35,14 +35,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -333,101 +325,83 @@ const GroceryPage = () => {
                       ingredient for freshness rules and which recipes need it.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Ingredient</TableHead>
-                            <TableHead className="w-28 text-right">
-                              Quantity
-                            </TableHead>
-                            <TableHead className="w-20">Unit</TableHead>
-                            <TableHead className="hidden w-32 sm:table-cell">
-                              Day
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {sortedItems.map((item) => {
-                            const ing = ingredientsById[item.ingredient_id]
-                            const name =
-                              ing?.name ??
-                              `[unknown:${item.ingredient_id.slice(0, 6)}]`
-                            const qty = item.quantity
-                            const allergenCount =
-                              ing?.ingredient_allergens.length ?? 0
-                            return (
-                              <TableRow key={item.id}>
-                                <TableCell className="font-medium">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setSelectedIngredientId(item.ingredient_id)
-                                    }
-                                    className="flex items-center gap-2 text-left hover:underline underline-offset-4"
-                                  >
-                                    <span>{name}</span>
-                                    {ing?.requires_fresh ? (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Sparkles
-                                            className="size-3.5 text-sky-600 dark:text-sky-400"
-                                            aria-label="Requires fresh"
-                                          />
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          Requires fresh purchase
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    ) : ing?.is_perishable ? (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Refrigerator
-                                            className="size-3.5 text-amber-600 dark:text-amber-400"
-                                            aria-label="Perishable"
-                                          />
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          Perishable
-                                          {ing.max_storage_days != null
-                                            ? ` — keeps ~${ing.max_storage_days}d`
-                                            : ''}
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    ) : null}
-                                    {allergenCount > 0 ? (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <AlertTriangle
-                                            className="size-3.5 text-destructive"
-                                            aria-label={`${allergenCount} allergen${allergenCount === 1 ? '' : 's'}`}
-                                          />
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          {allergenCount} allergen
-                                          {allergenCount === 1 ? '' : 's'} tagged
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    ) : null}
-                                  </button>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {formatQuantity(qty)}
-                                </TableCell>
-                                <TableCell className="text-muted-foreground">
-                                  {item.unit}
-                                </TableCell>
-                                <TableCell className="hidden text-muted-foreground sm:table-cell">
-                                  {item.scheduled_purchase_day
-                                    ? capitalize(item.scheduled_purchase_day)
-                                    : '—'}
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
+                  <CardContent className="pt-0">
+                    <div className="divide-y divide-border">
+                      {sortedItems.map((item) => {
+                        const ing = ingredientsById[item.ingredient_id]
+                        const name =
+                          ing?.name ??
+                          `[unknown:${item.ingredient_id.slice(0, 6)}]`
+                        const qty = item.quantity
+                        const allergenCount =
+                          ing?.ingredient_allergens.length ?? 0
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex min-h-11 items-center gap-3 py-1.5"
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedIngredientId(item.ingredient_id)
+                              }
+                              className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium hover:underline underline-offset-4"
+                            >
+                              <span className="truncate">{name}</span>
+                              {ing?.requires_fresh ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Sparkles
+                                      className="size-3.5 shrink-0 text-sky-600 dark:text-sky-400"
+                                      aria-label="Requires fresh"
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Requires fresh purchase
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : ing?.is_perishable ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Refrigerator
+                                      className="size-3.5 shrink-0 text-warning"
+                                      aria-label="Perishable"
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Perishable
+                                    {ing.max_storage_days != null
+                                      ? ` — keeps ~${ing.max_storage_days}d`
+                                      : ''}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : null}
+                              {allergenCount > 0 ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AlertTriangle
+                                      className="size-3.5 shrink-0 text-destructive"
+                                      aria-label={`${allergenCount} allergen${allergenCount === 1 ? '' : 's'}`}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {allergenCount} allergen
+                                    {allergenCount === 1 ? '' : 's'} tagged
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : null}
+                            </button>
+                            {item.scheduled_purchase_day ? (
+                              <span className="hidden shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:inline">
+                                {capitalize(item.scheduled_purchase_day)}
+                              </span>
+                            ) : null}
+                            <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                              {formatQuantity(qty)} {item.unit}
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
                   </CardContent>
                 </Card>

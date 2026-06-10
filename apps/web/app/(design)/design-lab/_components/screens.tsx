@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { SearchMock } from './search-mock'
 import { RecipeCookMock } from './recipe-cook-mock'
-import { GroceryMock } from './grocery-mock'
 import { ProfileMock } from './profile-mock'
 
 // Single source of truth for the design-lab screen set. Shared by the control
@@ -16,7 +15,7 @@ export const SCREENS: Screen[] = [
   { key: 'recipe-cook', label: 'Cook mode', render: () => <RecipeCookMock /> },
   // 'recipe-create' promoted to live /recipes/new (v1.8 Phase 3) — mock retired.
   // 'menu' + 'menu-create' promoted to live /menu (v1.8 Phase 3) — mocks retired.
-  { key: 'grocery', label: 'Grocery', render: () => <GroceryMock /> },
+  // 'grocery' promoted to the live /grocery screen (v1.8 Phase 3) — mock retired.
   // 'members' promoted to the live /members screen (v1.8 Phase 3) — mock retired.
   { key: 'profile', label: 'Profile', render: () => <ProfileMock /> },
 ]

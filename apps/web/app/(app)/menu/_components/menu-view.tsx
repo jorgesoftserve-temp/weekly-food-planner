@@ -17,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { resolveRecipeIcon } from '@/lib/recipe-icon'
 
 const DAY_ORDER: Record<string, number> = {
   monday: 0,
@@ -104,9 +105,16 @@ const SlotCard = ({
   editable: boolean
   onReplaceSlot?: (slot: MenuSlotRecord) => void
 }) => {
+  const icon = resolveRecipeIcon({ name: recipeName, meal: slot.meal_key })
   return (
-    <div className="flex items-start justify-between gap-2 rounded-md border border-border p-2">
-      <div className="flex min-w-0 flex-col gap-0.5">
+    <div className="flex items-start gap-2 rounded-xl border border-border bg-background p-2">
+      <div
+        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-lg"
+        aria-hidden
+      >
+        {icon}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-1.5">
           <span className="text-xs uppercase tracking-wide text-muted-foreground">
             {slot.meal_key}
@@ -114,14 +122,16 @@ const SlotCard = ({
           {slot.is_overridden ? (
             <span
               title="User-overridden slot"
-              className="flex items-center gap-0.5 rounded-sm bg-amber-500/10 px-1 py-0.5 text-[10px] font-medium uppercase text-amber-700 dark:text-amber-300"
+              className="flex items-center gap-0.5 rounded-full bg-warning-tint px-1.5 py-0.5 text-[10px] font-medium uppercase text-warning"
             >
               <Lock className="size-2.5" />
               Modified
             </span>
           ) : null}
         </div>
-        <span className="break-words text-sm font-medium">{recipeName}</span>
+        <span className="break-words text-sm font-medium leading-tight">
+          {recipeName}
+        </span>
         {memberName ? (
           <span className="truncate text-xs text-muted-foreground">
             For {memberName}
@@ -205,7 +215,7 @@ export const MenuView = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-md border border-border bg-card/40 px-4 py-3 text-sm text-muted-foreground">
+      <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <span>
             <span className="font-medium text-foreground">Week starting:</span>{' '}
@@ -236,7 +246,7 @@ export const MenuView = ({
             </span>
           ) : null}
           {overrideCount > 0 ? (
-            <span className="text-amber-700 dark:text-amber-300">
+            <span className="text-warning">
               {overrideCount} slot{overrideCount === 1 ? '' : 's'} modified
             </span>
           ) : null}
@@ -247,7 +257,7 @@ export const MenuView = ({
             </span>
           ) : null}
           {frequencyOverrideCount > 0 ? (
-            <span className="text-amber-700 dark:text-amber-300">
+            <span className="text-warning">
               Schedule customized ({frequencyOverrideCount})
             </span>
           ) : null}

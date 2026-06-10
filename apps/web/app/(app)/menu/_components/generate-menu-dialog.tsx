@@ -207,7 +207,7 @@ export const GenerateMenuDialog = ({
           </DialogHeader>
 
           <div
-            className="grid grid-cols-2 gap-1 rounded-md border border-border bg-muted/40 p-1"
+            className="grid grid-cols-2 gap-1 rounded-full bg-muted p-1"
             role="tablist"
             aria-label="Menu generation mode"
           >
@@ -216,7 +216,7 @@ export const GenerateMenuDialog = ({
               type="button"
               aria-selected={dialogMode === 'auto'}
               onClick={() => setDialogMode('auto')}
-              className={`flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`flex items-center justify-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 dialogMode === 'auto'
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
@@ -230,7 +230,7 @@ export const GenerateMenuDialog = ({
               type="button"
               aria-selected={dialogMode === 'custom'}
               onClick={() => setDialogMode('custom')}
-              className={`flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`flex items-center justify-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 dialogMode === 'custom'
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
@@ -271,7 +271,7 @@ export const GenerateMenuDialog = ({
             </div>
           </div>
 
-          <details className="rounded-md border border-border bg-card/40 px-3 py-2 text-sm">
+          <details className="rounded-xl border border-border bg-card/40 px-3 py-2 text-sm">
             <summary className="cursor-pointer select-none font-medium">
               Cooking for &amp; meal schedule
             </summary>
@@ -286,7 +286,7 @@ export const GenerateMenuDialog = ({
             </div>
           </details>
 
-          <details className="rounded-md border border-border bg-card/40 px-3 py-2 text-sm">
+          <details className="rounded-xl border border-border bg-card/40 px-3 py-2 text-sm">
             <summary className="cursor-pointer select-none font-medium">
               Dietary &amp; allergy presets for this menu
             </summary>
@@ -332,7 +332,7 @@ export const GenerateMenuDialog = ({
           ) : null}
 
           {failure && !failure.ok ? (
-            <div className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            <div className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
               <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
               <div className="flex flex-col gap-1">
                 <p className="font-medium text-destructive">

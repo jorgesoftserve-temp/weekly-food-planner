@@ -204,12 +204,17 @@ const MenuPage = () => {
 
       {!isLoading && isReviewingDraft && draft ? (
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-2 text-amber-900 dark:text-amber-100">
-              <Clock className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <div className="flex flex-col gap-3 rounded-2xl border border-warning/30 bg-gradient-hero px-4 py-3 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2">
+              <Clock className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
               <div>
-                <p className="font-medium">Reviewing draft</p>
-                <p className="text-xs opacity-80">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium">Reviewing draft</p>
+                  <span className="rounded-full bg-warning-tint px-2 py-0.5 text-xs font-medium text-warning">
+                    Draft
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
                   This menu isn&apos;t active yet — accept it to drive the
                   grocery list, or discard and try again. Generating again
                   replaces this draft.

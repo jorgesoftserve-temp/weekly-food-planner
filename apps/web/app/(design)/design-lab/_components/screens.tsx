@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { SearchMock } from './search-mock'
-import { RecipeDetailMock } from './recipe-detail-mock'
 import { RecipeCookMock } from './recipe-cook-mock'
 import { RecipeCreateMock } from './recipe-create-mock'
 import { MenuMock } from './menu-mock'
@@ -16,8 +15,7 @@ export type Screen = { key: string; label: string; render: () => ReactNode }
 export const SCREENS: Screen[] = [
   // 'dashboard' promoted to the live /dashboard screen (v1.8 Phase 3) — mock retired.
   { key: 'search', label: 'Search', render: () => <SearchMock /> },
-  // 'recipes' promoted to the live /recipes screen (v1.8 Phase 3) — mock retired.
-  { key: 'recipe', label: 'Recipe detail', render: () => <RecipeDetailMock /> },
+  // 'recipes' + 'recipe' (detail) promoted to live (v1.8 Phase 3) — mocks retired.
   { key: 'recipe-cook', label: 'Cook mode', render: () => <RecipeCookMock /> },
   { key: 'recipe-create', label: 'New recipe', render: () => <RecipeCreateMock /> },
   { key: 'menu', label: 'Weekly menu', render: () => <MenuMock /> },

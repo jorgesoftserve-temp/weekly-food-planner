@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { resolveRecipeIcon } from '../../dashboard/_components/recipe-icon'
+import { resolveRecipeIcon } from '@/lib/recipe-icon'
 
 // Difficulty badge tint mapping — uses only semantic token classes.
 const DIFFICULTY_CLASS: Record<string, string> = {

@@ -25,10 +25,10 @@ type ViewportKey = (typeof VIEWPORTS)[number]['key']
 // inherit those dark tokens. `.theme-light` (design-lab.css) re-asserts the
 // light token set locally, so both previews are correct regardless of OS theme.
 const DesignLabPage = () => {
-  const [screen, setScreen] = useState<string>('dashboard')
+  const [screen, setScreen] = useState<string>(SCREENS[0]?.key ?? '')
   const [dark, setDark] = useState(false)
   const [viewport, setViewport] = useState<ViewportKey>('fit')
-  const active = SCREENS.find((s) => s.key === screen) ?? SCREENS[0]!
+  const active = SCREENS.find((s) => s.key === screen) ?? SCREENS[0]
 
   // Measure the available width so device frames wider than the page scale down
   // to fit (the iframe keeps its real px width, so breakpoints stay honest).
@@ -47,15 +47,31 @@ const DesignLabPage = () => {
   const scale = vp.width && canvasWidth ? Math.min(1, canvasWidth / vp.width) : 1
   const frameSrc = `/design-lab/frame?screen=${screen}&dark=${dark ? '1' : '0'}`
 
+  // The harness is kept permanently but the registry is empty between releases
+  // (all mocks promoted + retired). Show a calm placeholder instead of crashing.
+  if (!active) {
+    return (
+      <div className="mx-auto flex min-h-[60dvh] max-w-2xl flex-col items-center justify-center gap-3 p-6 text-center">
+        <h1 className="text-lg font-semibold tracking-tight">Design lab</h1>
+        <p className="text-sm text-muted-foreground">
+          No mocks are registered right now — every screen has been promoted to
+          the live app. The harness (layout, viewport toggle, frame, and the
+          shared mock toolkit) is kept for the next version. Add screens in{' '}
+          <code className="rounded bg-muted px-1 py-0.5">_components/screens.tsx</code>.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
       {/* Control bar */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">Design lab — v1.8 cozy redesign</h1>
+            <h1 className="text-lg font-semibold tracking-tight">Design lab</h1>
             <p className="text-sm text-muted-foreground">
-              Proposed direction: Airbnb-warm, card-forward, soft-rounded. Mock data only.
+              Reviewable mock harness — Airbnb-warm, card-forward, soft-rounded. Mock data only.
             </p>
           </div>
           <div className="flex items-center gap-2">

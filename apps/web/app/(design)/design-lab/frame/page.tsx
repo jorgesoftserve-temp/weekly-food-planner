@@ -18,13 +18,21 @@ import { LabNavProvider } from '../_components/lab-nav'
 const FrameContent = () => {
   const params = useSearchParams()
   const dark = params.get('dark') === '1'
-  const [screen, setScreen] = useState<string>(() => findScreen(params.get('screen')).key)
+  const [screen, setScreen] = useState<string>(
+    () => findScreen(params.get('screen'))?.key ?? '',
+  )
   const active = findScreen(screen)
 
   return (
     <LabNavProvider value={setScreen}>
       <div className={cn('min-h-screen bg-muted/40 p-4', dark ? 'dark' : 'theme-light')}>
-        {active.render()}
+        {active ? (
+          active.render()
+        ) : (
+          <p className="p-6 text-sm text-muted-foreground">
+            No mocks registered.
+          </p>
+        )}
       </div>
     </LabNavProvider>
   )

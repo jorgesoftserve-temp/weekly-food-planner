@@ -1,31 +1,18 @@
 import type { ReactNode } from 'react'
-import { RecipeCookMock } from './recipe-cook-mock'
-import { ConfirmEmailMock, LoginMock, SignupMock } from './auth-mock'
 
 // Single source of truth for the design-lab screen set. Shared by the control
 // surface (page.tsx) and the chrome-less render target (frame/page.tsx), so the
 // viewport-toggle iframe and the inline preview always show the same screens.
 export type Screen = { key: string; label: string; render: () => ReactNode }
 
-export const SCREENS: Screen[] = [
-  // All v1.8 screens were promoted to the live app (Phase 3) and their mocks
-  // retired: dashboard, recipes, recipe (detail), recipe-create, menu,
-  // menu-create, grocery, members, profile (→ live /settings).
-  //
-  // Search was promoted to the live /search route (v1.9) and its mock retired.
-  // Cook mode is also live (/menu cook Sheet); its mock is kept here only until
-  // the live feature is reviewed against it, then it too retires.
-  { key: 'recipe-cook', label: 'Cook mode', render: () => <RecipeCookMock /> },
-  // Cozy auth mocks (v1.9 Part C) — the reviewable target before the live
-  // (auth) pages are promoted; retired once each is promoted.
-  { key: 'login', label: 'Login', render: () => <LoginMock /> },
-  { key: 'signup', label: 'Sign up', render: () => <SignupMock /> },
-  {
-    key: 'confirm-email',
-    label: 'Confirm email',
-    render: () => <ConfirmEmailMock />,
-  },
-]
+// All v1.8 + v1.9 mocks have been promoted to the live app and retired:
+// dashboard, recipes, recipe (detail/create), menu, menu-create, grocery,
+// members, profile (→ /settings), search, cook mode, and the auth screens
+// (login / signup / confirm-email). The registry is intentionally EMPTY now —
+// /design-lab is kept as a permanent, reusable harness (its layout, control
+// surface, chrome-less frame, and the shared mock toolkit under _components/),
+// ready for the next version's mocks. Add new mocks here to bring it back.
+export const SCREENS: Screen[] = []
 
-export const findScreen = (key: string | null): Screen =>
-  SCREENS.find((s) => s.key === key) ?? SCREENS[0]!
+export const findScreen = (key: string | null): Screen | undefined =>
+  SCREENS.find((s) => s.key === key) ?? SCREENS[0]

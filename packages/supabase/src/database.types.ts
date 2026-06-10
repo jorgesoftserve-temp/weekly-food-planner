@@ -347,6 +347,8 @@ export type Database = {
       }
       menu_slots: {
         Row: {
+          cooked_at: string | null
+          cooked_by: string | null
           day_of_week: Database["public"]["Enums"]["day_of_week"]
           id: string
           is_overridden: boolean
@@ -358,6 +360,8 @@ export type Database = {
           target_member_id: string | null
         }
         Insert: {
+          cooked_at?: string | null
+          cooked_by?: string | null
           day_of_week: Database["public"]["Enums"]["day_of_week"]
           id?: string
           is_overridden?: boolean
@@ -369,6 +373,8 @@ export type Database = {
           target_member_id?: string | null
         }
         Update: {
+          cooked_at?: string | null
+          cooked_by?: string | null
           day_of_week?: Database["public"]["Enums"]["day_of_week"]
           id?: string
           is_overridden?: boolean
@@ -380,6 +386,13 @@ export type Database = {
           target_member_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "menu_slots_cooked_by_fkey"
+            columns: ["cooked_by"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "menu_slots_menu_id_fkey"
             columns: ["menu_id"]

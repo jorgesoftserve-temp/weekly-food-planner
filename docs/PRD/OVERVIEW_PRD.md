@@ -211,7 +211,11 @@ The project is accepted when:
   - **v2.1** — smarter generation (inclusive preferences + per-generation overrides, multi-timeframe
     recipes), addons + on-the-fly cook mode, and the **bulk recipe-create primitive**.
   - **v2.2** — Extras (manual / non-food grocery lines).
-  - **v2.3** — **Hosting & Deployment** (managed Supabase + Vercel + CI) so v2 + v3 ship deployable for beta.
+  - **v2.3** — **demo-lab + Bruno tooling**: a production-gated, mock walkthrough harness to demo the whole
+    product to prospects (with the version it represents shown on top), plus a kept-current API test
+    collection and a one-call dev-onboarding seed.
+  - **v2.4** — **Hosting & Deployment** (managed Supabase + Vercel + CI + an agentic release pipeline) so
+    v2 + v3 ship deployable for beta.
 - **v3 — AI menu & recipe import + i18n** ([v3](../../.claude/plans/v3.md)): hand the app a nutritionist's
   list / weekly plan (ES or EN, via a fillable template or pasted text); it reviews the workspace, dedups,
   and generates a menu + the backing recipes (AI suggests, the human confirms; the engine stays

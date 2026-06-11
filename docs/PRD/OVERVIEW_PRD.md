@@ -200,14 +200,15 @@ The project is accepted when:
 
 # 9. Post-MVP roadmap
 
-> The 26-Jun-2026 MVP boundary (§6) is unchanged. The items below are **planned**, not shipped; each
-> release is specified in its own plan under [`.claude/plans/`](../../.claude/plans/) and PRD'd
-> section-by-section as it is built. This list is the release line, not feature detail.
+> The 26-Jun-2026 MVP boundary (§6) is unchanged. The items below are **planned**, not shipped —
+> **except v2.0, which shipped 2026-06-11**; each release is specified in its own plan under
+> [`.claude/plans/`](../../.claude/plans/) and PRD'd section-by-section as it is built. This list is the
+> release line, not feature detail.
 
 **Committed release line**
 - **v2 — Execution & Pantry + platform readiness** ([v2 epic](../../.claude/plans/v2.md)):
-  - **v2.0** — inventory/pantry, shopping confirmation + completeness, cook-status, leftovers, menu-level
-    ingredient substitution, all-members/per-member views, food groups.
+  - **v2.0** *(shipped 2026-06-11)* — inventory/pantry, shopping confirmation + completeness, cook-status,
+    leftovers, menu-level ingredient substitution, all-members/per-member views, food groups.
   - **v2.1** — smarter generation (inclusive preferences + per-generation overrides, multi-timeframe
     recipes), addons + on-the-fly cook mode, and the **bulk recipe-create primitive**.
   - **v2.2** — Extras (manual / non-food grocery lines).

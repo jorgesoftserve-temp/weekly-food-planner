@@ -22,13 +22,14 @@ export const GroceryViewModePicker = ({
     <span className="text-xs font-medium text-muted-foreground">View</span>
     <div
       className="flex flex-wrap gap-2"
-      role="group"
+      role="radiogroup"
       aria-label="Grocery view mode"
     >
       <button
         type="button"
+        role="radio"
         onClick={() => onChange('everyone')}
-        aria-pressed={mode === 'everyone'}
+        aria-checked={mode === 'everyone'}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition',
           mode === 'everyone'
@@ -41,8 +42,9 @@ export const GroceryViewModePicker = ({
       </button>
       <button
         type="button"
+        role="radio"
         onClick={() => onChange('by-member')}
-        aria-pressed={mode === 'by-member'}
+        aria-checked={mode === 'by-member'}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition',
           mode === 'by-member'

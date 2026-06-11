@@ -210,11 +210,14 @@ const SlotCard = ({
           ) : null}
           {overrideCount > 0 ? (
             <span
-              title={`${overrideCount} ingredient substitution${overrideCount === 1 ? '' : 's'}`}
-              className="flex items-center gap-0.5 rounded-full bg-success-tint px-1.5 py-0.5 text-[10px] font-medium uppercase text-success"
+              className="flex items-center gap-0.5 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground"
             >
               <ArrowLeftRight className="size-2.5" aria-hidden />
               Substituted
+              <span className="sr-only">
+                {' '}— {overrideCount} ingredient substitution
+                {overrideCount === 1 ? '' : 's'}
+              </span>
             </span>
           ) : null}
           {alert && cookStatus === 'planned' ? (
@@ -541,6 +544,9 @@ export const MenuView = ({
                     (slot.cooked_at ? 'cooked' : 'planned')
                   }
                   onSetCookStatus={onSetCookStatus}
+                  onOpenReconcile={onOpenReconcile}
+                  onOpenSubstitute={onOpenSubstitute}
+                  overrideCount={overrideCountBySlotId?.[slot.id] ?? 0}
                 />
               ))}
               {editable && onAddSlot ? (

@@ -51,7 +51,6 @@ import {
 import { EmptyState } from '@/components/empty-state'
 import { PageHeader } from '@/components/page-header'
 import { useActiveWorkspace } from '@/components/workspace-provider'
-import { cn } from '@/lib/utils'
 import { useSupabase } from '@/lib/hooks/use-supabase'
 import {
   downloadMenuExport,
@@ -475,13 +474,17 @@ const GroceryPage = () => {
                               </span>
                             ) : null}
                             <span className="flex shrink-0 flex-col items-end">
+                              {/* The required quantity is always the headline
+                                  number — never lowered or struck through
+                                  (PRODUCT_PRD §17). On-hand coverage is shown as
+                                  a secondary annotation below. */}
                               <span
-                                className={cn(
-                                  'text-sm tabular-nums',
+                                className="text-sm font-medium tabular-nums text-foreground"
+                                aria-label={
                                   item.fullyCovered
-                                    ? 'text-muted-foreground line-through'
-                                    : 'text-muted-foreground',
-                                )}
+                                    ? `${formatQuantity(qty)} ${item.unit} required — fully covered by pantry`
+                                    : undefined
+                                }
                               >
                                 {formatQuantity(qty)} {item.unit}
                               </span>

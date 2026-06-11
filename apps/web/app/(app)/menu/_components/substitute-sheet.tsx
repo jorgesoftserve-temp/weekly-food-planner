@@ -76,6 +76,9 @@ export const SubstituteSheet = ({
   const [selectedOriginal, setSelectedOriginal] = useState<string | null>(null)
   const [substituteId, setSubstituteId] = useState<string | null>(null)
   const [qtyText, setQtyText] = useState('')
+  // Inline form error (invalid qty, or the 422 allergen/exclusion rejection from
+  // the route) — shown in the sheet so the user can fix it without it closing.
+  const [formError, setFormError] = useState<string | null>(null)
 
   const recipeQuery = useRecipeDetail({
     supabase,
@@ -100,6 +103,7 @@ export const SubstituteSheet = ({
       setSelectedOriginal(null)
       setSubstituteId(null)
       setQtyText('')
+      setFormError(null)
     }
   }, [open, slot?.id])
 
@@ -123,15 +127,23 @@ export const SubstituteSheet = ({
     const existing = overridesByOriginal[originalId]
     setSubstituteId(existing?.substitute_ingredient_id ?? null)
     setQtyText(existing?.quantity != null ? String(existing.quantity) : '')
+    setFormError(null)
+  }
+
+  const chooseSubstitute = (id: string) => {
+    setSubstituteId(id)
+    // Clear a prior allergen/validation error — the user is changing the choice.
+    setFormError(null)
   }
 
   const handleApply = async () => {
     if (!slot || !selectedOriginal || !substituteId) return
     const qty = qtyText.trim() === '' ? null : Number.parseFloat(qtyText)
     if (qty != null && (!Number.isFinite(qty) || qty < 0)) {
-      notifyError('Invalid quantity', 'Enter a number of 0 or more, or leave it blank.')
+      setFormError('Enter a quantity of 0 or more, or leave it blank to keep the recipe amount.')
       return
     }
+    setFormError(null)
     try {
       await setMutation.mutateAsync({
         slotId: slot.id,
@@ -146,10 +158,9 @@ export const SubstituteSheet = ({
       )
       onOpenChange(false)
     } catch (err) {
-      notifyError(
-        'Could not substitute',
-        err instanceof Error ? err.message : 'Please try again.',
-      )
+      // Keep the sheet open and surface the reason inline (e.g. the 422
+      // allergen/exclusion rejection) so the user can pick another substitute.
+      setFormError(err instanceof Error ? err.message : 'Could not substitute. Please try again.')
     }
   }
 
@@ -201,7 +212,11 @@ export const SubstituteSheet = ({
                 <span className="text-xs font-medium text-muted-foreground">
                   Which ingredient?
                 </span>
-                <div className="flex flex-col gap-1" role="list">
+                <div
+                  className="flex flex-col gap-1"
+                  role="group"
+                  aria-label="Recipe ingredients"
+                >
                   {recipe.recipe_ingredients.map((ri) => {
                     const isSelected = ri.ingredient_id === selectedOriginal
                     const existing = overridesByOriginal[ri.ingredient_id]
@@ -209,7 +224,6 @@ export const SubstituteSheet = ({
                       <button
                         key={ri.id}
                         type="button"
-                        role="listitem"
                         aria-pressed={isSelected}
                         onClick={() => chooseOriginal(ri.ingredient_id)}
                         className={cn(
@@ -263,7 +277,7 @@ export const SubstituteSheet = ({
                           <button
                             key={s.ingredient_id}
                             type="button"
-                            onClick={() => setSubstituteId(s.ingredient_id)}
+                            onClick={() => chooseSubstitute(s.ingredient_id)}
                             aria-pressed={isSel}
                             className={cn(
                               'flex items-start gap-2 rounded-lg border px-3 py-2 text-left text-sm transition',
@@ -295,7 +309,7 @@ export const SubstituteSheet = ({
                     </span>
                     <IngredientPicker
                       value={substituteId}
-                      onChange={(next) => setSubstituteId(next)}
+                      onChange={(next) => chooseSubstitute(next)}
                     />
                   </div>
 
@@ -311,7 +325,12 @@ export const SubstituteSheet = ({
                       step="any"
                       inputMode="decimal"
                       value={qtyText}
-                      onChange={(e) => setQtyText(e.target.value)}
+                      onChange={(e) => {
+                        setQtyText(e.target.value)
+                        if (formError) setFormError(null)
+                      }}
+                      aria-invalid={formError != null}
+                      aria-describedby={formError ? 'sub-error' : undefined}
                       placeholder={
                         selectedIngredient
                           ? `${toNumber(selectedIngredient.quantity)} (keep)`
@@ -325,6 +344,16 @@ export const SubstituteSheet = ({
             </>
           )}
         </div>
+
+        {formError ? (
+          <p
+            id="sub-error"
+            role="alert"
+            className="pt-3 text-sm text-destructive"
+          >
+            {formError}
+          </p>
+        ) : null}
 
         <SheetFooter className="flex-row gap-2 pt-4">
           {hasExistingOverride ? (

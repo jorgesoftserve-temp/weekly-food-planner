@@ -34,11 +34,12 @@ export const MenuMemberPicker = ({
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs font-medium text-muted-foreground">View menu for</span>
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Menu member view">
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Menu member view">
         <button
           type="button"
+          role="radio"
           onClick={() => onChange(null)}
-          aria-pressed={selectedId === null}
+          aria-checked={selectedId === null}
           className={chip(selectedId === null)}
         >
           <Users className="size-3.5" aria-hidden />
@@ -50,8 +51,9 @@ export const MenuMemberPicker = ({
             <button
               key={memberId}
               type="button"
+              role="radio"
               onClick={() => onChange(memberId)}
-              aria-pressed={selectedId === memberId}
+              aria-checked={selectedId === memberId}
               className={chip(selectedId === memberId)}
             >
               {name.split(' ')[0]}

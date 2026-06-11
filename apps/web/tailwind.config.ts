@@ -18,8 +18,18 @@ const config: Config = {
   	},
   	extend: {
   		fontFamily: {
-  			sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-  			serif: ['var(--font-serif)', 'ui-serif', 'Georgia', 'serif']
+  			sans: [
+  				'var(--font-sans)',
+  				'ui-sans-serif',
+  				'system-ui',
+  				'sans-serif'
+  			],
+  			serif: [
+  				'var(--font-serif)',
+  				'ui-serif',
+  				'Georgia',
+  				'serif'
+  			]
   		},
   		colors: {
   			'user-accent': {
@@ -36,6 +46,15 @@ const config: Config = {
   				DEFAULT: 'hsl(var(--warning))',
   				foreground: 'hsl(0 0% 100%)',
   				tint: 'hsl(var(--warning-tint))'
+  			},
+  			purchase: {
+  				DEFAULT: 'hsl(var(--purchase))',
+  				tint: 'hsl(var(--purchase-tint))'
+  			},
+  			'tag-neutral': {
+  				DEFAULT: 'hsl(var(--tag-neutral))',
+  				tint: 'hsl(var(--tag-neutral-tint))',
+  				border: 'hsl(var(--tag-neutral-border))'
   			},
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',

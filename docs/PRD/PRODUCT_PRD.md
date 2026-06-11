@@ -100,6 +100,8 @@ Sensible defaults per `age_category` ship with the system; members may override 
 
 Recipes are workspace-scoped: every member of a workspace can view its recipes; create/edit/delete is restricted to `creator` and `admin` roles. Recipes are **not** shared across workspaces in MVP.
 
+**Note (v2.0):** Per-menu ingredient substitution ([§20](#20-menu-level-ingredient-substitution-v20)) allows swapping an ingredient on an accepted menu for that menu only. The stored recipe is never altered by a substitution.
+
 ## Recipe CRUD
 Users with the right role must be able to:
 - Create recipes
@@ -417,7 +419,7 @@ Both views are designed with a print/PDF-friendly layout and typography. PDF exp
 
 # 11. Label suggestions and corrections
 
-Several user-facing fields use extensible label sets backed by autocomplete: `cuisine` on recipes, dietary restrictions and allergies on members, dietary tags on recipes. All four follow the same suggestion UX — see [DATABASE_PRD.md §5.2](./DATABASE_PRD.md).
+Several user-facing fields use extensible label sets backed by autocomplete: `cuisine` on recipes, dietary restrictions and allergies on members, dietary tags on recipes, and **(v2.0)** `food_group` on ingredients. All five follow the same suggestion UX — see [DATABASE_PRD.md §5.2](./DATABASE_PRD.md).
 
 ## 11.1 Suggestion behavior
 
@@ -507,3 +509,229 @@ A dedicated **`/search` route** delivers **recipes-first** search, with the surf
 - **Cross-module search** over Weekly menu / Grocery / Members (the "Soon" tabs), which would introduce a workspace-scoped search endpoint — see [ARCHITECTURE_PRD.md §9](./ARCHITECTURE_PRD.md).
 
 No AI / semantic search — this is deterministic keyword + filter matching over existing tables. AI-assisted features remain out of scope until v3.0.
+
+---
+
+# 15. Inventory **(v2.0)**
+
+> Status: planned (v2.0). Implementation: [ARCHITECTURE_PRD.md §17](./ARCHITECTURE_PRD.md).
+
+The workspace maintains a shared pantry (`inventory_items`) tracking ingredients on hand.
+
+## 15.1 Item shape
+
+Each inventory entry records:
+
+- `ingredient_id` — reference to the ingredient catalog.
+- `quantity` — numeric (≥ 0); decremented on partial-spoilage or consumption.
+- `unit` — matches the unit enum from [DATABASE_PRD.md §5.1](./DATABASE_PRD.md).
+- `expiration_date` — optional; may be set manually or defaulted on inflow (see §19 — Leftovers).
+- `source` — how the item entered inventory: `manual` (user-entered), `purchase` (spilled over from a finalized shopping session), `leftover` (emitted when a slot is marked cooked — the prepared dish surplus), or `cook_remainder` (raw-ingredient shortfall from cook reconciliation — see §18.3 and §19). Display tags are derived from `source` at read time; see §15.4.
+- `source_menu_id` / `source_slot_id` — optional back-references when `source` is `purchase`, `leftover`, or `cook_remainder`.
+- `label` — optional free-text annotation (e.g. "organic", "freezer").
+- `is_consumed` — soft-consume flag; a consumed item stays in the table for audit but is excluded from on-hand calculations.
+
+## 15.2 Partial-spoilage decrement
+
+When some of a batch has spoiled before the rest is used ("I have 2 rotten of 5 tomatoes"), the user decrements the `quantity` field directly — no event log in v2.0. The row's quantity reaches 0 when everything is consumed or has spoiled; at that point the item can be marked `is_consumed = true` or deleted.
+
+## 15.3 Inflow sources
+
+- **Manual** — user creates an entry from the inventory page.
+- **Purchase** — when a shopping session is finalized (see §16), purchased quantities that exceed the week's requirements are spilled into `inventory_items(source='purchase')`.
+- **Leftover** — when a slot is marked `cooked`, the system may emit leftover entries (see §19).
+
+## 15.4 Display tags (derived from `source`) **(v2.0)**
+
+The internal `inventory_source` enum is never shown to users directly. Display labels are **derived at read time**:
+
+| Internal `source` | Normal display tag | Notes |
+|---|---|---|
+| `manual` | **Pantry** | User-entered stock |
+| `purchase` | **Menu** (while menu week is current) | See transition rule below |
+| `purchase` | **Pantry** (once menu week has ended) | General stock after the linked week passes |
+| `leftover` | **Leftover** | Prepared-dish surplus from a cooked slot |
+| `cook_remainder` | **Pantry** | Raw-ingredient remainder from cook reconciliation (see §19) |
+
+**Menu→Pantry transition rule:** a `purchase` item (`source='purchase'`, `source_menu_id` set) displays as **Menu** only while its linked menu's week is current (i.e. `menus.week_start_date + menus.duration_days > today`). Once that week has ended, the same row displays as **Pantry** — the purchased ingredient is now general household stock. This is a **read-side / lazy derivation**: no background cron job, no column update on the `inventory_items` row. The derivation is analogous to the lazy `expireLeftovers` pass — it evaluates against `menus.week_start_date` + `menus.duration_days` at the time inventory is loaded. An optional `released_to_pantry_at` timestamp column is **deferred** as a persistence option (useful if persistence is needed later for audit or query performance); it is **not required** for v2.0 correctness, which relies purely on the linked menu's date fields. See [DATABASE_PRD.md §6.18](./DATABASE_PRD.md) and [ARCHITECTURE_PRD.md §17](./ARCHITECTURE_PRD.md).
+
+---
+
+# 16. Shopping confirmation & completeness **(v2.0)**
+
+> Status: planned (v2.0). Schema: [DATABASE_PRD.md §6.18](./DATABASE_PRD.md).
+
+Each accepted menu can have at most one **active shopping session**. The session tracks how much of the grocery list was actually acquired.
+
+## 16.1 Session lifecycle
+
+1. User opens the shopping session for the active menu — creates a `shopping_sessions` row (`status = in_progress`).
+2. For each grocery item, the user marks an `acquired_quantity` and sets a per-item `status` (`pending` → `acquired` / `partial` / `skipped`). Recorded in `shopping_item_status`.
+3. Grouping by `food_group` is available as an optional view mode (read-side `GROUP BY ingredients.food_group` — no recompute change).
+4. **Finalize** — the user closes the session. The server:
+   - Computes `completeness` (quantity-weighted: sum of acquired quantities / sum of required quantities, clamped 0–1).
+   - Sets `status` to `complete` (completeness ≥ 0.90), `incomplete` (0.30–0.89), or a bare record when < 0.30 (barely-shopped).
+   - Spills purchased-but-unused quantities (acquired > required for a given item) as `inventory_items(source='purchase')`.
+
+## 16.2 Completeness thresholds
+
+| Completeness | Label |
+|---|---|
+| ≥ 90% | Complete |
+| 30%–89% | Incomplete |
+| < 30% | Barely shopped |
+
+---
+
+# 17. Incomplete-shopping alerts **(v2.0)**
+
+> Status: planned (v2.0). No table — derived state. See [ARCHITECTURE_PRD.md §17](./ARCHITECTURE_PRD.md).
+
+When shopping is `incomplete`, the system surfaces **in-app alerts** identifying which recipes of the current week are at risk because of missing ingredients.
+
+- Alerts are **derived, not persisted** — computed on read by `deriveShoppingAlertsForMenu` from the session's `shopping_item_status` and a reverse `ingredient → menu_slot` map (via `recipe_ingredients`, after applying any ingredient overrides from §23).
+- Only slots that are **not yet marked cooked** are included in the at-risk set — cooked slots have already consumed their ingredients.
+- **Degrades gracefully**: when `slot_completions` data is absent (cook-status feature not yet used), all slots are treated as `planned`.
+- Surfaced as badges on the menu/slot view; see [ARCHITECTURE_PRD.md §17](./ARCHITECTURE_PRD.md) for the derivation logic.
+
+---
+
+# 18. Cook-status on ongoing menus **(v2.0)**
+
+> Status: planned (v2.0). Schema: [DATABASE_PRD.md §6.20](./DATABASE_PRD.md).
+
+**Distinct from the v1.9 Cook mode quick-toggle** (`menu_slots.cooked_at`/`cooked_by`): Cook mode is the hands-on recipe checklist with a "Mark as cooked" stamp on the slot row. `slot_completions` (v2.0) is the richer execution record for the post-accept lifecycle — it drives leftovers and incomplete-shopping alerts, and has a three-state machine.
+
+## 18.1 States
+
+Each slot's execution state is one of:
+
+| State | Meaning |
+|---|---|
+| `planned` | Not yet acted on (default — absent row means `planned`) |
+| `cooked` | Slot was cooked; ingredients consumed; may emit leftover entries |
+| `skipped` | Slot was not cooked; ingredients are NOT consumed |
+
+A skipped slot's ingredients remain available in inventory; they do not flow into leftovers.
+
+## 18.2 Determinism invariant
+
+Cook-status is stored in a **separate `slot_completions` table** (keyed by `menu_slot_id`), not as a column on `menu_slots`. This structural separation makes cook-status **invisible to `accepted_seed`** — the seed hashes only slot recipe-tuples; a change to `slot_completions` cannot alter it. The engine never reads `slot_completions`.
+
+## 18.3 Cook-time ingredient reconciliation **(v2.0)**
+
+When a slot transitions to `cooked`, an optional **reconciliation step** opens over the slot's recipe ingredients:
+
+- The slot recipe's `recipe_ingredients` are listed with their **planned quantity** as the baseline.
+- The user adjusts the **actually used** quantity per ingredient.
+- Any **shortfall** (`planned − used > 0`) is offered as a raw-ingredient **Pantry** leftover row — the ingredient the user still has on hand (e.g. "used 4 of 5 tomatoes → 1 tomato to pantry"). See §19.
+- **Default: used == planned** (nothing left over). The user can skip reconciliation entirely; no rows are emitted.
+
+This step is entirely **post-accept**: it only writes `inventory_items` rows. It **never** reads or writes the constraint engine, `accepted_seed`, or `recomputeGroceryListsForMenu`. The determinism contract is fully preserved. See [ARCHITECTURE_PRD.md §17](./ARCHITECTURE_PRD.md) for the isolation guarantee.
+
+---
+
+# 19. Leftovers **(v2.0)**
+
+> Status: planned (v2.0). Depends on §15 (Inventory) and §18 (Cook-status).
+
+Two distinct kinds of leftover both flow into `inventory_items` when a slot is marked `cooked`. They share per-row expiry and consumption mechanics but differ in origin and display.
+
+## 19.1 Two kinds of leftovers
+
+### 19.1.1 Cooked-food surplus (`source = 'leftover'`)
+
+When a slot is marked `cooked`, the user may record **leftover portions of the prepared dish** — the food that was cooked but not eaten. These rows carry `source = 'leftover'`, an optional `label` (e.g. "pasta Bolognese — freezer"), `source_slot_id`, and `source_menu_id`, and are displayed under the **Leftover** tag.
+
+### 19.1.2 Raw-ingredient remainders (`source = 'cook_remainder'`) **(v2.0)**
+
+From the cook-time reconciliation step (§18.3), when `used < planned` for a recipe ingredient, the shortfall row is a **raw-ingredient Pantry leftover** — the physical ingredient still on the shelf (e.g. "1 tomato remaining after using 4 of 5"). These rows are displayed under the **Pantry** tag (not Leftover) because they are uncooked stock.
+
+**Recommended implementation:** a dedicated `inventory_source` value `cook_remainder` (see [DATABASE_PRD.md §5.1](./DATABASE_PRD.md)) so the origin is always queryable without inspecting provenance columns. The alternative — reusing `source = 'manual'` with `source_slot_id` set — is feasible but makes the origin ambiguous at a glance; `cook_remainder` is preferred. Both options share the same provenance columns (`source_slot_id`, `source_menu_id`) already present on `inventory_items`.
+
+## 19.2 Per-leftover expiry
+
+Each leftover row (either kind) carries its own `expiration_date`, computed per item at creation:
+
+```
+expiration_date = cooked_at::date + COALESCE(ingredients.max_storage_days, workspaces.leftover_max_days)
+```
+
+- `ingredients.max_storage_days` is the ingredient-level default (already on the catalog).
+- `workspaces.leftover_max_days` is the workspace fallback (new column, default 3 days — see [DATABASE_PRD.md §6.1](./DATABASE_PRD.md)).
+- `leftover_max_days` is **only the default**; each leftover row's `expiration_date` is **independently editable** by any workspace member after creation.
+
+## 19.3 Consumption and expiry
+
+- **Manual**: a member marks a leftover `is_consumed = true` (eaten) or decrements its `quantity` (partial use).
+- **Auto-expire on read**: when inventory is loaded, `expireLeftovers` evaluates each leftover row against its own `expiration_date` and marks expired rows consumed. No background cron in v2.0 — expiry is lazily evaluated.
+
+---
+
+# 20. Pantry-aware grocery view **(v2.0)**
+
+> Status: planned (v2.0). Pure read-side — `grocery_items` are never mutated.
+
+The grocery list view gains an **inventory annotation layer**. For each grocery line:
+
+- The **full required quantity** is always shown (never hidden or reduced).
+- An **on-hand annotation** is appended when the inventory contains matching items: *"you have N in inventory"*.
+- A **suggested-to-buy** quantity is derived: `max(0, required - onHand)`.
+- Example: **"5 tomato — you have 2 in inventory · suggested to buy 3"**.
+
+The user may choose to buy all 5 or just the suggested 3; the choice is theirs. The annotation is a shopping aid, not a decision.
+
+An optional **collapse-fully-covered** toggle can hide lines where the on-hand quantity meets or exceeds the requirement. The default shows all lines with both numbers visible.
+
+`grocery_items` rows are **never written** by this feature. The annotation is produced by `annotateWithInventory` in `apps/web/lib/grocery-filter.ts`, which composes after `applyShopForFilter` — both are pure presentation transforms. See [ARCHITECTURE_PRD.md §17](./ARCHITECTURE_PRD.md).
+
+---
+
+> **§21 — Community recipes** is authored in [v2.1](../../.claude/plans/v2.1.md) (addons + smarter generation). Not authored here.
+
+---
+
+# 22. Consolidated all-members grocery view **(v2.0)**
+
+> Status: planned (v2.0). Pure read-side aggregation — no schema change.
+
+In addition to the existing shared + per-member lists and the shop-for subset picker, the grocery view gains a **"Everyone / whole household"** mode that unions the shared list with every per-member list into one consolidated list of totals the household would actually buy.
+
+- Keyed by `(ingredient_id, unit)`; quantities summed across all buckets; `scheduled_purchase_day` folded to the earliest occurrence.
+- Surfaces as a view mode in the shop-for picker: **"Everyone"** (consolidated) / **"By member"** (the existing subset picker).
+- Implemented by `aggregateHouseholdGrocery` in `apps/web/lib/grocery-filter.ts` — a pure transform that composes cleanly with `applyShopForFilter` and `annotateWithInventory`.
+- No recompute or grocery table change; entirely read-side.
+
+---
+
+# 23. Menu-level ingredient substitution **(v2.0)**
+
+> Status: planned (v2.0). Schema: [DATABASE_PRD.md §6.21](./DATABASE_PRD.md). Architecture: [ARCHITECTURE_PRD.md §19](./ARCHITECTURE_PRD.md).
+
+On an accepted menu, any ingredient on any slot may be substituted **for that menu only** (e.g. swap red tomatoes → green tomatoes for this week's accepted plan).
+
+## 23.1 Rules
+
+- The **stored recipe is not changed** — the substitution is a per-slot override on the menu.
+- The **grocery list reflects the substitution** (after recompute).
+- The **menu's `accepted_seed` and engine inputs are unchanged** — substitutions are menu state, not recipe state, and are structurally invisible to the seed.
+- Suggested substitutes are sourced from the recipe's existing `recipe_ingredients.substitutions` JSONB catalog (currently unused by the engine); free substitution from the ingredient catalog is also allowed.
+- A substitute is **validated against the slot eaters' allergies and exclusive restrictions** before being accepted — reuses the engine's allergen/exclusion check (`recipeViolatesAllergies` / `recipeHasExcludedIngredient`) at the route layer. A substitute that introduces an allergen or violates a restriction for any eater of that slot returns 422.
+- Quantity and unit may optionally be adjusted alongside the ingredient swap.
+
+## 23.2 Grocery recompute
+
+After a successful override write, `recomputeGroceryListsForMenu` is re-run. The recompute applies the per-slot override map after loading `recipe_ingredients` — replacing `(ingredient_id, quantity?, unit?)` per slot before aggregation. This is the one change to recompute's inputs for v2.0; the recompute remains inventory-agnostic and engine-agnostic (overrides are menu state, not inventory state).
+
+---
+
+# 24. Per-member menu view **(v2.0)**
+
+> Status: planned (v2.0). Pure read-side filter — no schema change.
+
+The weekly menu screen gains a **member/household toggle** mirroring the grocery shop-for picker: a member selector that filters the rendered slots to those targeting the selected member (or "Everyone" / whole household for all slots).
+
+- Filters rendered slots by `target_member_id`; household = all slots.
+- URL-param driven (`?menu_for=uuid` or absent for household), analogous to `?shop_for=` on the grocery page.
+- Implemented as a new `menu-member-picker.tsx` component under `apps/web/app/(app)/menu/_components/`, composed alongside the existing `menu-view.tsx`.
+- Pure read-side; no mutation of menu data.

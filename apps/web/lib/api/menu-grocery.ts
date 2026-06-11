@@ -114,10 +114,11 @@ export const recomputeGroceryListsForMenu = async ({
 
   const { data: slotRows, error: slotsErr } = await admin
     .from('menu_slots')
-    .select('recipe_id, target_member_id, day_of_week')
+    .select('id, recipe_id, target_member_id, day_of_week')
     .eq('menu_id', menuId)
   if (slotsErr) return { ok: false, detail: slotsErr.message }
   type SlotRow = {
+    id: string
     recipe_id: string
     target_member_id: string | null
     day_of_week: string
@@ -151,6 +152,41 @@ export const recomputeGroceryListsForMenu = async ({
       list.push(row)
       recipeIngsByRecipe.set(row.recipe_id, list)
       ingredientIds.add(row.ingredient_id)
+    }
+  }
+
+  // (v2.0 Phase 6) Menu-level ingredient substitution. This is the ONE change to
+  // recompute's inputs: per-slot overrides replace (ingredient_id, quantity?,
+  // unit?) for that slot's recipe ingredients before aggregation. Keyed by
+  // menu_slot_id + original_ingredient_id so the same recipe in two slots can be
+  // substituted independently. Still engine-agnostic and inventory-agnostic —
+  // overrides are post-accept menu state, structurally invisible to
+  // accepted_seed (which hashes recipe-tuples only).
+  type OverrideRow = {
+    menu_slot_id: string
+    original_ingredient_id: string
+    substitute_ingredient_id: string
+    quantity: string | number | null
+    unit: string | null
+  }
+  // Map<menuSlotId, Map<originalIngredientId, OverrideRow>>.
+  const overridesBySlot = new Map<string, Map<string, OverrideRow>>()
+  const slotIds = slots.map((s) => s.id)
+  if (slotIds.length > 0) {
+    const { data: ovRows, error: ovErr } = await admin
+      .from('menu_slot_ingredient_overrides')
+      .select(
+        'menu_slot_id, original_ingredient_id, substitute_ingredient_id, quantity, unit',
+      )
+      .in('menu_slot_id', slotIds)
+    if (ovErr) return { ok: false, detail: ovErr.message }
+    for (const row of (ovRows ?? []) as OverrideRow[]) {
+      const bySlot = overridesBySlot.get(row.menu_slot_id) ?? new Map<string, OverrideRow>()
+      bySlot.set(row.original_ingredient_id, row)
+      overridesBySlot.set(row.menu_slot_id, bySlot)
+      // The substitute is what actually lands on the grocery list, so its
+      // perishability must be loaded too.
+      ingredientIds.add(row.substitute_ingredient_id)
     }
   }
 
@@ -251,24 +287,35 @@ export const recomputeGroceryListsForMenu = async ({
       : eatersForSharedSlot
     const scaleForShared = eatersForShared / servings
     const scaleForMember = 1 / servings
+    const slotOverrides = overridesBySlot.get(slot.id)
     for (const ri of recipeIngs) {
-      const qty =
-        typeof ri.quantity === 'string'
-          ? Number.parseFloat(ri.quantity)
+      // Apply this slot's override (if any) for this ingredient: the substitute
+      // ingredient replaces the original; an override quantity/unit replaces the
+      // recipe's planned values, otherwise the recipe's are kept.
+      const override = slotOverrides?.get(ri.ingredient_id)
+      const effectiveIngredientId = override?.substitute_ingredient_id ?? ri.ingredient_id
+      const effectiveUnit = override?.unit ?? ri.unit
+      const baseQtyRaw =
+        override?.quantity != null && override.quantity !== ''
+          ? override.quantity
           : ri.quantity
-      if (!Number.isFinite(qty)) continue
+      const qty =
+        typeof baseQtyRaw === 'string'
+          ? Number.parseFloat(baseQtyRaw)
+          : baseQtyRaw
+      if (qty == null || !Number.isFinite(qty)) continue
       addToBucket({
         bucketKey: 'shared',
-        ingredientId: ri.ingredient_id,
-        unit: ri.unit,
+        ingredientId: effectiveIngredientId,
+        unit: effectiveUnit,
         quantity: qty * scaleForShared,
         dayIdx,
       })
       if (slot.target_member_id) {
         addToBucket({
           bucketKey: `m:${slot.target_member_id}`,
-          ingredientId: ri.ingredient_id,
-          unit: ri.unit,
+          ingredientId: effectiveIngredientId,
+          unit: effectiveUnit,
           quantity: qty * scaleForMember,
           dayIdx,
         })

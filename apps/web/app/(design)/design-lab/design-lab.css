@@ -40,6 +40,12 @@
   --user-accent: 351 79% 56%;
   --user-accent-strong: 351 70% 45%;
   --user-accent-tint: 351 90% 96%;
+  --warning: 34 70% 24%;
+  --purchase: 205 75% 36%;
+  --purchase-tint: 205 80% 95%;
+  --tag-neutral: 0 0% 30%;
+  --tag-neutral-tint: 0 0% 91%;
+  --tag-neutral-border: 0 0% 55%;
 }
 
 /* The gradient utilities switch via a `.dark` ANCESTOR selector (globals.css),
@@ -59,12 +65,17 @@
   --shadow-lg: 0 8px 24px hsl(20 30% 12% / 0.1), 0 16px 40px hsl(20 30% 12% / 0.1);
 
   /* Status palette (light) — moss = success/accepted, tuscan = warning/draft.
-     Scoped to the lab so we can demonstrate the fuller palette WITHOUT promoting
-     it into globals.css yet (Phase 3). Tokens only — never inline hex. */
+     --warning darkened to 34 70% 24% so small text passes 4.5:1 on --warning-tint (was 30%).
+     --purchase = ocean-blue domain-semantic token for inventory/grocery annotations. */
   --success: 114 40% 32%;
   --success-tint: 114 40% 94%;
-  --warning: 34 70% 30%;
+  --warning: 34 70% 24%;
   --warning-tint: 42 90% 90%;
+  --purchase: 205 75% 36%;
+  --purchase-tint: 205 80% 95%;
+  --tag-neutral: 0 0% 30%;
+  --tag-neutral-tint: 0 0% 91%;
+  --tag-neutral-border: 0 0% 55%;
 }
 
 [data-skin='cozy'] .dark {
@@ -77,6 +88,11 @@
   --success-tint: 114 28% 20%;
   --warning: 42 90% 70%;
   --warning-tint: 38 45% 20%;
+  --purchase: 205 80% 62%;
+  --purchase-tint: 205 45% 20%;
+  --tag-neutral: 0 0% 64%;
+  --tag-neutral-tint: 0 0% 22%;
+  --tag-neutral-border: 0 0% 44%;
 }
 
 /* Cozy card: large radius + soft layered shadow + roomy padding. */
@@ -123,4 +139,20 @@
 }
 .text-warning {
   color: hsl(var(--warning));
+}
+.bg-purchase-tint {
+  background-color: hsl(var(--purchase-tint));
+}
+.text-purchase {
+  color: hsl(var(--purchase));
+}
+/* Neutral tag — gray badge clearly visible on white card or dark card surfaces.
+   Text contrast on fill: ~7.03:1 (light), ~4.76:1 (dark).
+   Border contrast against card: ~3.33:1 (light), ~3.10:1 (dark). WCAG 1.4.11 ✓
+   Compose in Tailwind: bg-tag-neutral-tint border border-tag-neutral-border text-tag-neutral
+   Or apply this single class to the badge root. */
+.badge-neutral {
+  background-color: hsl(var(--tag-neutral-tint));
+  border: 1px solid hsl(var(--tag-neutral-border));
+  color: hsl(var(--tag-neutral));
 }

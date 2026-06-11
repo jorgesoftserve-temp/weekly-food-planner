@@ -83,6 +83,8 @@ Must NOT:
 - Read or write the database
 - Call `Date.now()`, `new Date()`, `Math.random()`, or anything else non-deterministic
 - Depend on any app package
+- Read execution or inventory state — `slot_completions`, `inventory_items`, `shopping_sessions`, `shopping_item_status`, and `menu_slot_ingredient_overrides` are **post-accept mutable state; the engine sees none of them** **(v2.0)**
+- Accept ingredient substitutions as input — substitutions are menu state consumed only by the grocery recompute path, never by the constraint engine; they are structurally invisible to `accepted_seed` **(v2.0)**
 
 ### Public API: TypeScript-first domain, JSON-serializable DTO
 
@@ -179,6 +181,12 @@ Cloning copies a historical accepted menu's slots into a fresh draft. The route 
 4. Inserts a new `menus` row inheriting the source's `seed`, `inputs_hash`, `generation_options`, `menu_type`, and `duration_days`; sets `cloned_from_menu_id` to the source id for audit; `accepted_at = NULL`.
 5. Copies every `menu_slots` row from the source into the new draft, plus every `menu_participants` row — a clone is the same household intent on a new week.
 
+## 5.5 Grocery recompute with ingredient overrides **(v2.0)**
+
+After a menu-slot ingredient override is written (see §19), the route handler re-runs `recomputeGroceryListsForMenu`. The recompute gains one additional step: after loading `recipe_ingredients` for the menu's slots, it left-joins the `menu_slot_ingredient_overrides` map and replaces `(ingredient_id, quantity?, unit?)` per slot before aggregation. This is the only change to the recompute's inputs for v2.0.
+
+`recomputeGroceryListsForMenu` remains **inventory-agnostic and engine-agnostic** — overrides are menu state (stored in a table keyed by `menu_slot_id`), not inventory state, and are structurally unreachable from `accepted_seed`. The seed hashes only slot recipe-tuples; the override table does not participate.
+
 ## 5.4 Acceptance + slot replacement
 
 After a draft exists, the user can:
@@ -238,6 +246,9 @@ Greedy + local search is fast, deterministic, and easy to reason about. It does 
   - `ingredients.same_day_cook` (purchase day == cook day)
 - Outputs are deterministic given the same seed.
 - **(v1.8) Note preservation across recompute.** `grocery_items.note` (the free-text shopper annotation, [PRODUCT_PRD.md §7.2](./PRODUCT_PRD.md)) is user-entered, not engine-derived. Since `recomputeGroceryListsForMenu` deletes-and-reinserts rows, it must snapshot existing notes keyed by `(grocery_list scope, ingredient_id)` before the rebuild and re-apply them to matching rows afterward; notes for ingredients that drop off the recomputed list are discarded. The note is never an engine input and never affects scaling, scheduling, or determinism.
+- **(v2.0) Ingredient-override application.** `recomputeGroceryListsForMenu` applies the per-slot `menu_slot_ingredient_overrides` map before aggregation — see §5.5. The recompute remains inventory-agnostic; inventory annotation is a separate, purely read-side transform (see §17.3).
+- **(v2.0) Inventory annotation (`annotateWithInventory`).** After the grocery list is loaded for display, `annotateWithInventory` in `apps/web/lib/grocery-filter.ts` composes after `applyShopForFilter` to add on-hand stock metadata. It matches inventory rows by `(ingredient_id, unit)` against the grocery lines and returns `{ required, onHand, suggestedToBuy: max(0, required - onHand) }`. It never writes `grocery_items` and never changes `required`. See [PRODUCT_PRD.md §20](./PRODUCT_PRD.md).
+- **(v2.0) All-members aggregation (`aggregateHouseholdGrocery`).** A pure transform in `apps/web/lib/grocery-filter.ts` that unions the shared list + every per-member list into one consolidated list keyed by `(ingredient_id, unit)`, summing quantities and folding `scheduled_purchase_day` to the earliest. Composes cleanly with `applyShopForFilter` and `annotateWithInventory`. No recompute or schema change. See [PRODUCT_PRD.md §22](./PRODUCT_PRD.md).
 
 ---
 
@@ -310,6 +321,17 @@ Resource-oriented under `app/api/`:
 /api/labels/search                  → GET (debounced autocomplete over enum_metadata)
 /api/labels/suggestions             → DELETE (a user removes their own pending label)
 /api/profile                        → GET, PATCH (v1.8 — the caller's own profile; PATCH sets accent_color. Self-scoped, see DATABASE_PRD §6.0)
+
+# (v2.0) Execution & pantry endpoints — all workspace-scoped, all planned
+/api/workspaces/:id/inventory                                                    → GET, POST
+/api/workspaces/:id/inventory/:itemId                                            → PATCH, DELETE
+/api/workspaces/:id/menus/:menuId/shopping-sessions                              → POST (create active session)
+/api/workspaces/:id/menus/:menuId/shopping-sessions/active                       → GET (optionally ?group=food_group for food-group grouping)
+/api/workspaces/:id/menus/:menuId/shopping-sessions/:sid/items/:groceryItemId    → PATCH (set acquired_quantity / status)
+/api/workspaces/:id/menus/:menuId/shopping-sessions/:sid/finalize                → POST (compute completeness; spill purchased-but-unused into inventory)
+/api/workspaces/:id/menus/:menuId/alerts                                         → GET (derived incomplete-shopping alerts — no table; see §17)
+/api/workspaces/:id/menus/:menuId/slots/:slotId/completion                       → PATCH (set slot_completions status {status, notes?}; any workspace member; accepted menus only)
+/api/workspaces/:id/menus/:menuId/slots/:slotId/ingredient-overrides             → PUT, DELETE (menu-level ingredient substitution; triggers grocery recompute on accepted menus)
 ```
 
 > The per-member accent (`workspace_members.accent_color`) is set through the existing `PATCH /api/workspaces/:id/members` path (it's a member field), not a new endpoint. The two member-writable menu/grocery mutations above are the only deviations from the otherwise service-role-managed menu pipeline — each re-checks workspace membership server-side and writes only its narrow column set.
@@ -428,19 +450,186 @@ The determinism regression suite runs as part of step 3.
 
 # 15. Out of scope
 
-Per [OVERVIEW_PRD.md §6](./OVERVIEW_PRD.md):
+Per [OVERVIEW_PRD.md §6](./OVERVIEW_PRD.md) (MVP boundary, 26 Jun 2026):
 
-- AI recipe suggestions
+- AI recipe suggestions (AI food-group classification is v2.0 server-only — see §17; headline AI features are v3)
 - Nutrition APIs
 - Real-time collaboration
 - Budget optimization
 - Shopping integrations
-- Inventory tracking
-- Calendar synchronization
 - **PDF export of menus and grocery lists** (planned for next MVP; in-app views are designed PDF-ready)
+- Calendar synchronization
+
+Inventory tracking, shopping confirmation, cook-status, leftovers, and ingredient substitution are **v2.0 planned** (out of MVP; see §17 and §19).
 
 ---
 
 # 16. Open architectural questions
 
 - Soft-delete cleanup policy: when (if ever) should a maintenance job hard-delete rows where `is_deleted = true`?
+
+---
+
+# 17. Execution-state architecture **(v2.0)**
+
+> Status: planned (v2.0). User-facing behaviour: [PRODUCT_PRD.md §15–§20](./PRODUCT_PRD.md). Schema: [DATABASE_PRD.md §6.18–§6.20](./DATABASE_PRD.md).
+
+## 17.1 Structural isolation from the engine and `accepted_seed`
+
+The defining property of v2.0: **none of the execution tables feed the constraint engine or change `accepted_seed`**.
+
+- `slot_completions` is a **separate table** (not a column on `menu_slots`) — cook-status is structurally invisible to `accepted_seed` (which hashes only slot recipe-tuples) and to all slot-replace paths.
+- `inventory_items` is workspace-scoped and never read by the engine or by `recomputeGroceryListsForMenu`. Inventory only touches grocery on the **read side** as a non-destructive annotation (§17.3).
+- `shopping_sessions` / `shopping_item_status` are post-accept read-only from the engine's perspective; finalization writes to `inventory_items` (purchase spill), not to `grocery_items`.
+- `menu_slot_ingredient_overrides` is the one exception that changes `recomputeGroceryListsForMenu` output — but it does not reach the engine or `accepted_seed` (see §19).
+
+## 17.2 Inventory inflow and outflow
+
+```
+inflow:
+  manual entry                → inventory_items(source='manual')
+  shopping finalize           → inventory_items(source='purchase', source_menu_id)
+  slot marked cooked          → inventory_items(source='leftover', source_slot_id, source_menu_id,
+                                                expiration_date = cooked_at::date
+                                                  + COALESCE(ingredients.max_storage_days,
+                                                             workspaces.leftover_max_days))
+  cook reconciliation shortfall → inventory_items(source='cook_remainder', source_slot_id,
+                                                  source_menu_id,
+                                                  expiration_date = cooked_at::date
+                                                    + COALESCE(ingredients.max_storage_days,
+                                                               workspaces.leftover_max_days))
+
+outflow:
+  manual consumption    → quantity decrement or is_consumed = true
+  lazy expiry on read   → expireLeftovers() marks rows is_consumed=true where
+                          expiration_date < current_date (evaluated per row against its own date)
+```
+
+No background cron in v2.0 — expiry is lazily evaluated when inventory is loaded.
+
+## 17.3 Pantry annotation (read-side only)
+
+`annotateWithInventory` in `apps/web/lib/grocery-filter.ts` is a **pure function** that composes after `applyShopForFilter`:
+
+```
+annotateWithInventory({ groceryLines, inventoryItems }) →
+  groceryLines.map(line => ({
+    ...line,
+    onHand: sumMatchingInventory(line, inventoryItems),
+    suggestedToBuy: Math.max(0, line.quantity - onHand),
+  }))
+```
+
+- Matches by `(ingredient_id, unit)`.
+- **Never modifies `line.quantity`** (the required amount is always surfaced).
+- **Never writes `grocery_items`**.
+- Inventory annotation is presentation-only and does not affect determinism, exports, or recompute.
+
+## 17.4 Incomplete-shopping alert derivation
+
+`deriveShoppingAlertsForMenu` in `apps/web/lib/api/menu-alerts.ts`:
+
+1. Load missing items from `shopping_item_status` (status = `skipped` or `partial` with shortfall).
+2. Build a reverse map: `ingredient_id → [menu_slot_id, …]` via `recipe_ingredients` **after applying `menu_slot_ingredient_overrides`** (Phase 6 overrides).
+3. Cross-reference with `slot_completions`: only include slots where status is `planned` (absent row = `planned`).
+4. If inventory covers the shortfall, suppress the alert for that ingredient.
+5. Return per-slot alert objects referencing the affected recipe. Degrades to "all slots planned" when `slot_completions` is entirely absent for the menu.
+
+Alerts are **never persisted** — high write-amplification for a fully-derivable signal.
+
+## 17.5 Per-leftover expiry defaulting
+
+Each `inventory_items` row with `source = 'leftover'` or `source = 'cook_remainder'` receives an `expiration_date` computed at creation:
+
+```
+expiration_date = cooked_at::date
+  + COALESCE(ingredients.max_storage_days, workspaces.leftover_max_days)
+```
+
+`workspaces.leftover_max_days` (default 3 days) is the workspace-wide fallback. Each row's `expiration_date` is independently editable via `PATCH /inventory/:itemId` after creation — `leftover_max_days` is a default, not a global hard rule.
+
+## 17.6 Food-group classification (Phase 0)
+
+`food_group` is a `text` column on `ingredients` backed by the `food_group` extensible label set (§5.2). Classification strategy:
+
+- **Seed**: catalog ingredients seeded via `apps/web/app/api/admin/seed-ingredients/route.ts` receive `food_group` values inline (`food_group_source = 'seed'`).
+- **AI fallback**: user-created ingredients lacking a group are classified server-side by `apps/web/lib/api/food-group-classify.ts` using `@anthropic-ai/sdk` with prompt caching. The result is cached on the row via `supabaseAdminClient` (`food_group_source = 'ai'`). This is the first Anthropic SDK use in the repo; it is **server-only** and **never in the engine**. See [TECHNICAL_PRD.md §2](./TECHNICAL_PRD.md).
+- Food groups drive shopping-session grouping (read-side `GROUP BY ingredients.food_group`) — no engine involvement.
+
+## 17.7 Display-tag derivation for inventory source **(v2.0)**
+
+The internal `inventory_source` value is never rendered directly. At read time the client (or a server-side view transform) derives a display tag:
+
+```
+display_tag(item):
+  if item.source == 'manual'         → "Pantry"
+  if item.source == 'cook_remainder' → "Pantry"
+  if item.source == 'leftover'       → "Leftover"
+  if item.source == 'purchase':
+    linked_menu = menus WHERE id = item.source_menu_id
+    if (linked_menu.week_start_date + linked_menu.duration_days) > today
+      → "Menu"     // still within the menu's week
+    else
+      → "Pantry"   // week has ended; ingredient is now general stock
+```
+
+This is a **read-side / lazy derivation** — no background cron, no column update, no new table. The evaluation is analogous to the lazy `expireLeftovers` pass: it runs when inventory is loaded and inspects the linked menu's `week_start_date` + `duration_days`. An optional `released_to_pantry_at` timestamp on `inventory_items` is a **deferred persistence option** (may be added later for audit or query optimisation); it is not required for v2.0. See [PRODUCT_PRD.md §15.4](./PRODUCT_PRD.md) and [DATABASE_PRD.md §6.18](./DATABASE_PRD.md).
+
+## 17.8 Cook-time reconciliation isolation **(v2.0)**
+
+The cook-time ingredient reconciliation flow ([PRODUCT_PRD.md §18.3](./PRODUCT_PRD.md)) is **strictly additive to `inventory_items`** and isolated from every other system:
+
+- It reads `recipe_ingredients` for the slot's recipe to derive planned quantities.
+- It reads nothing from the constraint engine, `accepted_seed`, `grocery_items`, or `recomputeGroceryListsForMenu`.
+- It writes only `inventory_items(source='cook_remainder', source_slot_id, source_menu_id, …)` rows — one per shortfall ingredient.
+- It does not trigger a grocery recompute.
+- Writing or deleting these rows cannot change `accepted_seed` (which hashes only slot recipe-tuples) and is invisible to the engine (which never reads `inventory_items`).
+
+The only shared provenance columns are `source_slot_id` and `source_menu_id`, which already exist on `inventory_items` (§6.18 in DATABASE_PRD). No new table or schema change is required beyond the `cook_remainder` enum value — see [DATABASE_PRD.md §5.1](./DATABASE_PRD.md).
+
+---
+
+> **§18 — Community architecture** is authored in the [v4 epic](../../.claude/plans/v4.md). Not authored here.
+
+---
+
+# 19. Menu-level ingredient substitution architecture **(v2.0)**
+
+> Status: planned (v2.0). Behaviour: [PRODUCT_PRD.md §23](./PRODUCT_PRD.md). Schema: [DATABASE_PRD.md §6.21](./DATABASE_PRD.md).
+
+## 19.1 Proof of engine and seed isolation
+
+`menu_slot_ingredient_overrides` is keyed by `menu_slot_id`. The `accepted_seed` computation (in `apps/web/lib/api/menu-accept.ts`) hashes only `(inputs_hash, sorted slot recipe-tuples { day, meal_key, target_member_id, recipe_id })` — ingredient lists are not part of the seed. Therefore:
+
+- Writing or deleting a row in `menu_slot_ingredient_overrides` **cannot change `accepted_seed`**.
+- The engine receives `GenerateMenuInput` assembled from workspace/member/recipe snapshots — it never reads `menu_slot_ingredient_overrides`.
+- No golden-snapshot regen is required for v2.0.
+
+## 19.2 Recompute integration
+
+`recomputeGroceryListsForMenu` is the sole consumer of `menu_slot_ingredient_overrides`. After loading `recipe_ingredients` for the menu's slots, it applies the override map:
+
+```
+for each slot:
+  overrides = menu_slot_ingredient_overrides WHERE menu_slot_id = slot.id
+  for each override:
+    replace recipe_ingredient(original_ingredient_id)
+      with (substitute_ingredient_id, override.quantity ?? original.quantity, override.unit ?? original.unit)
+```
+
+The override application happens **before aggregation** — the grocery list reflects the substitution as if the recipe had always called for the substitute. The recompute remains:
+- **Inventory-agnostic**: no `inventory_items` reads.
+- **Engine-agnostic**: no engine invocation.
+- **Seed-invisible**: `accepted_seed` is not recomputed.
+
+After a successful override write on an accepted menu, the route handler re-runs `recomputeGroceryListsForMenu`. This is the one change to recompute inputs in v2.0; it is covered by the recompute regression tests.
+
+## 19.3 Validation at the route layer
+
+Before accepting a substitution, the route handler validates that the substitute ingredient does not introduce an allergen or violate an exclusive restriction for any eater of the target slot. This reuses the engine's own filter functions (`recipeViolatesAllergies`, `recipeHasExcludedIngredient` from `packages/constraint-engine/src/filter.ts`) **at the route layer** — not inside the engine, not inside the DB. This mirrors the existing slot-replace validation in `apps/web/app/api/workspaces/[id]/menus/[menuId]/slots/[slotId]/route.ts`. A rejected substitute returns 422.
+
+**This is route-layer reuse of engine utilities, not an engine edit.** v2.0 is engine-free.
+
+> **§20 — Preference architecture** (inclusive prefs + per-generation relax) is authored in **[v2.1](../../.claude/plans/v2.1.md)**.
+> **§21 — Multi-timeframe architecture** is authored in **[v2.1](../../.claude/plans/v2.1.md)**.
+> **§22 — Community/seed-pack architecture** moves to the **[v4 epic](../../.claude/plans/v4.md)**.

@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useMemo, useState } from 'react'
 import {
   CalendarRange,
   Check,
@@ -14,10 +15,12 @@ import {
 import {
   useActiveMenu,
   useDraftMenu,
+  useMenuSlotCompletions,
+  useMenuSlotIngredientOverrides,
   useRecipesList,
   useWorkspaceWithMembers,
 } from '@weekly-food-planner/supabase/react'
-import type { MenuSlotRecord } from '@weekly-food-planner/supabase'
+import type { DbTypes, MenuSlotRecord } from '@weekly-food-planner/supabase'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -31,6 +34,9 @@ import { PageHeader } from '@/components/page-header'
 import { useActiveWorkspace } from '@/components/workspace-provider'
 import { useSupabase } from '@/lib/hooks/use-supabase'
 import { useExclusiveOverlay } from '@/hooks/use-exclusive-overlay'
+import { useMenuShoppingAlerts } from '@/lib/hooks/use-menu-alerts'
+import { useSetSlotCompletion } from '@/lib/hooks/use-slot-completion'
+import type { SlotShoppingAlert } from '@/lib/api/menu-alerts'
 import {
   downloadMenuExport,
   type ExportFormat,
@@ -43,8 +49,11 @@ import { notifyError, notifySuccess } from '@/lib/toast'
 import { AddSlotDialog } from './_components/add-slot-dialog'
 import { CookSheet } from './_components/cook-sheet'
 import { GenerateMenuDialog } from './_components/generate-menu-dialog'
+import { MenuMemberPicker } from './_components/menu-member-picker'
 import { MenuView } from './_components/menu-view'
+import { ReconcileSheet } from './_components/reconcile-sheet'
 import { ReplaceSlotDialog } from './_components/replace-slot-dialog'
+import { SubstituteSheet } from './_components/substitute-sheet'
 
 // Exactly one menu overlay is open at a time (generate / replace-slot /
 // add-slot) — see hooks/use-exclusive-overlay.ts.
@@ -53,8 +62,12 @@ type MenuOverlay =
   | { kind: 'replace'; slot: MenuSlotRecord }
   | { kind: 'addSlot'; day: string }
 
+const MEMBER_PARAM = 'member'
+
 const MenuPage = () => {
   const supabase = useSupabase()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { workspace, isLoading: workspaceLoading } = useActiveWorkspace()
   const activeMenuQuery = useActiveMenu({
     supabase,
@@ -88,6 +101,11 @@ const MenuPage = () => {
   // Cook sheet runs off the active (accepted) menu, independent of the draft
   // overlays above — so it gets its own slot state, not the overlay union.
   const [cookSlot, setCookSlot] = useState<MenuSlotRecord | null>(null)
+  // (v2.0 Phase 5) Cook-time reconciliation sheet — opens when a slot is marked
+  // cooked, and re-openable from the "Reconcile / leftovers" affordance.
+  const [reconcileSlot, setReconcileSlot] = useState<MenuSlotRecord | null>(null)
+  // (v2.0 Phase 6) Ingredient-substitution sheet for an accepted-menu slot.
+  const [substituteSlot, setSubstituteSlot] = useState<MenuSlotRecord | null>(null)
   const isLoading =
     workspaceLoading || activeMenuQuery.isLoading || draftQuery.isLoading
 
@@ -104,9 +122,119 @@ const MenuPage = () => {
     return map
   }, [workspaceQuery.data])
 
+  // (v2.0 item 10) Per-member menu view filter, URL-driven (?member=) like the
+  // grocery ?shop_for= — survives refresh and is shareable. null = household.
+  const memberFilter = searchParams.get(MEMBER_PARAM)
+  const setMemberFilter = useCallback(
+    (next: string | null) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next === null) params.delete(MEMBER_PARAM)
+      else params.set(MEMBER_PARAM, next)
+      const query = params.toString()
+      router.replace(query.length > 0 ? `?${query}` : '?', { scroll: false })
+    },
+    [router, searchParams],
+  )
+
   const draft = draftQuery.data
   const activeMenu = activeMenuQuery.data
   const isReviewingDraft = !!draft
+
+  // (v2.0 item 10) Members the active menu was generated for — drives the
+  // per-member view switcher. Falls back to distinct slot target members.
+  const activeParticipantIds = useMemo(() => {
+    if (!activeMenu) return []
+    const fromParticipants =
+      activeMenu.menu_participants?.map((p) => p.member_id) ?? []
+    if (fromParticipants.length > 0) return fromParticipants
+    return Array.from(
+      new Set(
+        activeMenu.menu_slots
+          .map((s) => s.target_member_id)
+          .filter((id): id is string => id !== null),
+      ),
+    )
+  }, [activeMenu])
+
+  // (v2.0 Phase 3) Incomplete-shopping alerts for the accepted menu — only when
+  // an active menu is being viewed (not while reviewing a draft).
+  const alertsQuery = useMenuShoppingAlerts({
+    workspaceId: workspace?.id ?? null,
+    menuId: activeMenu?.id ?? null,
+    enabled: !!workspace && !!activeMenu && !isReviewingDraft,
+  })
+  const alertsBySlotId = useMemo(() => {
+    const map: Record<string, SlotShoppingAlert> = {}
+    for (const alert of alertsQuery.data?.alerts ?? []) map[alert.slotId] = alert
+    return map
+  }, [alertsQuery.data])
+
+  // (v2.0 Phase 4) Cook-status (planned/cooked/skipped) for the accepted menu.
+  const completionsQuery = useMenuSlotCompletions({
+    supabase,
+    menuId: activeMenu?.id ?? null,
+    enabled: !!workspace && !!activeMenu && !isReviewingDraft,
+  })
+  const cookStatusBySlotId = useMemo(() => {
+    const map: Record<string, DbTypes.SlotCookStatus> = {}
+    for (const c of completionsQuery.data ?? []) map[c.menu_slot_id] = c.status
+    return map
+  }, [completionsQuery.data])
+
+  // (v2.0 Phase 6) Ingredient overrides for the accepted menu — drives the
+  // "Substituted" badge counts and seeds the substitution sheet's current state.
+  const overridesQuery = useMenuSlotIngredientOverrides({
+    supabase,
+    menuId: activeMenu?.id ?? null,
+    enabled: !!workspace && !!activeMenu && !isReviewingDraft,
+  })
+  const overrideCountBySlotId = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const o of overridesQuery.data ?? [])
+      map[o.menu_slot_id] = (map[o.menu_slot_id] ?? 0) + 1
+    return map
+  }, [overridesQuery.data])
+  const overridesBySlotAndOriginal = useMemo(() => {
+    const map: Record<
+      string,
+      Record<
+        string,
+        { substitute_ingredient_id: string; quantity: number | null; unit: DbTypes.Unit | null }
+      >
+    > = {}
+    for (const o of overridesQuery.data ?? []) {
+      const bySlot = map[o.menu_slot_id] ?? {}
+      bySlot[o.original_ingredient_id] = {
+        substitute_ingredient_id: o.substitute_ingredient_id,
+        quantity: o.quantity,
+        unit: o.unit,
+      }
+      map[o.menu_slot_id] = bySlot
+    }
+    return map
+  }, [overridesQuery.data])
+
+  const setCookStatus = useSetSlotCompletion({
+    workspaceId: workspace?.id ?? '',
+    menuId: activeMenu?.id ?? null,
+  })
+  const handleSetCookStatus = async ({
+    slot,
+    status,
+  }: {
+    slot: MenuSlotRecord
+    status: DbTypes.SlotCookStatus
+  }) => {
+    try {
+      await setCookStatus.mutateAsync({ slotId: slot.id, status })
+      // (v2.0 Phase 5) Marking a slot cooked opens the reconciliation so the
+      // user can record what they actually used and save any remainder to the
+      // pantry. Skippable — no inventory rows are created unless they save.
+      if (status === 'cooked') setReconcileSlot(slot)
+    } catch (err) {
+      notifyError(err instanceof Error ? err.message : 'Could not update cook-status.')
+    }
+  }
 
   const handleExport = (format: ExportFormat) => {
     if (!workspace || !activeMenu) return
@@ -269,12 +397,29 @@ const MenuPage = () => {
       ) : null}
 
       {!isLoading && !isReviewingDraft && activeMenu ? (
-        <MenuView
-          menu={activeMenu}
-          recipeNamesById={recipeNamesById}
-          memberNamesById={memberNamesById}
-          onCookSlot={(slot) => setCookSlot(slot)}
-        />
+        <div className="flex flex-col gap-4">
+          {activeParticipantIds.length > 1 ? (
+            <MenuMemberPicker
+              participantIds={activeParticipantIds}
+              memberNamesById={memberNamesById}
+              selectedId={memberFilter}
+              onChange={setMemberFilter}
+            />
+          ) : null}
+          <MenuView
+            menu={activeMenu}
+            recipeNamesById={recipeNamesById}
+            memberNamesById={memberNamesById}
+            onCookSlot={(slot) => setCookSlot(slot)}
+            alertsBySlotId={alertsBySlotId}
+            cookStatusBySlotId={cookStatusBySlotId}
+            onSetCookStatus={handleSetCookStatus}
+            onOpenReconcile={(slot) => setReconcileSlot(slot)}
+            onOpenSubstitute={(slot) => setSubstituteSlot(slot)}
+            overrideCountBySlotId={overrideCountBySlotId}
+            filterMemberId={memberFilter}
+          />
+        </div>
       ) : null}
 
       {!isLoading && !isReviewingDraft && !activeMenu && !activeMenuQuery.error ? (
@@ -335,6 +480,45 @@ const MenuPage = () => {
           open={!!cookSlot}
           onOpenChange={(next) => {
             if (!next) setCookSlot(null)
+          }}
+        />
+      ) : null}
+
+      {workspace && activeMenu ? (
+        <ReconcileSheet
+          workspaceId={workspace.id}
+          menuId={activeMenu.id}
+          slot={reconcileSlot}
+          recipeName={
+            reconcileSlot
+              ? recipeNamesById[reconcileSlot.recipe_id] ?? 'Recipe'
+              : 'Recipe'
+          }
+          open={!!reconcileSlot}
+          onOpenChange={(next) => {
+            if (!next) setReconcileSlot(null)
+          }}
+        />
+      ) : null}
+
+      {workspace && activeMenu ? (
+        <SubstituteSheet
+          workspaceId={workspace.id}
+          menuId={activeMenu.id}
+          slot={substituteSlot}
+          recipeName={
+            substituteSlot
+              ? recipeNamesById[substituteSlot.recipe_id] ?? 'Recipe'
+              : 'Recipe'
+          }
+          overridesByOriginal={
+            substituteSlot
+              ? overridesBySlotAndOriginal[substituteSlot.id] ?? {}
+              : {}
+          }
+          open={!!substituteSlot}
+          onOpenChange={(next) => {
+            if (!next) setSubstituteSlot(null)
           }}
         />
       ) : null}

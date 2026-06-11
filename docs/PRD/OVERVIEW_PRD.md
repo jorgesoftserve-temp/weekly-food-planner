@@ -93,7 +93,9 @@ Groups with:
 
 ## Menu & grocery viewing
 - In-app menu view (week / day)
+- Per-member menu view — filter the weekly grid to one member's slots **(v2.0)**
 - In-app grocery list view (shared + per-member)
+- Consolidated all-members grocery view — single household list unioning shared + every per-member list **(v2.0)**
 - PDF-ready layout (PDF export itself is post-MVP)
 
 ---
@@ -103,6 +105,18 @@ Groups with:
 - Freshness-aware grouping
 - Shared grocery list
 - Member-specific grocery items
+
+---
+
+## Week execution & pantry **(v2.0)**
+
+Post-accept lifecycle: shop → cook → leftovers → pantry-aware next week.
+
+- **Inventory** — workspace-level pantry tracking of ingredients by source (manual, purchase, leftover); optional per-item expiration; partial-spoilage decrement.
+- **Shopping confirmation** — review the grocery list per accepted menu (optionally grouped by food group); mark each item acquired/partial/skipped; completeness threshold (≥90% complete, 30–90% incomplete, <30% barely-shopped); finalize spills purchased-but-unused into inventory.
+- **Cook-status** — per-slot planned/cooked/skipped record; structurally invisible to `accepted_seed` and the engine.
+- **Leftovers** — leftover entries in inventory; each leftover has its own independently editable expiration, defaulted from the ingredient's `max_storage_days` else the workspace `leftover_max_days` fallback.
+- **Food groups** — classification for ingredients (seed column + Claude-API fallback, server-only); drives shopping-session grouping.
 
 ---
 
@@ -131,6 +145,26 @@ Groups with:
 - Shopping integrations
 - Inventory tracking
 - Calendar synchronization
+
+---
+
+## v2.0 — Execution & Pantry (post-MVP, planned)
+
+Items 0–5, 7, 8, 9, 10 from the [v2 epic](../../.claude/plans/v2.md). Buildable plan in [`.claude/plans/v2.0.md`](../../.claude/plans/v2.0.md).
+
+| Item | Feature |
+|---|---|
+| 0 | Food groups (seed + Claude-API classify, server-only) |
+| 1 | Inventory tracking (manual/purchase/leftover; optional per-item expiration) |
+| 2 | Shopping confirmation + completeness (30/90 thresholds, food-group grouping) |
+| 3 | Incomplete-shopping alerts (derived, no table) |
+| 4 | Cook-status per slot (`planned`/`cooked`/`skipped`; separate table; invisible to `accepted_seed`) |
+| 5, 7 | Leftovers + per-leftover expiry defaulting (each row's own `expiration_date`) |
+| 8 | Consolidated all-members grocery view (pure read-side aggregation) |
+| 9 | Menu-level ingredient substitution (grocery reflects it; seed unchanged) |
+| 10 | Per-member menu switcher |
+
+**v2.1 follow-on** — smarter generation (inclusive preferences + per-generation overlay relax, multi-timeframe recipes), addons + on-the-fly cook mode, bulk recipe-create primitive. See [`.claude/plans/v2.1.md`](../../.claude/plans/v2.1.md).
 
 ---
 

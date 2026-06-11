@@ -48,9 +48,14 @@ auth.users (Supabase)
             │       └── recipe_dietary_tags  (M—N → dietary_tag label)
             ├── menus (1—N)                           // carries generation_options for audit
             │       ├── menu_slots       (1—N → recipes)
+            │       │       ├── slot_completions (1—0..1)                    // (v2.0) cook-status; see §6.19
+            │       │       └── menu_slot_ingredient_overrides (1—N)         // (v2.0) per-slot ingredient swap; see §6.20
             │       ├── grocery_lists    (1—N)
             │       │       └── grocery_items (1—N → ingredients)
+            │       ├── shopping_sessions (1—N)                              // (v2.0) see §6.18
+            │       │       └── shopping_item_status (1—N → grocery_items)  // (v2.0)
             │       └── generation_runs  (1—N)        // audit trail
+            ├── inventory_items (1—N → ingredients)                          // (v2.0) see §6.17
             └── ingredients (global catalog; see §6.6)
                     └── ingredient_allergens (M—N → food_allergy label; see §6.6.1)
 
@@ -79,8 +84,15 @@ Backed by native Postgres enums. Values can only be added via migration. Used wh
 | `unit` | `g`, `kg`, `ml`, `l`, `tsp`, `tbsp`, `cup`, `piece`, `slice`, `pinch`, `clove`, `can`, `pack` |
 | `menu_type` | `weekly`, `custom` |
 | `accent_color` (v1.8) | `strawberry`, `moss`, `teal`, `amber`, `ocean`, `plum` |
+| `inventory_source` **(v2.0)** | `manual`, `purchase`, `leftover`; **candidate v2.0 addition: `cook_remainder`** (see note below) |
+| `shopping_status` **(v2.0)** | `in_progress`, `complete`, `incomplete` |
+| `acquired_status` **(v2.0)** | `pending`, `acquired`, `partial`, `skipped` |
+| `slot_cook_status` **(v2.0)** | `planned`, `cooked`, `skipped` |
+| `food_group_source` **(v2.0)** | `seed`, `ai`, `unset` |
 
 No user-suggestion path for these in MVP — a new value requires a migration. The `accent_color` set is a deliberately curated, contrast-safe palette (see [`docs/design/user-accent-colors.md`](../design/user-accent-colors.md)); it backs both the per-user accent (`profiles.accent_color`, §6.0) and the per-member accent (`workspace_members.accent_color`, §6.2).
+
+**`inventory_source` — `cook_remainder` candidate (v2.0):** The cook-time ingredient reconciliation feature (see [PRODUCT_PRD.md §18.3](./PRODUCT_PRD.md) and [§19.1.2](./PRODUCT_PRD.md)) emits raw-ingredient remainder rows when `used < planned` during a slot's cook reconciliation. The **recommended** approach is to add a `cook_remainder` value to `inventory_source` so the origin is always queryable. The **alternative** — reusing `source = 'manual'` with `source_slot_id` set — avoids a migration but makes the origin ambiguous without inspecting provenance columns. Decide at build time; lean toward `cook_remainder` for queryability. The migration would be `ALTER TYPE inventory_source ADD VALUE 'cook_remainder'`.
 
 ## 5.2 Extensible labels (user-suggestable)
 
@@ -92,6 +104,7 @@ Stored as `text` columns. Allowed values are sourced from `enum_metadata` (§10)
 | `dietary_restriction` | `vegetarian`, `vegan`, `gluten_free`, `dairy_free`, `nut_free`, `egg_free`, `soy_free`, `pescatarian`, `halal`, `kosher`, `low_sodium`, `diabetic_friendly` |
 | `dietary_tag` | all `dietary_restriction` values plus `high_protein`, `low_carb`, `keto`, `paleo`, `whole30` |
 | `food_allergy` | `peanut`, `tree_nut`, `dairy`, `egg`, `soy`, `gluten`, `fish`, `shellfish`, `sesame`, `mustard`, `celery`, `lupin`, `mollusk`, `sulfite` |
+| `food_group` **(v2.0)** | `vegetables`, `fruits`, `grains`, `proteins`, `dairy`, `fats_oils`, `herbs_spices`, `condiments`, `beverages`, `other` |
 
 Each column referencing an extensible label is `text` and validated by the application through a single RPC, `sys_save_label(enum_type, value)`, that ensures the value exists in `enum_metadata` (inserting a pending row if needed) before the dependent write proceeds. See §10 for the full lifecycle and §11 (UX) in PRODUCT_PRD for the corresponding behavior.
 
@@ -124,6 +137,7 @@ One row per `auth.users` row, holding per-account UI preferences. **No soft dele
 | `type` | `workspace_type` NOT NULL | `individual` or `group` |
 | `name` | text NOT NULL | |
 | `shared_meal_frequency` | jsonb NULL | Optional shared schedule for group workspaces (see §7) |
+| `leftover_max_days` | int NOT NULL DEFAULT 3 | **(v2.0)** Workspace-level fallback for leftover expiry. Used when an ingredient has no `max_storage_days`; each leftover row's `expiration_date` is independently editable after creation. See [PRODUCT_PRD.md §19](./PRODUCT_PRD.md) |
 | `is_deleted` | boolean NOT NULL DEFAULT false | Soft delete flag (§6.16) |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -188,6 +202,8 @@ Composite PK `(member_id, ingredient_id)`. Kept separate from allergies so the e
 | `max_storage_days` | int NULL | |
 | `requires_fresh` | bool DEFAULT false | |
 | `same_day_cook` | bool DEFAULT false | |
+| `food_group` | text NULL | **(v2.0)** Label from the `food_group` set (§5.2); validated via `sys_save_label`. Seeded for catalog ingredients; derived via Claude-API classify (`food_group_source='ai'`) for user-created ingredients lacking a value — cached on the row server-side. See [ARCHITECTURE_PRD.md §17](./ARCHITECTURE_PRD.md) |
+| `food_group_source` | `food_group_source` NULL | **(v2.0)** Tracks the origin of the `food_group` value (`seed`, `ai`, or `unset`). NULL = not yet classified |
 | `created_at`, `updated_at` | timestamptz | |
 
 Global catalog (not workspace-scoped). See §8 for RLS implications. No soft delete — catalog rows are service-role managed.
@@ -419,6 +435,110 @@ Every menu — `weekly` or `custom` — moves through a three-state lifecycle: *
 
 Historical (soft-deleted) menus and their children remain queryable by service-role for audit. The partial unique indexes from §6.11 enforce one accepted + one draft maximum per `(workspace_id, week_start_date)`.
 
+## 6.18 `inventory_items` **(v2.0)**
+
+> Status: planned (v2.0). Behaviour: [PRODUCT_PRD.md §15](./PRODUCT_PRD.md). Architecture: [ARCHITECTURE_PRD.md §17](./ARCHITECTURE_PRD.md).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `workspace_id` | uuid NOT NULL | FK → `workspaces.id` ON DELETE CASCADE |
+| `ingredient_id` | uuid NOT NULL | FK → `ingredients.id` |
+| `source` | `inventory_source` NOT NULL | `manual`, `purchase`, `leftover`, or `cook_remainder` (see §5.1 candidate note). Display tags are derived at read time — see below |
+| `quantity` | numeric NOT NULL CHECK (quantity >= 0) | Decremented on partial spoilage or consumption |
+| `unit` | `unit` NOT NULL | |
+| `expiration_date` | date NULL | Optional. Defaulted on leftover/cook_remainder inflow (see [PRODUCT_PRD.md §19](./PRODUCT_PRD.md)); independently editable |
+| `source_menu_id` | uuid NULL | FK → `menus.id` ON DELETE SET NULL. Set when `source` is `purchase`, `leftover`, or `cook_remainder` |
+| `source_slot_id` | uuid NULL | FK → `menu_slots.id` ON DELETE SET NULL. Set when `source` is `leftover` or `cook_remainder` |
+| `label` | text NULL | Optional free-text annotation (e.g. "organic", "freezer") |
+| `is_consumed` | boolean NOT NULL DEFAULT false | Soft-consume; consumed rows are excluded from on-hand calculations but retained for audit |
+| `created_by` | uuid NULL | FK → `workspace_members.id` ON DELETE SET NULL |
+| `created_at`, `updated_at` | timestamptz | |
+
+**Provenance columns cover all inflow paths.** Both cooked-food leftovers (`source='leftover'`) and raw-ingredient cook remainders (`source='cook_remainder'`) use the same `source_slot_id` + `source_menu_id` back-references. No new column is needed to distinguish the two kinds — the `source` value itself is the discriminator. **No engine-feeding table and no schema change** are required for the Menu→Pantry display-tag transition; the derivation reads only `menus.week_start_date` + `menus.duration_days` through the existing `source_menu_id` FK.
+
+**`released_to_pantry_at` (deferred, optional):** An optional `released_to_pantry_at timestamptz NULL` column may be added in a future release if persisted audit of the Menu→Pantry transition is needed (e.g. for query performance or an audit trail). It is **not required for v2.0** — the transition is a read-side derivation (see [ARCHITECTURE_PRD.md §17.7](./ARCHITECTURE_PRD.md)). The column would be set lazily by the same read pass that computes display tags, the first time a `purchase` item's linked week has ended.
+
+RLS: read = any active workspace member; write (INSERT/UPDATE/DELETE) = creator of the row or `creator`/`admin` role (`fn_user_workspace_role`).
+
+Partial indexes: `(workspace_id, ingredient_id) WHERE NOT is_consumed`, `(workspace_id, expiration_date) WHERE NOT is_consumed`.
+
+## 6.19 `shopping_sessions` and `shopping_item_status` **(v2.0)**
+
+> Status: planned (v2.0). Behaviour: [PRODUCT_PRD.md §16](./PRODUCT_PRD.md).
+
+### `shopping_sessions`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `menu_id` | uuid NOT NULL | FK → `menus.id` ON DELETE CASCADE |
+| `workspace_id` | uuid NOT NULL | FK → `workspaces.id` ON DELETE CASCADE |
+| `status` | `shopping_status` NOT NULL DEFAULT `'in_progress'` | `in_progress`, `complete`, or `incomplete` |
+| `completeness` | numeric NULL | Quantity-weighted ratio 0–1; set on finalize |
+| `created_by` | uuid NULL | FK → `workspace_members.id` ON DELETE SET NULL |
+| `created_at`, `updated_at` | timestamptz | |
+
+Partial UNIQUE `(menu_id) WHERE status = 'in_progress'` — at most one active session per menu.
+
+### `shopping_item_status`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `session_id` | uuid NOT NULL | FK → `shopping_sessions.id` ON DELETE CASCADE |
+| `grocery_item_id` | uuid NOT NULL | FK → `grocery_items.id` ON DELETE CASCADE |
+| `acquired_quantity` | numeric NOT NULL DEFAULT 0 | How much was actually acquired |
+| `status` | `acquired_status` NOT NULL DEFAULT `'pending'` | `pending`, `acquired`, `partial`, or `skipped` |
+| `created_at`, `updated_at` | timestamptz | |
+
+UNIQUE `(session_id, grocery_item_id)`.
+
+RLS for both tables: read = any active workspace member; write = any active workspace member (shopping is a shared household action).
+
+## 6.20 `slot_completions` **(v2.0)**
+
+> Status: planned (v2.0). Behaviour: [PRODUCT_PRD.md §18](./PRODUCT_PRD.md). Architecture: [ARCHITECTURE_PRD.md §17](./ARCHITECTURE_PRD.md).
+
+A **separate table** (not a column on `menu_slots`) so cook-status is structurally invisible to `accepted_seed` and to slot-replace paths. An absent row means `planned`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `menu_slot_id` | uuid NOT NULL | FK → `menu_slots.id` ON DELETE CASCADE |
+| `workspace_id` | uuid NOT NULL | FK → `workspaces.id` ON DELETE CASCADE. Denormalized for RLS |
+| `status` | `slot_cook_status` NOT NULL DEFAULT `'planned'` | `planned`, `cooked`, or `skipped` |
+| `cooked_at` | timestamptz NULL | Set when status transitions to `cooked` |
+| `notes` | text NULL | Optional free-text note |
+| `created_at`, `updated_at` | timestamptz | |
+
+UNIQUE `(menu_slot_id)`.
+
+RLS: read = any active workspace member (via `menu_slots → menus.workspace_id` EXISTS); write = any active workspace member (cook-status is a shared household action, like `menu_slots.cooked_at`).
+
+## 6.21 `menu_slot_ingredient_overrides` **(v2.0)**
+
+> Status: planned (v2.0). Behaviour: [PRODUCT_PRD.md §23](./PRODUCT_PRD.md). Architecture: [ARCHITECTURE_PRD.md §19](./ARCHITECTURE_PRD.md).
+
+Per-slot ingredient substitution for an accepted menu. Keyed by `menu_slot_id` so it is **structurally unreachable from `accepted_seed`** and the engine — the seed hashes only slot recipe-tuples, not ingredient lists.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `menu_slot_id` | uuid NOT NULL | FK → `menu_slots.id` ON DELETE CASCADE |
+| `workspace_id` | uuid NOT NULL | FK → `workspaces.id` ON DELETE CASCADE. Denormalized for RLS |
+| `original_ingredient_id` | uuid NOT NULL | FK → `ingredients.id`. The ingredient being substituted |
+| `substitute_ingredient_id` | uuid NOT NULL | FK → `ingredients.id`. The replacement ingredient |
+| `quantity` | numeric NULL | Override quantity; NULL = inherit from `recipe_ingredients` |
+| `unit` | `unit` NULL | Override unit; NULL = inherit from `recipe_ingredients` |
+| `note` | text NULL | Optional annotation |
+| `created_by` | uuid NULL | FK → `workspace_members.id` ON DELETE SET NULL |
+| `created_at`, `updated_at` | timestamptz | |
+
+UNIQUE `(menu_slot_id, original_ingredient_id)` — one active substitute per original ingredient per slot.
+
+RLS: read = any active workspace member (via `menu_slots → menus.workspace_id` EXISTS); write = creator of the row or `creator`/`admin` role.
+
 ---
 
 # 7. `meal_frequency` JSONB shape
@@ -473,6 +593,10 @@ Policy summary:
 | `recipes`, `recipe_ingredients`, `recipe_instructions`, `recipe_dietary_tags` | any member of the workspace (active recipes) | `creator` or `admin` |
 | `ingredients`, `ingredient_allergens` | any authenticated user (global catalog) | service-role only |
 | `menus`, `menu_slots`, `grocery_lists`, `grocery_items`, `generation_runs` | any member of the workspace (active menus for the read; runs are always visible) | service-role (engine pipeline). Two narrow member-scoped exceptions: **(v1.9)** `menu_slots.cooked_at`/`cooked_by` (Cook mode) via the row-scoped `menu_slots_cook_mode_update` UPDATE policy with column discipline enforced in the route handler — see §6.12; and **(v1.8)** `grocery_items.note` (shopper note — see §6.14), gated to workspace membership |
+| `inventory_items` **(v2.0)** | any active workspace member | creator of row or `creator`/`admin` (see §6.18) |
+| `shopping_sessions`, `shopping_item_status` **(v2.0)** | any active workspace member | any active workspace member (shared household action) |
+| `slot_completions` **(v2.0)** | any active workspace member (via `menu_slots → menus.workspace_id`) | any active workspace member (cook-status is a shared household action) |
+| `menu_slot_ingredient_overrides` **(v2.0)** | any active workspace member (via `menu_slots → menus.workspace_id`) | creator of row or `creator`/`admin` |
 | `enum_metadata` | any authenticated user | service-role for official rows; users may insert pending rows via `sys_save_label` and delete their own pending rows via `sys_delete_enum_suggestion` (§10) |
 
 A helper SQL function `fn_user_workspace_role(user_id, workspace_id) RETURNS workspace_role` centralizes role lookups so policies stay simple.
@@ -484,7 +608,7 @@ A helper SQL function `fn_user_workspace_role(user_id, workspace_id) RETURNS wor
 - `fn_create_updated_at_trigger()` — generic; attached to every mutable table.
 - `sys_create_workspace_on_signup()` — on `auth.users` insert, creates an `individual` workspace and a `workspace_members` row with `role='creator'`. The workspace is functional once the user verifies their email.
 - `trg_workspace_single_creator` — partial unique index on `(workspace_id) WHERE role='creator' AND is_deleted = false`.
-- `sys_save_label(enum_type text, value text)` — RPC. Ensures an `enum_metadata` row exists for `(enum_type, value)`; inserts an `is_official=false, is_pending=true, suggested_by=auth.uid()` row if missing. Used by the application before any insert/update of an extensible-label column (cuisine, dietary_restriction, dietary_tag, food_allergy). Returns the canonical label.
+- `sys_save_label(enum_type text, value text)` — RPC. Ensures an `enum_metadata` row exists for `(enum_type, value)`; inserts an `is_official=false, is_pending=true, suggested_by=auth.uid()` row if missing. Used by the application before any insert/update of an extensible-label column (cuisine, dietary_restriction, dietary_tag, food_allergy, **(v2.0)** food_group). Returns the canonical label.
 - `sys_delete_enum_suggestion(enum_type text, value text)` — RPC. A user may delete an `enum_metadata` row where `is_official=false AND suggested_by = auth.uid()`. The function sets any references to that value to NULL within the caller's accessible scope, returning a count for the UI to show in the confirmation. Official rows are never deletable through this RPC.
 - `fn_increment_enum_metadata_usage(enum_type text, value text)` — called by application code when an enum value is used, to drive popularity-sorted autocomplete.
 
@@ -518,7 +642,7 @@ Two lifecycles, by enum kind:
 1. Every official value ships with a corresponding `enum_metadata` row (`is_official=true`) in the same migration that creates the enum.
 2. No user-suggestion path in MVP. A new value requires a migration that both `ALTER TYPE`s the enum and inserts the metadata row.
 
-### Extensible labels (§5.2 — cuisine_type, dietary_restriction, dietary_tag, food_allergy)
+### Extensible labels (§5.2 — cuisine_type, dietary_restriction, dietary_tag, food_allergy, food_group)
 1. Every official seed value ships in `enum_metadata` (`is_official=true`).
 2. When the user submits a value not present in `enum_metadata` for the relevant `enum_type`, the application calls `sys_save_label`. That RPC:
    - Inserts an `is_official=false, is_pending=true, suggested_by=<user>` row if missing.
@@ -589,6 +713,14 @@ The per-menu overlay never produces a failure — duplicate values are silently 
 - `enum_metadata (enum_type, usage_count DESC)`
 - `enum_metadata (enum_type) WHERE is_pending = true` — moderation queue
 - `ingredients (name)` text-search-friendly (`pg_trgm`)
+- `ingredients (food_group) WHERE food_group IS NOT NULL` **(v2.0)** — supports shopping-session food-group grouping
+- `inventory_items (workspace_id, ingredient_id) WHERE NOT is_consumed` **(v2.0)** — on-hand lookup by ingredient
+- `inventory_items (workspace_id, expiration_date) WHERE NOT is_consumed` **(v2.0)** — lazy expiry scan
+- `shopping_sessions (menu_id) WHERE status = 'in_progress'` **(v2.0)** — unique active session per menu (backs the partial unique constraint)
+- `shopping_item_status (session_id)` **(v2.0)**
+- `slot_completions (menu_slot_id)` **(v2.0)** (unique; backs the partial unique constraint)
+- `slot_completions (workspace_id, status) WHERE status != 'planned'` **(v2.0)** — incomplete-alert derivation
+- `menu_slot_ingredient_overrides (menu_slot_id)` **(v2.0)** — override map lookup during grocery recompute
 
 ---
 

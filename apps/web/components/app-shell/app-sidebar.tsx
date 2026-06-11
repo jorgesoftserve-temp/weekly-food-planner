@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation'
 import {
   ChefHat,
   CalendarRange,
+  ClipboardCheck,
+  Package,
   ShoppingCart,
   LayoutDashboard,
   Search,
@@ -31,6 +33,8 @@ const NAV_LINKS = [
   { href: '/recipes', label: 'Recipes', icon: ChefHat },
   { href: '/menu', label: 'Weekly menu', icon: CalendarRange },
   { href: '/grocery', label: 'Grocery list', icon: ShoppingCart },
+  { href: '/shopping', label: 'Shopping', icon: ClipboardCheck },
+  { href: '/inventory', label: 'Inventory', icon: Package },
 ] as const
 
 export const AppSidebar = () => {

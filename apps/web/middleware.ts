@@ -12,6 +12,8 @@ const PROTECTED_PREFIXES = [
   '/recipes',
   '/menu',
   '/grocery',
+  '/shopping',
+  '/inventory',
   '/search',
   '/settings',
 ]

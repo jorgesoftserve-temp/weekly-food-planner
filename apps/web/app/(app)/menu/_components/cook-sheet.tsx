@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSupabase } from '@/lib/hooks/use-supabase'
-import { useMarkSlotCooked } from '@/lib/hooks/use-cook-slot'
+import { useSetSlotCompletion } from '@/lib/hooks/use-slot-completion'
 import { resolveRecipeIcon } from '@/lib/recipe-icon'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -39,9 +39,10 @@ export type CookSheetProps = {
 
 // Full-screen "Cook mode" Sheet opened from an accepted-menu slot. The recipe's
 // real ingredients + numbered steps are checkable hands-on (ephemeral, per-cook
-// progress — not persisted). "Mark as cooked" writes cooked_at server-side via
-// useMarkSlotCooked; an already-cooked slot can be un-marked. Promotes the
-// design-lab recipe-cook-mock onto live data.
+// progress — not persisted). "Mark as cooked" records a slot_completion (status
+// cooked ↔ planned) via useSetSlotCompletion — the same path as the menu-view
+// cook-status chip — which also syncs cooked_at. Promotes the design-lab
+// recipe-cook-mock onto live data.
 export const CookSheet = ({
   workspaceId,
   menuId,
@@ -89,7 +90,9 @@ export const CookSheet = ({
     )
   }, [recipe])
 
-  const markCooked = useMarkSlotCooked({ workspaceId, menuId })
+  // Cook mode's mark action routes through the same slot_completions endpoint as
+  // the menu-view cook-status chip, so both surfaces agree (cooked ↔ planned).
+  const markCooked = useSetSlotCompletion({ workspaceId, menuId })
   const isCooked = !!slot?.cooked_at
 
   const toggle = (set: Set<string>, id: string): Set<string> => {
@@ -102,7 +105,10 @@ export const CookSheet = ({
   const handleMark = async (cooked: boolean) => {
     if (!slot) return
     try {
-      await markCooked.mutateAsync({ slotId: slot.id, cooked })
+      await markCooked.mutateAsync({
+        slotId: slot.id,
+        status: cooked ? 'cooked' : 'planned',
+      })
       notifySuccess(
         cooked ? 'Marked as cooked' : 'Marked as not cooked',
         cooked ? `${recipeName} — enjoy!` : undefined,

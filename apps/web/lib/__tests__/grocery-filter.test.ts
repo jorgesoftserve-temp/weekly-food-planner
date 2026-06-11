@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { GroceryListRecord } from '@weekly-food-planner/supabase'
-import { applyShopForFilter } from '../grocery-filter'
+import {
+  aggregateHouseholdGrocery,
+  annotateWithInventory,
+  applyShopForFilter,
+} from '../grocery-filter'
 
 const list = ({
   id,
@@ -131,5 +135,136 @@ describe('applyShopForFilter', () => {
       selectedIds: ['m1'],
     })
     expect(result[0]?.scaledItems[0]?.scheduled_purchase_day).toBe('tuesday')
+  })
+})
+
+// ── aggregateHouseholdGrocery (item 8) ──────────────────────────────────────
+
+describe('aggregateHouseholdGrocery', () => {
+  it('uses the shared list as the total — does NOT double-count per-member lists', () => {
+    // shared already = the household total; per-member is a breakdown of it.
+    const shared = list({
+      id: 'shared',
+      targetMemberId: null,
+      items: [
+        { id: 's1', ingredientId: 'ing-a', quantity: 400 },
+        { id: 's2', ingredientId: 'ing-b', quantity: 8, unit: 'piece' },
+      ],
+    })
+    const alice = list({
+      id: 'alice',
+      targetMemberId: 'm1',
+      items: [{ id: 'a1', ingredientId: 'ing-a', quantity: 200 }],
+    })
+    const result = aggregateHouseholdGrocery({ lists: [shared, alice] })
+    expect(result.target_member_id).toBeNull()
+    const a = result.scaledItems.find((i) => i.ingredient_id === 'ing-a')
+    expect(a?.quantity).toBe(400) // NOT 600
+    expect(result.scaledItems).toHaveLength(2)
+  })
+
+  it('unions per-member lists when there is no shared list', () => {
+    const alice = list({
+      id: 'alice',
+      targetMemberId: 'm1',
+      items: [{ id: 'a1', ingredientId: 'ing-a', quantity: 200, unit: 'g' }],
+    })
+    const bob = list({
+      id: 'bob',
+      targetMemberId: 'm2',
+      items: [{ id: 'b1', ingredientId: 'ing-a', quantity: 150, unit: 'g' }],
+    })
+    const result = aggregateHouseholdGrocery({ lists: [alice, bob] })
+    const a = result.scaledItems.find((i) => i.ingredient_id === 'ing-a')
+    expect(a?.quantity).toBe(350)
+    expect(result.scaledItems).toHaveLength(1)
+  })
+
+  it('keeps mismatched units as separate lines', () => {
+    const shared = list({
+      id: 'shared',
+      targetMemberId: null,
+      items: [
+        { id: 's1', ingredientId: 'ing-a', quantity: 2, unit: 'cup' },
+        { id: 's2', ingredientId: 'ing-a', quantity: 100, unit: 'g' },
+      ],
+    })
+    const result = aggregateHouseholdGrocery({ lists: [shared] })
+    expect(result.scaledItems).toHaveLength(2)
+  })
+
+  it('folds scheduled_purchase_day to the earliest (Mon-first)', () => {
+    const alice = list({
+      id: 'alice',
+      targetMemberId: 'm1',
+      items: [{ id: 'a1', ingredientId: 'ing-a', quantity: 1, unit: 'g', day: 'friday' }],
+    })
+    const bob = list({
+      id: 'bob',
+      targetMemberId: 'm2',
+      items: [{ id: 'b1', ingredientId: 'ing-a', quantity: 1, unit: 'g', day: 'tuesday' }],
+    })
+    const result = aggregateHouseholdGrocery({ lists: [alice, bob] })
+    expect(result.scaledItems[0]?.scheduled_purchase_day).toBe('tuesday')
+  })
+})
+
+// ── annotateWithInventory (§17) ─────────────────────────────────────────────
+
+describe('annotateWithInventory', () => {
+  const items = [
+    { id: 'i1', ingredient_id: 'tomato', quantity: 5, unit: 'piece', scheduled_purchase_day: null },
+    { id: 'i2', ingredient_id: 'rice', quantity: 200, unit: 'g', scheduled_purchase_day: null },
+  ]
+
+  it('annotates on-hand + suggested-to-buy without lowering required', () => {
+    const out = annotateWithInventory({
+      items,
+      inventory: [{ ingredient_id: 'tomato', unit: 'piece', quantity: 2 }],
+    })
+    const tomato = out.find((i) => i.ingredient_id === 'tomato')!
+    expect(tomato.quantity).toBe(5) // required untouched
+    expect(tomato.onHand).toBe(2)
+    expect(tomato.suggestedToBuy).toBe(3)
+    expect(tomato.fullyCovered).toBe(false)
+  })
+
+  it('marks a line fully covered when on-hand >= required', () => {
+    const out = annotateWithInventory({
+      items,
+      inventory: [{ ingredient_id: 'tomato', unit: 'piece', quantity: 9 }],
+    })
+    const tomato = out.find((i) => i.ingredient_id === 'tomato')!
+    expect(tomato.suggestedToBuy).toBe(0)
+    expect(tomato.fullyCovered).toBe(true)
+  })
+
+  it('does not offset across mismatched units', () => {
+    const out = annotateWithInventory({
+      items,
+      inventory: [{ ingredient_id: 'rice', unit: 'cup', quantity: 3 }],
+    })
+    const rice = out.find((i) => i.ingredient_id === 'rice')!
+    expect(rice.onHand).toBe(0)
+    expect(rice.suggestedToBuy).toBe(200)
+  })
+
+  it('sums multiple inventory rows for the same (ingredient, unit)', () => {
+    const out = annotateWithInventory({
+      items,
+      inventory: [
+        { ingredient_id: 'tomato', unit: 'piece', quantity: 1 },
+        { ingredient_id: 'tomato', unit: 'piece', quantity: 2 },
+      ],
+    })
+    const tomato = out.find((i) => i.ingredient_id === 'tomato')!
+    expect(tomato.onHand).toBe(3)
+    expect(tomato.suggestedToBuy).toBe(2)
+  })
+
+  it('leaves lines with no inventory at onHand 0', () => {
+    const out = annotateWithInventory({ items, inventory: [] })
+    expect(out.every((i) => i.onHand === 0)).toBe(true)
+    expect(out[0]?.suggestedToBuy).toBe(5)
   })
 })

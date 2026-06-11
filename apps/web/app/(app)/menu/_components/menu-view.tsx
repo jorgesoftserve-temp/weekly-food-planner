@@ -1,8 +1,26 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, ChefHat, Lock, MoreHorizontal, Plus, Repeat2 } from 'lucide-react'
-import type { MenuRecord, MenuSlotRecord } from '@weekly-food-planner/supabase'
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  Check,
+  ChefHat,
+  Lock,
+  MoreHorizontal,
+  Plus,
+  Refrigerator,
+  Repeat2,
+} from 'lucide-react'
+import type {
+  DbTypes,
+  MenuRecord,
+  MenuSlotRecord,
+} from '@weekly-food-planner/supabase'
+import type { SlotShoppingAlert } from '@/lib/api/menu-alerts'
+import { CookStatusChip } from './cook-status-chip'
+
+type SlotCookStatus = DbTypes.SlotCookStatus
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -43,6 +61,26 @@ export type MenuViewProps = {
   // When provided (active/accepted menu), each slot shows a Cook affordance
   // that opens the cook sheet for hands-on cooking + marking cooked.
   onCookSlot?: (slot: MenuSlotRecord) => void
+  // (v2.0 Phase 3) Incomplete-shopping alerts keyed by slot id. When a slot has
+  // an entry, it renders a "Missing items" warning listing the short ingredients.
+  alertsBySlotId?: Record<string, SlotShoppingAlert>
+  // (v2.0 Phase 4) Cook-status keyed by slot id (from slot_completions). Absent
+  // entry = planned. When onSetCookStatus is provided each slot shows a cycling
+  // cook-status chip (planned → cooked → skipped).
+  cookStatusBySlotId?: Record<string, SlotCookStatus>
+  onSetCookStatus?: ({ slot, status }: { slot: MenuSlotRecord; status: SlotCookStatus }) => void
+  // (v2.0 Phase 5) Re-open the cook-time reconciliation / leftovers sheet for an
+  // already-cooked slot. Shown only on cooked slots.
+  onOpenReconcile?: (slot: MenuSlotRecord) => void
+  // (v2.0 Phase 6) Open the ingredient-substitution sheet for a slot. When
+  // provided each active-menu slot shows a "Substitute" affordance.
+  onOpenSubstitute?: (slot: MenuSlotRecord) => void
+  // (v2.0 Phase 6) Count of active ingredient overrides per slot id — drives the
+  // "Substituted" badge.
+  overrideCountBySlotId?: Record<string, number>
+  // (v2.0 item 10) When set, render only this member's slots (plus shared
+  // household slots). null = whole household (every slot).
+  filterMemberId?: string | null
 }
 
 type DayBucket = { day: string; slots: MenuSlotRecord[] }
@@ -96,6 +134,11 @@ const groupByDay = ({
   }))
 }
 
+const formatMissing = (alert: SlotShoppingAlert): string =>
+  alert.missingIngredients
+    .map((m) => `${m.name} (short ${m.shortfall} ${m.unit})`)
+    .join(', ')
+
 const SlotCard = ({
   slot,
   recipeName,
@@ -103,6 +146,12 @@ const SlotCard = ({
   editable,
   onReplaceSlot,
   onCookSlot,
+  alert,
+  cookStatus,
+  onSetCookStatus,
+  onOpenReconcile,
+  onOpenSubstitute,
+  overrideCount = 0,
 }: {
   slot: MenuSlotRecord
   recipeName: string
@@ -110,11 +159,24 @@ const SlotCard = ({
   editable: boolean
   onReplaceSlot?: (slot: MenuSlotRecord) => void
   onCookSlot?: (slot: MenuSlotRecord) => void
+  alert?: SlotShoppingAlert
+  // (v2.0 Phase 4) cook-status from slot_completions; falls back to cooked_at.
+  cookStatus: SlotCookStatus
+  onSetCookStatus?: ({ slot, status }: { slot: MenuSlotRecord; status: SlotCookStatus }) => void
+  onOpenReconcile?: (slot: MenuSlotRecord) => void
+  onOpenSubstitute?: (slot: MenuSlotRecord) => void
+  overrideCount?: number
 }) => {
   const icon = resolveRecipeIcon({ name: recipeName, meal: slot.meal_key })
-  const cooked = !!slot.cooked_at
+  const cooked = cookStatus === 'cooked'
+  const skipped = cookStatus === 'skipped'
   return (
-    <div className="flex items-start gap-2 rounded-xl border border-border bg-background p-2">
+    <div
+      className={cn(
+        'flex items-start gap-2 rounded-xl border border-border bg-background p-2',
+        skipped && 'opacity-60',
+      )}
+    >
       <div
         className={cn(
           'flex size-9 shrink-0 items-center justify-center rounded-lg text-lg',
@@ -146,10 +208,38 @@ const SlotCard = ({
               Modified
             </span>
           ) : null}
+          {overrideCount > 0 ? (
+            <span
+              title={`${overrideCount} ingredient substitution${overrideCount === 1 ? '' : 's'}`}
+              className="flex items-center gap-0.5 rounded-full bg-success-tint px-1.5 py-0.5 text-[10px] font-medium uppercase text-success"
+            >
+              <ArrowLeftRight className="size-2.5" aria-hidden />
+              Substituted
+            </span>
+          ) : null}
+          {alert && cookStatus === 'planned' ? (
+            <span
+              title={`Missing for this meal: ${formatMissing(alert)}`}
+              className="flex items-center gap-0.5 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-destructive"
+            >
+              <AlertTriangle className="size-2.5" aria-hidden />
+              Missing items
+            </span>
+          ) : null}
         </div>
-        <span className="break-words text-sm font-medium leading-tight">
+        <span
+          className={cn(
+            'break-words text-sm font-medium leading-tight',
+            skipped && 'text-muted-foreground line-through',
+          )}
+        >
           {recipeName}
         </span>
+        {alert && cookStatus === 'planned' ? (
+          <span className="break-words text-xs leading-tight text-destructive">
+            Short on {alert.missingIngredients.map((m) => m.name).join(', ')}
+          </span>
+        ) : null}
         {memberName ? (
           <span className="truncate text-xs text-muted-foreground">
             For {memberName}
@@ -180,17 +270,52 @@ const SlotCard = ({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      ) : onCookSlot ? (
-        <Button
-          variant={cooked ? 'ghost' : 'outline'}
-          size="sm"
-          className="h-8 shrink-0 gap-1 px-2.5 text-xs"
-          onClick={() => onCookSlot(slot)}
-          aria-label={`Cook ${recipeName} (${slot.meal_key})`}
-        >
-          <ChefHat className="size-3.5" aria-hidden />
-          {cooked ? 'View' : 'Cook'}
-        </Button>
+      ) : onSetCookStatus || onCookSlot ? (
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {onSetCookStatus ? (
+            <CookStatusChip
+              status={cookStatus}
+              recipeName={recipeName}
+              onChange={({ status }) => onSetCookStatus({ slot, status })}
+            />
+          ) : null}
+          {onCookSlot ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 gap-1 px-2 text-xs text-muted-foreground"
+              onClick={() => onCookSlot(slot)}
+              aria-label={`Open cook mode for ${recipeName} (${slot.meal_key})`}
+            >
+              <ChefHat className="size-3.5" aria-hidden />
+              Cook mode
+            </Button>
+          ) : null}
+          {cooked && onOpenReconcile ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 gap-1 px-2 text-xs text-muted-foreground"
+              onClick={() => onOpenReconcile(slot)}
+              aria-label={`Reconcile leftovers for ${recipeName} (${slot.meal_key})`}
+            >
+              <Refrigerator className="size-3.5" aria-hidden />
+              Reconcile / leftovers
+            </Button>
+          ) : null}
+          {onOpenSubstitute ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 gap-1 px-2 text-xs text-muted-foreground"
+              onClick={() => onOpenSubstitute(slot)}
+              aria-label={`Substitute an ingredient for ${recipeName} (${slot.meal_key})`}
+            >
+              <ArrowLeftRight className="size-3.5" aria-hidden />
+              Substitute
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
@@ -204,15 +329,30 @@ export const MenuView = ({
   onReplaceSlot,
   onAddSlot,
   onCookSlot,
+  alertsBySlotId,
+  cookStatusBySlotId,
+  onSetCookStatus,
+  onOpenReconcile,
+  onOpenSubstitute,
+  overrideCountBySlotId,
+  filterMemberId = null,
 }: MenuViewProps) => {
+  // (v2.0 item 10) Per-member filter: keep the member's targeted slots plus any
+  // shared household slots (target_member_id === null), which everyone eats.
+  const visibleSlots = useMemo(() => {
+    if (filterMemberId === null) return menu.menu_slots
+    return menu.menu_slots.filter(
+      (s) => s.target_member_id === filterMemberId || s.target_member_id === null,
+    )
+  }, [menu.menu_slots, filterMemberId])
   const buckets = useMemo(
     () =>
       groupByDay({
-        slots: menu.menu_slots,
+        slots: visibleSlots,
         startDayOfWeek: menu.start_day_of_week,
         durationDays: menu.duration_days,
       }),
-    [menu.menu_slots, menu.start_day_of_week, menu.duration_days],
+    [visibleSlots, menu.start_day_of_week, menu.duration_days],
   )
   const initialDay =
     buckets[0]?.day && DAY_ORDER[buckets[0].day] !== undefined ? buckets[0].day : 'monday'
@@ -344,6 +484,15 @@ export const MenuView = ({
                     editable={editable}
                     onReplaceSlot={onReplaceSlot}
                     onCookSlot={onCookSlot}
+                    alert={alertsBySlotId?.[slot.id]}
+                    cookStatus={
+                      cookStatusBySlotId?.[slot.id] ??
+                      (slot.cooked_at ? 'cooked' : 'planned')
+                    }
+                    onSetCookStatus={onSetCookStatus}
+                    onOpenReconcile={onOpenReconcile}
+                    onOpenSubstitute={onOpenSubstitute}
+                    overrideCount={overrideCountBySlotId?.[slot.id] ?? 0}
                   />
                 ))}
                 {editable && onAddSlot ? (
@@ -386,6 +535,12 @@ export const MenuView = ({
                   editable={editable}
                   onReplaceSlot={onReplaceSlot}
                   onCookSlot={onCookSlot}
+                  alert={alertsBySlotId?.[slot.id]}
+                  cookStatus={
+                    cookStatusBySlotId?.[slot.id] ??
+                    (slot.cooked_at ? 'cooked' : 'planned')
+                  }
+                  onSetCookStatus={onSetCookStatus}
                 />
               ))}
               {editable && onAddSlot ? (

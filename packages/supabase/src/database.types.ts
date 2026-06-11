@@ -206,6 +206,8 @@ export type Database = {
       ingredients: {
         Row: {
           created_at: string
+          food_group: string | null
+          food_group_source: Database["public"]["Enums"]["food_group_source"]
           id: string
           image_url: string | null
           is_perishable: boolean
@@ -217,6 +219,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          food_group?: string | null
+          food_group_source?: Database["public"]["Enums"]["food_group_source"]
           id?: string
           image_url?: string | null
           is_perishable?: boolean
@@ -228,6 +232,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          food_group?: string | null
+          food_group_source?: Database["public"]["Enums"]["food_group_source"]
           id?: string
           image_url?: string | null
           is_perishable?: boolean
@@ -238,6 +244,93 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      inventory_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expiration_date: string | null
+          id: string
+          ingredient_id: string
+          is_consumed: boolean
+          label: string | null
+          quantity: number
+          source: Database["public"]["Enums"]["inventory_source"]
+          source_menu_id: string | null
+          source_slot_id: string | null
+          unit: Database["public"]["Enums"]["unit"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expiration_date?: string | null
+          id?: string
+          ingredient_id: string
+          is_consumed?: boolean
+          label?: string | null
+          quantity: number
+          source?: Database["public"]["Enums"]["inventory_source"]
+          source_menu_id?: string | null
+          source_slot_id?: string | null
+          unit: Database["public"]["Enums"]["unit"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expiration_date?: string | null
+          id?: string
+          ingredient_id?: string
+          is_consumed?: boolean
+          label?: string | null
+          quantity?: number
+          source?: Database["public"]["Enums"]["inventory_source"]
+          source_menu_id?: string | null
+          source_slot_id?: string | null
+          unit?: Database["public"]["Enums"]["unit"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_source_menu_id_fkey"
+            columns: ["source_menu_id"]
+            isOneToOne: false
+            referencedRelation: "menus"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_source_slot_id_fkey"
+            columns: ["source_slot_id"]
+            isOneToOne: false
+            referencedRelation: "menu_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       member_allergies: {
         Row: {
@@ -341,6 +434,84 @@ export type Database = {
             columns: ["menu_id"]
             isOneToOne: false
             referencedRelation: "menus"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_slot_ingredient_overrides: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          menu_slot_id: string
+          note: string | null
+          original_ingredient_id: string
+          quantity: number | null
+          substitute_ingredient_id: string
+          unit: Database["public"]["Enums"]["unit"] | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          menu_slot_id: string
+          note?: string | null
+          original_ingredient_id: string
+          quantity?: number | null
+          substitute_ingredient_id: string
+          unit?: Database["public"]["Enums"]["unit"] | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          menu_slot_id?: string
+          note?: string | null
+          original_ingredient_id?: string
+          quantity?: number | null
+          substitute_ingredient_id?: string
+          unit?: Database["public"]["Enums"]["unit"] | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_slot_ingredient_overrides_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_slot_ingredient_overrides_menu_slot_id_fkey"
+            columns: ["menu_slot_id"]
+            isOneToOne: false
+            referencedRelation: "menu_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_slot_ingredient_overrides_original_ingredient_id_fkey"
+            columns: ["original_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_slot_ingredient_overrides_substitute_ingredient_id_fkey"
+            columns: ["substitute_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_slot_ingredient_overrides_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -681,6 +852,164 @@ export type Database = {
           },
         ]
       }
+      shopping_item_status: {
+        Row: {
+          acquired_quantity: number
+          created_at: string
+          grocery_item_id: string
+          id: string
+          session_id: string
+          status: Database["public"]["Enums"]["acquired_status"]
+          updated_at: string
+        }
+        Insert: {
+          acquired_quantity?: number
+          created_at?: string
+          grocery_item_id: string
+          id?: string
+          session_id: string
+          status?: Database["public"]["Enums"]["acquired_status"]
+          updated_at?: string
+        }
+        Update: {
+          acquired_quantity?: number
+          created_at?: string
+          grocery_item_id?: string
+          id?: string
+          session_id?: string
+          status?: Database["public"]["Enums"]["acquired_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_item_status_grocery_item_id_fkey"
+            columns: ["grocery_item_id"]
+            isOneToOne: false
+            referencedRelation: "grocery_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_item_status_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "shopping_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopping_sessions: {
+        Row: {
+          completeness: number | null
+          created_at: string
+          created_by: string | null
+          id: string
+          menu_id: string
+          status: Database["public"]["Enums"]["shopping_status"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          completeness?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          menu_id: string
+          status?: Database["public"]["Enums"]["shopping_status"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          completeness?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          menu_id?: string
+          status?: Database["public"]["Enums"]["shopping_status"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_sessions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_sessions_menu_id_fkey"
+            columns: ["menu_id"]
+            isOneToOne: false
+            referencedRelation: "menus"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_sessions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      slot_completions: {
+        Row: {
+          cooked_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          menu_slot_id: string
+          notes: string | null
+          status: Database["public"]["Enums"]["slot_cook_status"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          cooked_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          menu_slot_id: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["slot_cook_status"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          cooked_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          menu_slot_id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["slot_cook_status"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "slot_completions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "slot_completions_menu_slot_id_fkey"
+            columns: ["menu_slot_id"]
+            isOneToOne: true
+            referencedRelation: "menu_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "slot_completions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_members: {
         Row: {
           accent_color: Database["public"]["Enums"]["accent_color"] | null
@@ -739,6 +1068,7 @@ export type Database = {
           created_at: string
           id: string
           is_deleted: boolean
+          leftover_max_days: number
           name: string
           owner_id: string
           shared_meal_frequency: Json | null
@@ -749,6 +1079,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_deleted?: boolean
+          leftover_max_days?: number
           name: string
           owner_id: string
           shared_meal_frequency?: Json | null
@@ -759,6 +1090,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_deleted?: boolean
+          leftover_max_days?: number
           name?: string
           owner_id?: string
           shared_meal_frequency?: Json | null
@@ -797,6 +1129,7 @@ export type Database = {
     }
     Enums: {
       accent_color: "strawberry" | "moss" | "teal" | "amber" | "ocean" | "plum"
+      acquired_status: "pending" | "acquired" | "partial" | "skipped"
       age_category: "infant" | "toddler" | "child" | "teen" | "adult" | "senior"
       day_of_week:
         | "monday"
@@ -807,9 +1140,13 @@ export type Database = {
         | "saturday"
         | "sunday"
       difficulty: "easy" | "medium" | "hard"
+      food_group_source: "seed" | "ai" | "unset"
       generation_status: "pending" | "running" | "success" | "failed"
+      inventory_source: "manual" | "purchase" | "leftover" | "cook_remainder"
       meal_type: "breakfast" | "lunch" | "dinner" | "snack"
       menu_type: "weekly" | "custom"
+      shopping_status: "in_progress" | "complete" | "incomplete"
+      slot_cook_status: "planned" | "cooked" | "skipped"
       unit:
         | "g"
         | "kg"
@@ -954,6 +1291,7 @@ export const Constants = {
   public: {
     Enums: {
       accent_color: ["strawberry", "moss", "teal", "amber", "ocean", "plum"],
+      acquired_status: ["pending", "acquired", "partial", "skipped"],
       age_category: ["infant", "toddler", "child", "teen", "adult", "senior"],
       day_of_week: [
         "monday",
@@ -965,9 +1303,13 @@ export const Constants = {
         "sunday",
       ],
       difficulty: ["easy", "medium", "hard"],
+      food_group_source: ["seed", "ai", "unset"],
       generation_status: ["pending", "running", "success", "failed"],
+      inventory_source: ["manual", "purchase", "leftover", "cook_remainder"],
       meal_type: ["breakfast", "lunch", "dinner", "snack"],
       menu_type: ["weekly", "custom"],
+      shopping_status: ["in_progress", "complete", "incomplete"],
+      slot_cook_status: ["planned", "cooked", "skipped"],
       unit: [
         "g",
         "kg",

@@ -5,6 +5,7 @@ import {
   CalendarRange,
   ChefHat,
   LayoutDashboard,
+  Package,
   ShoppingCart,
   Users,
 } from 'lucide-react'
@@ -17,6 +18,7 @@ const NAV = [
   { key: 'recipes', label: 'Recipes', icon: ChefHat },
   { key: 'menu', label: 'Weekly menu', icon: CalendarRange },
   { key: 'grocery', label: 'Grocery', icon: ShoppingCart },
+  { key: 'inventory', label: 'Inventory', icon: Package },
   { key: 'members', label: 'Members', icon: Users },
 ] as const
 

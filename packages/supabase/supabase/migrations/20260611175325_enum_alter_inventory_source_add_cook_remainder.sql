@@ -1,0 +1,12 @@
+-- (v2.0 Phase 5) Raw-ingredient leftovers from the cook-time reconciliation.
+-- When a recipe slot is marked `cooked` and the cook used less of an ingredient
+-- than planned, the remainder is offered back to the pantry as raw stock. A
+-- dedicated `cook_remainder` source keeps that origin queryable and distinct
+-- from prepared-dish surplus (`leftover`) and ordinary pantry stock (`manual`).
+-- Displayed under the "Pantry" tag (see deriveInventoryDisplayTag). Engine-free:
+-- inventory_items never feeds the constraint engine.
+--
+-- ADD VALUE is transaction-unsafe only when the new value is USED in the same
+-- migration; it is not used here, so it is safe under Supabase's wrapping
+-- transaction (PG15).
+ALTER TYPE public.inventory_source ADD VALUE IF NOT EXISTS 'cook_remainder';

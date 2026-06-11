@@ -8,6 +8,7 @@ import { getAuthenticatedUser } from '@/lib/api/auth-helpers'
 import { supabaseAdminClient } from '@/utils/supabase/admin'
 import { badRequest, jsonOk, unauthorized } from '@/lib/api/responses'
 import { runWithErrorHandler } from '@/lib/api/route-helpers'
+import { classifyIngredientFoodGroup } from '@/lib/api/food-group-classify'
 
 export const GET = async () => {
   const user = await getAuthenticatedUser()
@@ -58,8 +59,21 @@ export const POST = async (request: NextRequest) => {
         requiresFresh: body.requiresFresh,
         sameDayCook: body.sameDayCook,
         allergens: body.allergens,
+        // food_group_source defaults to 'unset'; the classifier below stamps
+        // 'ai' asynchronously if ANTHROPIC_API_KEY is set.
       },
     })
+
+    // Fire-and-forget: classify the new user ingredient into a food_group.
+    // This MUST be non-blocking — ingredient creation must never fail because
+    // of a classify error. The result is a catalog annotation only; it is
+    // never read by the constraint engine or the menu input builder, and never
+    // affects accepted_seed. (v2.0 Phase 0, food-group-classify.ts)
+    void classifyIngredientFoodGroup({
+      ingredientId: ingredient.id,
+      ingredientName: ingredient.name,
+    })
+
     return jsonOk({ ingredient }, { status: 201 })
   })
 }

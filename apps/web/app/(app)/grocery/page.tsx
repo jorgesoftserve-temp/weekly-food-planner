@@ -15,6 +15,7 @@ import {
   useActiveGroceryLists,
   useActiveMenu,
   useIngredients,
+  useInventoryList,
   useUpcomingMenus,
   useWorkspaceWithMembers,
 } from '@weekly-food-planner/supabase/react'
@@ -50,14 +51,25 @@ import {
 import { EmptyState } from '@/components/empty-state'
 import { PageHeader } from '@/components/page-header'
 import { useActiveWorkspace } from '@/components/workspace-provider'
+import { cn } from '@/lib/utils'
 import { useSupabase } from '@/lib/hooks/use-supabase'
 import {
   downloadMenuExport,
   type ExportFormat,
 } from '@/lib/hooks/export-menu'
-import { applyShopForFilter } from '@/lib/grocery-filter'
+import {
+  aggregateHouseholdGrocery,
+  annotateWithInventory,
+  applyShopForFilter,
+  type AnnotatedGroceryItem,
+  type InventoryOnHand,
+} from '@/lib/grocery-filter'
 import { IngredientDetailDialog } from './_components/ingredient-detail-dialog'
 import { ShopForPicker } from './_components/shop-for-picker'
+import {
+  GroceryViewModePicker,
+  type GroceryViewMode,
+} from './_components/grocery-view-mode-picker'
 
 const capitalize = (s: string): string =>
   s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1)
@@ -68,6 +80,7 @@ const formatQuantity = (n: number): string => {
 }
 
 const SHOP_FOR_PARAM = 'shop_for'
+const VIEW_PARAM = 'view'
 
 const GroceryPage = () => {
   const supabase = useSupabase()
@@ -104,6 +117,24 @@ const GroceryPage = () => {
     },
     [router, searchParams],
   )
+  // (v2.0 item 8) Grocery view mode: 'everyone' (consolidated household total)
+  // or 'by-member' (per-member breakdown + shop-for subset). URL-driven so it
+  // survives refresh, like shop_for. Default 'everyone' per the approved design.
+  const viewMode: GroceryViewMode =
+    searchParams.get(VIEW_PARAM) === 'by-member' ? 'by-member' : 'everyone'
+  const setViewMode = useCallback(
+    (next: GroceryViewMode) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next === 'everyone') params.delete(VIEW_PARAM)
+      else params.set(VIEW_PARAM, next)
+      // Leaving by-member clears any subset selection so 'everyone' is truly all.
+      if (next === 'everyone') params.delete(SHOP_FOR_PARAM)
+      const query = params.toString()
+      router.replace(query.length > 0 ? `?${query}` : '?', { scroll: false })
+    },
+    [router, searchParams],
+  )
+
   const upcomingQuery = useUpcomingMenus({
     supabase,
     workspaceId: workspace?.id ?? null,
@@ -129,6 +160,22 @@ const GroceryPage = () => {
     workspaceId: workspace?.id ?? null,
     enabled: !!workspace && !!groceryQuery.data,
   })
+  // (v2.0 §17) On-hand pantry stock for the non-destructive annotation. The GET
+  // also runs the lazy leftover-expiry sweep server-side.
+  const inventoryQuery = useInventoryList({
+    supabase,
+    workspaceId: workspace?.id ?? null,
+    enabled: !!workspace && !!groceryQuery.data,
+  })
+  const onHandInventory = useMemo<InventoryOnHand[]>(
+    () =>
+      (inventoryQuery.data ?? []).map((i) => ({
+        ingredient_id: i.ingredient_id,
+        unit: i.unit,
+        quantity: i.quantity,
+      })),
+    [inventoryQuery.data],
+  )
 
   const [selectedIngredientId, setSelectedIngredientId] = useState<string | null>(
     null,
@@ -172,16 +219,21 @@ const GroceryPage = () => {
     return workspaceQuery.data?.workspace_members?.map((m) => m.id) ?? []
   }, [activeMenuQuery.data, workspaceQuery.data])
 
-  // Apply the shop-for filter (scale shared, filter per-member) before sort.
-  // Shared bucket stays first regardless of filter state.
+  // Build the lists to render based on the view mode:
+  //   - 'everyone'   → one consolidated household total (no double-count).
+  //   - 'by-member'  → shared + per-member buckets, with the shop-for subset
+  //                    filter (scale shared, filter per-member) applied.
   const filteredLists = useMemo(() => {
     if (!grocery) return []
+    if (viewMode === 'everyone') {
+      return [aggregateHouseholdGrocery({ lists: grocery.lists })]
+    }
     return applyShopForFilter({
       lists: grocery.lists,
       participantIds,
       selectedIds: selectedShopForIds,
     })
-  }, [grocery, participantIds, selectedShopForIds])
+  }, [grocery, viewMode, participantIds, selectedShopForIds])
 
   const sortedLists = useMemo(() => {
     return [...filteredLists].sort((a, b) => {
@@ -292,7 +344,8 @@ const GroceryPage = () => {
       ) : (
         <TooltipProvider delayDuration={150}>
           <div className="flex flex-col gap-4">
-            {participantIds.length > 0 ? (
+            <GroceryViewModePicker mode={viewMode} onChange={setViewMode} />
+            {viewMode === 'by-member' && participantIds.length > 0 ? (
               <ShopForPicker
                 participantIds={participantIds}
                 memberNamesById={memberNamesById}
@@ -302,13 +355,19 @@ const GroceryPage = () => {
             ) : null}
             {sortedLists.map((list) => {
               const heading =
-                list.target_member_id === null
-                  ? 'Shared'
-                  : `Per member: ${
-                      memberNamesById[list.target_member_id] ??
-                      `[unknown:${list.target_member_id.slice(0, 6)}]`
-                    }`
-              const sortedItems = [...list.scaledItems].sort((a, b) => {
+                viewMode === 'everyone'
+                  ? 'Everyone — whole household'
+                  : list.target_member_id === null
+                    ? 'Shared'
+                    : `Per member: ${
+                        memberNamesById[list.target_member_id] ??
+                        `[unknown:${list.target_member_id.slice(0, 6)}]`
+                      }`
+              // (v2.0 §17) Annotate with on-hand pantry stock, then sort by name.
+              const sortedItems: AnnotatedGroceryItem[] = annotateWithInventory({
+                items: list.scaledItems,
+                inventory: onHandInventory,
+              }).sort((a, b) => {
                 const na =
                   ingredientsById[a.ingredient_id]?.name ?? a.ingredient_id
                 const nb =
@@ -415,8 +474,36 @@ const GroceryPage = () => {
                                 {capitalize(item.scheduled_purchase_day)}
                               </span>
                             ) : null}
-                            <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                              {formatQuantity(qty)} {item.unit}
+                            <span className="flex shrink-0 flex-col items-end">
+                              <span
+                                className={cn(
+                                  'text-sm tabular-nums',
+                                  item.fullyCovered
+                                    ? 'text-muted-foreground line-through'
+                                    : 'text-muted-foreground',
+                                )}
+                              >
+                                {formatQuantity(qty)} {item.unit}
+                              </span>
+                              {/* (v2.0 §17) Non-destructive pantry annotation — the
+                                  required qty above is never lowered. */}
+                              {item.onHand > 0 ? (
+                                <span className="text-[11px] leading-tight text-muted-foreground">
+                                  have {formatQuantity(item.onHand)}
+                                  {item.fullyCovered ? (
+                                    <span className="ml-1 font-medium text-success">
+                                      covered
+                                    </span>
+                                  ) : (
+                                    <>
+                                      {' · '}
+                                      <span className="font-medium text-foreground">
+                                        buy {formatQuantity(item.suggestedToBuy)}
+                                      </span>
+                                    </>
+                                  )}
+                                </span>
+                              ) : null}
                             </span>
                           </div>
                         )

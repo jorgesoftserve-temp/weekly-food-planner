@@ -79,6 +79,7 @@ export const ShopForPicker = ({
               type="button"
               variant={isOn ? 'default' : 'outline'}
               size="sm"
+              aria-pressed={isOn}
               onClick={() => toggle(memberId)}
             >
               {memberNamesById[memberId] ?? memberId.slice(0, 6)}

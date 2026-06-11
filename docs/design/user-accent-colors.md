@@ -26,7 +26,8 @@ separate dark-mode block:
 ```css
 /* in globals.css */
 [data-accent="moss"]        { --user-accent: 114 38% 45%; --user-accent-strong: 114 40% 32%; --user-accent-tint: 114 40% 95%; }
-.dark [data-accent="moss"]  { --user-accent: 114 45% 58%; --user-accent-strong: 114 45% 68%; --user-accent-tint: 114 45% 55%; } /* tint applied at /0.16 */
+.dark [data-accent="moss"]  { --user-accent: 114 45% 58%; --user-accent-strong: 114 48% 80%; --user-accent-tint: 114 30% 18%; }
+/* Dark tint is a solid opaque dark surface; strong is a high-L (light) hue for AA text on it. */
 ```
 
 - **`apps/web/app/(app)/layout.tsx`** reads `profiles.accent_color` server-side and renders
@@ -39,30 +40,34 @@ separate dark-mode block:
 
 ### The three vars per accent
 - `--user-accent` — the **solid**: focus ring, link, avatar ring, small indicators (mid-L, AA on white as a 3:1 non-text UI element).
-- `--user-accent-strong` — **text on the pale tint** (darkened for ≥4.5:1 on `--user-accent-tint`).
-- `--user-accent-tint` — **soft background** for active/selected surfaces (very light in light mode; applied at `/0.16` opacity in dark mode).
+- `--user-accent-strong` — **text on the tint surface**. Light mode: dark text (low L) on pale background. Dark mode: **light text** (high L, 80–83%) on dark tinted surface — same approach as `--success` / `--warning` in dark mode. Must clear ≥4.5:1 on `--user-accent-tint`.
+- `--user-accent-tint` — **tinted background** for active/selected surfaces. Light mode: very pale (L≥94%). Dark mode: pre-baked dark surface (L=16–20%), NOT applied at opacity — it is a solid opaque color that serves as the chip/row background.
 
 > We deliberately use **tint-bg + colored-text** for active surfaces (like Todoist), not a solid
 > white-on-color fill. This sidesteps the white-text-contrast problem on light hues (amber) and keeps
 > every accent legible without per-accent special-casing.
+> Dark mode: the tint is a dark surface; the strong value is a **very light** version of the hue
+> acting as text. Never set dark `--user-accent-strong` below L=78% — that is the floor for AA at
+> ≥4.5:1 against the darkest tint (teal at L=16%).
 
 ## The accent set
 
 Curated to avoid "breaking" colors — nothing too dark (unreadable as text) or too light
 (invisible as a fill). **Pastel-petal is excluded** (90% L, decoration only).
 
-| Key | Name | Light `--user-accent` / `strong` / `tint` | Dark `--user-accent` / `strong` / `tint`(@0.16) | From palette |
+| Key | Name | Light `--user-accent` / `strong` / `tint` | Dark `--user-accent` / `strong` / `tint` | From palette |
 |---|---|---|---|---|
-| `strawberry` *(default)* | Strawberry | `351 79% 56%` / `351 70% 45%` / `351 90% 96%` | `351 84% 66%` / `351 85% 75%` / `351 40% 22%` | brand (351° since 2026-06-08; color-palette §4.3) |
-| `moss` | Moss | `114 38% 45%` / `114 40% 32%` / `114 40% 95%` | `114 45% 58%` / `114 45% 68%` / `114 45% 55%` | moss-green |
-| `teal` | Teal | `159 35% 40%` / `159 38% 28%` / `159 35% 94%` | `159 42% 52%` / `159 42% 64%` / `159 42% 50%` | jungle-teal |
-| `amber` | Amber | `38 80% 44%` / `34 75% 33%` / `42 90% 94%` | `42 88% 60%` / `42 90% 70%` / `42 85% 58%` | tuscan-sun (darkened) |
-| `ocean` | Ocean | `205 75% 43%` / `205 70% 33%` / `205 80% 95%` | `205 80% 62%` / `205 80% 72%` / `205 80% 58%` | safe addition |
-| `plum` | Plum | `285 45% 48%` / `285 45% 36%` / `290 50% 96%` | `288 55% 66%` / `288 55% 76%` / `288 55% 64%` | safe addition |
+| `strawberry` *(default)* | Strawberry | `351 79% 56%` / `351 70% 45%` / `351 90% 96%` | `351 84% 66%` / `351 85% 82%` / `351 40% 20%` | brand (351° since 2026-06-08; color-palette §4.3) |
+| `moss` | Moss | `114 38% 45%` / `114 40% 32%` / `114 40% 95%` | `114 45% 58%` / `114 48% 80%` / `114 30% 18%` | moss-green |
+| `teal` | Teal | `159 35% 40%` / `159 38% 28%` / `159 35% 94%` | `159 42% 52%` / `159 44% 80%` / `159 30% 16%` | jungle-teal |
+| `amber` | Amber | `38 80% 44%` / `34 75% 33%` / `42 90% 94%` | `42 88% 60%` / `42 90% 80%` / `38 45% 18%` | tuscan-sun (darkened) |
+| `ocean` | Ocean | `205 75% 43%` / `205 70% 33%` / `205 80% 95%` | `205 80% 62%` / `205 80% 82%` / `205 45% 18%` | safe addition |
+| `plum` | Plum | `285 45% 48%` / `285 45% 36%` / `290 50% 96%` | `288 55% 66%` / `288 55% 83%` / `288 35% 20%` | safe addition |
 
-> Values above are the starting set. **`accessibility-auditor` co-signs** every one: `--user-accent`
-> ≥3:1 as a non-text UI indicator, `--user-accent-strong` on `--user-accent-tint` ≥4.5:1, in **both**
-> modes, before they ship.
+> Values above reflect 2026-06-11 contrast remediation (color-palette §4.11). Dark `--user-accent-strong`
+> raised to L=80–83% so it functions as light text on the dark tint surface; tints nudged 2 L-points
+> darker for added margin. **`accessibility-auditor` co-signs** every one: `--user-accent` ≥3:1 as a
+> non-text UI indicator, `--user-accent-strong` on `--user-accent-tint` ≥4.5:1, in **both** modes.
 
 ## Persistence
 

@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   CalendarRange,
   Download,
+  Info,
   Refrigerator,
   ShoppingCart,
   Sparkles,
@@ -20,6 +21,7 @@ import {
   useWorkspaceWithMembers,
 } from '@weekly-food-planner/supabase/react'
 import type { IngredientRecord } from '@weekly-food-planner/supabase'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -28,6 +30,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +89,60 @@ const formatQuantity = (n: number): string => {
 
 const SHOP_FOR_PARAM = 'shop_for'
 const VIEW_PARAM = 'view'
+
+// (v2.0 parity) Pantry coverage indicator next to a grocery item. The required
+// quantity stays the headline number (PRODUCT_PRD §17); on-hand stock lives
+// here as a secondary annotation: a "Covered" badge when fully covered, else a
+// focusable blue info dot whose popover shows what's on hand + suggested buy.
+const PantryInfoDot = ({
+  item,
+  name,
+}: {
+  item: AnnotatedGroceryItem
+  name: string
+}) => {
+  if (item.onHand <= 0) return null
+
+  if (item.fullyCovered) {
+    return (
+      <Badge
+        variant="outline"
+        className="shrink-0 border-success/40 bg-success-tint px-1.5 py-0 text-[10px] text-success"
+        aria-label={`${name} — fully covered by your pantry`}
+      >
+        Covered
+      </Badge>
+    )
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Pantry stock for ${name}`}
+          className="inline-flex shrink-0 items-center justify-center rounded-full text-purchase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+        >
+          <Info className="size-3.5" aria-hidden />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        className="w-56 px-3 py-2.5 text-xs"
+      >
+        <p className="font-medium text-foreground">
+          You have {formatQuantity(item.onHand)} {item.unit} in your pantry
+        </p>
+        {item.suggestedToBuy > 0 ? (
+          <p className="mt-0.5 text-muted-foreground">
+            Suggested to buy: {formatQuantity(item.suggestedToBuy)} {item.unit}
+          </p>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 const GroceryPage = () => {
   const supabase = useSupabase()
@@ -179,6 +242,9 @@ const GroceryPage = () => {
   const [selectedIngredientId, setSelectedIngredientId] = useState<string | null>(
     null,
   )
+  // (v2.0 parity) Ephemeral display toggle — hide lines already fully covered by
+  // pantry stock so the shopper sees only what they still need to buy.
+  const [collapseCovered, setCollapseCovered] = useState(false)
 
   const ingredientsById = useMemo(() => {
     const map: Record<string, IngredientRecord> = {}
@@ -352,6 +418,27 @@ const GroceryPage = () => {
                 onChange={setShopForIds}
               />
             ) : null}
+            <div className="flex items-start gap-2 rounded-md border border-border bg-card/40 px-4 py-2.5 text-xs text-muted-foreground">
+              <Info className="mt-0.5 size-4 shrink-0 text-purchase" aria-hidden />
+              <p>
+                Quantities are the <strong>full required amounts</strong>. Tap
+                the blue dot next to an item to see your pantry stock — you
+                decide how much to buy.
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <Label
+                htmlFor="collapse-covered"
+                className="cursor-pointer text-sm text-muted-foreground"
+              >
+                Hide lines already covered by pantry
+              </Label>
+              <Switch
+                id="collapse-covered"
+                checked={collapseCovered}
+                onCheckedChange={setCollapseCovered}
+              />
+            </div>
             {sortedLists.map((list) => {
               const heading =
                 viewMode === 'everyone'
@@ -373,10 +460,29 @@ const GroceryPage = () => {
                   ingredientsById[b.ingredient_id]?.name ?? b.ingredient_id
                 return na.localeCompare(nb)
               })
+              // (v2.0 parity) Collapse-covered hides fully-covered lines; if a
+              // whole list ends up covered, drop the empty card entirely.
+              const coveredCount = sortedItems.filter(
+                (i) => i.fullyCovered,
+              ).length
+              const visibleItems = collapseCovered
+                ? sortedItems.filter((i) => !i.fullyCovered)
+                : sortedItems
+              if (collapseCovered && visibleItems.length === 0) return null
               return (
                 <Card key={list.id}>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base">{heading}</CardTitle>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      {heading}
+                      {coveredCount > 0 ? (
+                        <Badge
+                          variant="outline"
+                          className="border-success/40 bg-success-tint text-xs text-success"
+                        >
+                          {coveredCount} covered
+                        </Badge>
+                      ) : null}
+                    </CardTitle>
                     <CardDescription>
                       {sortedItems.length}{' '}
                       {sortedItems.length === 1 ? 'item' : 'items'} — tap an
@@ -385,7 +491,7 @@ const GroceryPage = () => {
                   </CardHeader>
                   <CardContent className="pt-0">
                     <div className="divide-y divide-border">
-                      {sortedItems.map((item) => {
+                      {visibleItems.map((item) => {
                         const ing = ingredientsById[item.ingredient_id]
                         const name =
                           ing?.name ??
@@ -411,7 +517,7 @@ const GroceryPage = () => {
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <Sparkles
-                                        className="size-3.5 shrink-0 text-sky-600 dark:text-sky-400"
+                                        className="size-3.5 shrink-0 text-purchase"
                                         aria-hidden
                                       />
                                     </TooltipTrigger>
@@ -468,49 +574,28 @@ const GroceryPage = () => {
                                 </>
                               ) : null}
                             </button>
+                            {/* (v2.0 parity) Pantry coverage — "Covered" badge or
+                                a focusable info dot whose popover shows on-hand +
+                                suggested buy. The required qty stays the headline
+                                number (PRODUCT_PRD §17). */}
+                            <PantryInfoDot item={item} name={name} />
                             {item.scheduled_purchase_day ? (
                               <span className="hidden shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:inline">
                                 {capitalize(item.scheduled_purchase_day)}
                               </span>
                             ) : null}
-                            <span className="flex shrink-0 flex-col items-end">
-                              {/* The required quantity is always the headline
-                                  number — never lowered or struck through
-                                  (PRODUCT_PRD §17). On-hand coverage is shown as
-                                  a secondary annotation below. */}
-                              <span
-                                className="text-sm font-medium tabular-nums text-foreground"
-                                aria-label={
-                                  item.fullyCovered
-                                    ? `${formatQuantity(qty)} ${item.unit} required — fully covered by pantry`
-                                    : undefined
-                                }
-                              >
-                                {formatQuantity(qty)} {item.unit}
-                              </span>
-                              {/* (v2.0 §17) Non-destructive pantry annotation — the
-                                  required qty above is never lowered. */}
-                              {item.onHand > 0 ? (
-                                <span className="text-[11px] leading-tight text-muted-foreground">
-                                  have {formatQuantity(item.onHand)}
-                                  {item.fullyCovered ? (
-                                    <span className="ml-1 font-medium text-success">
-                                      covered
-                                    </span>
-                                  ) : (
-                                    <>
-                                      {' · '}
-                                      <span className="font-medium text-foreground">
-                                        buy {formatQuantity(item.suggestedToBuy)}
-                                      </span>
-                                    </>
-                                  )}
-                                </span>
-                              ) : null}
+                            <span className="shrink-0 text-sm font-medium tabular-nums text-foreground">
+                              {formatQuantity(qty)} {item.unit}
                             </span>
                           </div>
                         )
                       })}
+                      {collapseCovered && coveredCount > 0 ? (
+                        <p className="py-2 text-xs text-muted-foreground">
+                          {coveredCount} covered item
+                          {coveredCount === 1 ? '' : 's'} hidden
+                        </p>
+                      ) : null}
                     </div>
                   </CardContent>
                 </Card>

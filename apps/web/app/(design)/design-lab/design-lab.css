@@ -26,6 +26,8 @@
   --accent-foreground: 0 0% 100%;
   --destructive: 0 72% 41%;
   --destructive-foreground: 0 0% 100%;
+  --destructive-solid: 0 72% 41%;
+  --destructive-tint: 0 72% 95%;
   --border: 0 0% 90%;
   --input: 0 0% 90%;
   --ring: 359 79% 56%;

@@ -35,6 +35,10 @@ export type CookSheetProps = {
   recipeName: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  // (v2.0 Phase 5) Fired after the slot is successfully marked cooked, so the
+  // parent can chain straight into cook-time reconciliation. Not called when
+  // un-marking ("not cooked").
+  onCooked?: (slot: MenuSlotRecord) => void
 }
 
 // Full-screen "Cook mode" Sheet opened from an accepted-menu slot. The recipe's
@@ -50,6 +54,7 @@ export const CookSheet = ({
   recipeName,
   open,
   onOpenChange,
+  onCooked,
 }: CookSheetProps) => {
   const supabase = useSupabase()
   const [checkedIngredients, setCheckedIngredients] = useState<Set<string>>(
@@ -116,6 +121,9 @@ export const CookSheet = ({
       // Close on either toggle: the active-menu query re-fetches fresh slot
       // rows, so the held `slot` prop (with stale cooked_at) is discarded.
       onOpenChange(false)
+      // Chain into cook-time reconciliation so the cook can record what they
+      // actually used and save any remainder to the pantry. Skippable.
+      if (cooked) onCooked?.(slot)
     } catch (err) {
       notifyError(
         'Could not update',

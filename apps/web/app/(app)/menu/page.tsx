@@ -181,6 +181,17 @@ const MenuPage = () => {
     return map
   }, [completionsQuery.data])
 
+  // (v2.0 parity) Weekly cook progress for the active-menu header — how many of
+  // the menu's slots have been marked cooked. Absent completion = 'planned'.
+  const cookedCount = useMemo(
+    () =>
+      (activeMenu?.menu_slots ?? []).filter(
+        (s) => cookStatusBySlotId[s.id] === 'cooked',
+      ).length,
+    [activeMenu, cookStatusBySlotId],
+  )
+  const totalSlotCount = activeMenu?.menu_slots.length ?? 0
+
   // (v2.0 Phase 6) Ingredient overrides for the accepted menu — drives the
   // "Substituted" badge counts and seeds the substitution sheet's current state.
   const overridesQuery = useMenuSlotIngredientOverrides({
@@ -398,14 +409,34 @@ const MenuPage = () => {
 
       {!isLoading && !isReviewingDraft && activeMenu ? (
         <div className="flex flex-col gap-4">
-          {activeParticipantIds.length > 1 ? (
-            <MenuMemberPicker
-              participantIds={activeParticipantIds}
-              memberNamesById={memberNamesById}
-              selectedId={memberFilter}
-              onChange={setMemberFilter}
-            />
-          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {activeParticipantIds.length > 1 ? (
+              <MenuMemberPicker
+                participantIds={activeParticipantIds}
+                memberNamesById={memberNamesById}
+                selectedId={memberFilter}
+                onChange={setMemberFilter}
+              />
+            ) : (
+              <span />
+            )}
+            {totalSlotCount > 0 ? (
+              <div
+                className="flex items-center gap-2 text-sm text-muted-foreground"
+                aria-label={`${cookedCount} of ${totalSlotCount} meals cooked this week`}
+              >
+                <Check className="size-4 text-success" aria-hidden />
+                <span>
+                  <span className="font-medium tabular-nums text-foreground">
+                    {cookedCount}
+                  </span>{' '}
+                  of{' '}
+                  <span className="tabular-nums">{totalSlotCount}</span> meals
+                  cooked
+                </span>
+              </div>
+            ) : null}
+          </div>
           <MenuView
             menu={activeMenu}
             recipeNamesById={recipeNamesById}
@@ -481,6 +512,7 @@ const MenuPage = () => {
           onOpenChange={(next) => {
             if (!next) setCookSlot(null)
           }}
+          onCooked={(slot) => setReconcileSlot(slot)}
         />
       ) : null}
 

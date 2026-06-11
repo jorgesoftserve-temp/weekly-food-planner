@@ -32,10 +32,20 @@ const AppLayout = async ({ children }: { children: ReactNode }) => {
     <AccentProvider initialAccent={accent}>
       <WorkspaceProvider>
         <SidebarProvider>
+          {/* Skip link — first focusable element so keyboard/screen-reader users
+              can jump past the sidebar + header straight to page content. */}
+          <a
+            href="#main-content"
+            className="sr-only z-50 rounded-md bg-background px-4 py-2 text-sm font-medium text-foreground shadow-md ring-2 ring-ring focus:not-sr-only focus:absolute focus:left-4 focus:top-4"
+          >
+            Skip to content
+          </a>
           <AppSidebar />
           <SidebarInset>
             <AppHeader />
-            <main className="flex-1 px-4 py-6 sm:px-6">{children}</main>
+            <main id="main-content" className="flex-1 px-4 py-6 sm:px-6">
+              {children}
+            </main>
           </SidebarInset>
         </SidebarProvider>
       </WorkspaceProvider>

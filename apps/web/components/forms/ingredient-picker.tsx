@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Check, ChevronsUpDown, Plus } from 'lucide-react'
 import {
   Command,
@@ -34,6 +34,7 @@ export const IngredientPicker = ({
   disabled,
 }: IngredientPickerProps) => {
   const supabase = useSupabase()
+  const listboxId = useId()
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const ingredientsQuery = useIngredients({ supabase, enabled: open || !!value })
@@ -53,6 +54,7 @@ export const IngredientPicker = ({
             variant="outline"
             role="combobox"
             aria-expanded={open}
+            aria-controls={open ? listboxId : undefined}
             disabled={disabled}
             className={cn('w-full justify-between', className)}
           >
@@ -65,7 +67,7 @@ export const IngredientPicker = ({
         <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
           <Command>
             <CommandInput placeholder="Search ingredients…" />
-            <CommandList>
+            <CommandList id={listboxId}>
               <CommandEmpty>
                 {ingredientsQuery.isLoading
                   ? 'Loading ingredients…'

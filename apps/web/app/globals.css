@@ -20,6 +20,8 @@
     --accent-foreground: 0 0% 100%;
     --destructive: 0 72% 41%;
     --destructive-foreground: 0 0% 100%;
+    --destructive-solid: 0 72% 41%;
+    --destructive-tint: 0 72% 95%;
     --border: 0 0% 90%;
     --input: 0 0% 90%;
     --ring: 359 79% 56%;
@@ -69,8 +71,10 @@
     --muted-foreground: 0 0% 64%;
     --accent: 114 32% 48%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 65% 50%;
+    --destructive: 0 65% 68%;
     --destructive-foreground: 0 0% 100%;
+    --destructive-solid: 0 65% 50%;
+    --destructive-tint: 0 50% 18%;
     --border: 0 0% 20%;
     --input: 0 0% 20%;
     --ring: 359 84% 64%;
@@ -96,8 +100,8 @@
     --tag-neutral-tint: 0 0% 22%;
     --tag-neutral-border: 0 0% 44%;
     --user-accent: 351 84% 66%;
-    --user-accent-strong: 351 85% 75%;
-    --user-accent-tint: 351 40% 22%;
+    --user-accent-strong: 351 85% 82%;
+    --user-accent-tint: 351 40% 20%;
   }
 
   /* ── Per-user accent palette ──────────────────────────────────────────────
@@ -111,12 +115,12 @@
   [data-accent='ocean']      { --user-accent: 205 75% 43%; --user-accent-strong: 205 70% 33%; --user-accent-tint: 205 80% 95%; }
   [data-accent='plum']       { --user-accent: 285 45% 48%; --user-accent-strong: 285 45% 36%; --user-accent-tint: 290 50% 96%; }
 
-  .dark [data-accent='strawberry'] { --user-accent: 351 84% 66%; --user-accent-strong: 351 85% 75%; --user-accent-tint: 351 40% 22%; }
-  .dark [data-accent='moss']       { --user-accent: 114 45% 58%; --user-accent-strong: 114 45% 68%; --user-accent-tint: 114 28% 20%; }
-  .dark [data-accent='teal']       { --user-accent: 159 42% 52%; --user-accent-strong: 159 42% 64%; --user-accent-tint: 159 28% 18%; }
-  .dark [data-accent='amber']      { --user-accent: 42 88% 60%;  --user-accent-strong: 42 90% 70%;  --user-accent-tint: 38 45% 20%; }
-  .dark [data-accent='ocean']      { --user-accent: 205 80% 62%; --user-accent-strong: 205 80% 72%; --user-accent-tint: 205 45% 20%; }
-  .dark [data-accent='plum']       { --user-accent: 288 55% 66%; --user-accent-strong: 288 55% 76%; --user-accent-tint: 288 35% 22%; }
+  .dark [data-accent='strawberry'] { --user-accent: 351 84% 66%; --user-accent-strong: 351 85% 82%; --user-accent-tint: 351 40% 20%; }
+  .dark [data-accent='moss']       { --user-accent: 114 45% 58%; --user-accent-strong: 114 48% 80%; --user-accent-tint: 114 30% 18%; }
+  .dark [data-accent='teal']       { --user-accent: 159 42% 52%; --user-accent-strong: 159 44% 80%; --user-accent-tint: 159 30% 16%; }
+  .dark [data-accent='amber']      { --user-accent: 42 88% 60%;  --user-accent-strong: 42 90% 80%;  --user-accent-tint: 38 45% 18%; }
+  .dark [data-accent='ocean']      { --user-accent: 205 80% 62%; --user-accent-strong: 205 80% 82%; --user-accent-tint: 205 45% 18%; }
+  .dark [data-accent='plum']       { --user-accent: 288 55% 66%; --user-accent-strong: 288 55% 83%; --user-accent-tint: 288 35% 20%; }
 }
 
 @layer base {

@@ -38,8 +38,10 @@ wrapper) to match the shadcn convention in `globals.css`. Edit `:root` and `.dar
 | `--accent-foreground` | `0 0% 100%` | |
 | `--muted` | `339 60% 97%` | Faint pastel-petal tint (warm, not gray). |
 | `--muted-foreground` | `0 0% 42%` | |
-| `--destructive` | `0 72% 41%` | **Deep crimson** — distinct from brand red (see §4.1). |
+| `--destructive` | `0 72% 41%` | **Deep crimson text** — for `text-destructive` on surfaces (allergen chips, error labels, badge text on tint). Distinct from brand red (see §4.1). |
 | `--destructive-foreground` | `0 0% 100%` | |
+| `--destructive-solid` | `0 72% 41%` | **Solid fill** for Button/Badge `variant="destructive"`. White on fill: **~6.7:1** ✓. Light value equals `--destructive` (same deep crimson). See §4.12. |
+| `--destructive-tint` | `0 72% 95%` | Soft background for destructive-state badges. `--destructive` text on this tint: **~5.61:1** ✓. See §4.10. |
 | `--border` / `--input` | `0 0% 90%` | |
 | `--ring` | `359 79% 56%` | Focus ring = brand (overridden per-user accent). |
 | `--radius` | `1rem` | Cozy Phase 3 bump (was `0.65rem`). Cascades to `lg/md/sm` border-radius tokens. |
@@ -74,8 +76,10 @@ wrapper) to match the shadcn convention in `globals.css`. Edit `:root` and `.dar
 | `--accent-foreground` | `0 0% 100%` | |
 | `--muted` | `20 6% 16%` | |
 | `--muted-foreground` | `0 0% 64%` | |
-| `--destructive` | `0 65% 50%` | Lighter crimson; still ≠ brand. |
+| `--destructive` | `0 65% 68%` | Lighter crimson, raised to 68% L so it reads as **light text** on dark tint surfaces. Clears 4.5:1 on `--destructive-tint` (dark: **~5.38:1** ✓). Still ≠ brand. See §4.10. |
 | `--destructive-foreground` | `0 0% 100%` | |
+| `--destructive-solid` | `0 65% 50%` | **Solid fill** for Button/Badge `variant="destructive"` in dark mode. White on fill: **~5.05:1** ✓. Darker than `--destructive` text (50% vs 68% L) so the solid button remains distinct. See §4.12. |
+| `--destructive-tint` | `0 50% 18%` | Dark tinted surface for destructive-state badges. Paired with `--destructive` text. See §4.10. |
 | `--border` / `--input` | `0 0% 20%` | |
 | `--ring` | `359 84% 64%` | |
 | `--shadow-sm` | `0 1px 2px hsl(0 0% 0% / 0.30)` | Dark depth — pure black, higher opacity. |
@@ -113,8 +117,10 @@ full 5-color rainbow gradient anywhere in product UI (it exists only as a brand 
 ### 4.1 Brand red ≠ destructive red
 The brand **is** red, so destructive actions must not also be bright red or users can't distinguish
 "delete" from "primary".
-- **Destructive = deep crimson** (`0 72% 41%` light / `0 65% 50%` dark) **and always paired with an
-  icon + an explicit verb** ("Delete recipe", trash icon).
+- **Destructive = deep crimson.** Use `--destructive-solid` (`0 72% 41%` light / `0 65% 50%` dark)
+  for **solid fills** (Button/Badge `variant="destructive"`). Use `--destructive` for **text on
+  surfaces** (allergen chips, error labels, status badges on `--destructive-tint`). Both are always
+  paired with an icon + an explicit verb ("Delete recipe", trash icon). See §4.12.
 - **Bright strawberry is reserved** for primary / positive / neutral CTAs. Never style a destructive
   action strawberry, and never style a primary action crimson.
 
@@ -187,6 +193,73 @@ click). **Reuse `--purchase`** — it is already ocean-blue, AA-compliant, and s
 - Tailwind classes for the builder: dot/icon = `text-purchase` (or `bg-purchase` for a filled dot),
   popover accent = `bg-purchase-tint text-purchase`.
 - **Do not** use `--user-accent-*` here; the color must be stable across accent preferences.
+
+### 4.10 `--destructive-tint` + dark-mode destructive contrast remediation (2026-06-11)
+The `--destructive` token was missing a corresponding tint surface. Components in the design-lab were
+using `bg-destructive/10` (Tailwind opacity shorthand) which at 10% opacity over the dark card gives a
+surface too close in luminance to the mid-tone dark destructive text — approximately 3.0:1.
+
+**Fix:**
+- Added `--destructive-tint` as a proper token pair (light + dark).
+- Raised dark `--destructive` from `0 65% 50%` to `0 65% 68%` so it functions as **light text** on
+  the dark tint surface (same principle as `--success`, `--warning`, `--purchase` in dark mode).
+
+**Light:**
+- `--destructive` `0 72% 41%` — unchanged. On `--destructive-tint`: **~5.61:1** ✓.
+- `--destructive-tint` `0 72% 95%` — very light crimson wash, analogous to `--success-tint` light.
+
+**Dark:**
+- `--destructive` `0 65% 68%` — raised 18 L-points from `50%`. On dark card `hsl(20 6% 13%)`:
+  text is now the lighter element, clears 4.5:1. On `--destructive-tint` (dark): **~5.38:1** ✓.
+- `--destructive-tint` `0 50% 18%` — dark crimson surface. Analogous to dark success/warning tints.
+
+**Usage in components:** `bg-destructive-tint text-destructive` (or Tailwind: `bg-destructive/tint`).
+Do NOT use `bg-destructive/10` as an ad-hoc tint — use this token pair.
+The `.dark` raised value keeps destructive still visually distinct from the brand (brand is 351° hue;
+destructive is 0°/360°) and lighter than the light value's fill (68% vs 41%) — intentional.
+
+### 4.11 Dark-mode accent chip contrast remediation (2026-06-11)
+`text-accent-strong` on `bg-accent-tint` in dark mode was measuring below WCAG AA (~3.5:1) for
+several accents because the `--user-accent-strong` L values (68–76%) left insufficient margin against
+the very dark tint surfaces (L=18–22%). The principle in dark mode is the same as `--success` /
+`--warning` / `--purchase`: the "strong" value is a **light text** color on a dark-but-tinted surface.
+
+**Fix (2026-06-11):** Raised dark `--user-accent-strong` to 80–83% L across all six accents.
+Dark `--user-accent-tint` surfaces were simultaneously nudged 2 L-points darker to deepen contrast.
+
+| Accent | Old strong / tint | New strong / tint | Measured ratio |
+|---|---|---|---|
+| strawberry | `351 85% 75%` / `351 40% 22%` | `351 85% 82%` / `351 40% 20%` | ~5.68:1 → **~8.1:1** ✓ |
+| moss | `114 45% 68%` / `114 28% 20%` | `114 48% 80%` / `114 30% 18%` | ~3.5:1 → **~8.6:1** ✓ |
+| teal | `159 42% 64%` / `159 28% 18%` | `159 44% 80%` / `159 30% 16%` | ~3.5:1 → **~8.3:1** ✓ |
+| amber | `42 90% 70%` / `38 45% 20%` | `42 90% 80%` / `38 45% 18%` | ~7.3:1 → **~9.3:1** ✓ |
+| ocean | `205 80% 72%` / `205 45% 20%` | `205 80% 82%` / `205 45% 18%` | ~6.4:1 → **~9.5:1** ✓ |
+| plum | `288 55% 76%` / `288 35% 22%` | `288 55% 83%` / `288 35% 20%` | ~6.2:1 → **~9.1:1** ✓ |
+
+Light-mode `--user-accent-strong` values are unchanged (they already passed AA).
+
+### 4.12 `--destructive-solid` — dedicated solid-fill token for destructive primitives (2026-06-11)
+`--destructive` is dual-use: it serves as **text on a tinted surface** (allergen chips, error labels,
+`bg-destructive-tint` badges — ~8 usage sites) AND as a **solid background fill** (Button/Badge
+`variant="destructive"` — 2 primitives). These two roles have mutually exclusive lightness needs:
+
+- Text on a dark tint surface needs **≥~65% L** (dark mode) to clear 4.5:1.
+- Solid fill with white text needs **≤~50% L** to keep white-on-fill ≥ 4.5:1.
+
+`--destructive` was raised to `0 65% 68%` (dark) by §4.10 to fix the text-on-tint usage. This broke
+white-on-solid on the two primitives (measured: ~2.90:1 — failed AA and 3:1). Fix: a separate
+`--destructive-solid` token governs only those two solid-fill usages.
+
+| Token | Light | Dark | White-on ratio |
+|---|---|---|---|
+| `--destructive-solid` | `0 72% 41%` | `0 65% 50%` | light **~6.7:1** ✓ / dark **~5.05:1** ✓ |
+
+**Primitives updated:** `Button variant="destructive"` → `bg-destructive-solid hover:bg-destructive-solid/90`; `Badge variant="destructive"` → `bg-destructive-solid hover:bg-destructive-solid/80`. `text-destructive-foreground` unchanged on both.
+
+**`text-destructive` is NOT changed** — it continues to point at `--destructive` (text role, 8+ sites).
+
+**Light note:** In light mode both tokens share the same value (`0 72% 41%`). The split is
+architecturally correct but only materially visible in dark mode.
 
 ## 5. Do / Don't
 

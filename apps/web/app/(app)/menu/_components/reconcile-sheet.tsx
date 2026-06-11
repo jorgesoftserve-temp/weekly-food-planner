@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Minus, Plus, Refrigerator } from 'lucide-react'
 import { useIngredients, useRecipeDetail } from '@weekly-food-planner/supabase/react'
 import type { DbTypes, MenuSlotRecord } from '@weekly-food-planner/supabase'
@@ -27,6 +27,16 @@ const toNumber = (n: number | string): number => {
 }
 
 const round3 = (n: number): number => Math.round(n * 1000) / 1000
+
+// Adaptive step for the used-quantity stepper. Whole-number-ish planned
+// amounts step by 1; small / fractional planned amounts (e.g. 0.5 kg of
+// butter, 1.5 cups) step finely so the cook can actually land on a real
+// remainder instead of being forced to the nearest integer.
+const stepFor = (planned: number): number => {
+  if (planned >= 10) return 1
+  if (planned >= 2) return 0.5
+  return 0.25
+}
 
 type ReconcileRow = {
   recipeIngredientId: string
@@ -63,6 +73,14 @@ export const ReconcileSheet = ({
 }: ReconcileSheetProps) => {
   const supabase = useSupabase()
   const [rows, setRows] = useState<ReconcileRow[]>([])
+  // Remember what had focus when the sheet opened so we can hand focus back
+  // there on close — the sheet is opened programmatically (controlled `open`),
+  // so Radix has no trigger to auto-restore to and would otherwise drop focus
+  // to <body>.
+  const triggerRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (open) triggerRef.current = document.activeElement as HTMLElement | null
+  }, [open])
 
   const recipeQuery = useRecipeDetail({
     supabase,
@@ -167,7 +185,17 @@ export const ReconcileSheet = ({
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) handleSkip() }}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 sm:max-w-md">
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 sm:max-w-md"
+        onCloseAutoFocus={(e) => {
+          // Return focus to the affordance that opened the sheet.
+          if (triggerRef.current) {
+            e.preventDefault()
+            triggerRef.current.focus()
+          }
+        }}
+      >
         <SheetHeader className="pb-4">
           <SheetTitle>Used what you planned?</SheetTitle>
           <SheetDescription>
@@ -220,7 +248,12 @@ export const ReconcileSheet = ({
                       <button
                         type="button"
                         aria-label={`Decrease used quantity of ${row.name}`}
-                        onClick={() => setUsed({ id: row.recipeIngredientId, delta: -1 })}
+                        onClick={() =>
+                          setUsed({
+                            id: row.recipeIngredientId,
+                            delta: -stepFor(row.plannedQty),
+                          })
+                        }
                         disabled={row.usedQty === 0}
                         className={cn(
                           'flex size-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground',
@@ -231,7 +264,7 @@ export const ReconcileSheet = ({
                         <Minus className="size-3" aria-hidden />
                       </button>
                       <span
-                        className="w-10 text-center text-sm font-semibold tabular-nums"
+                        className="w-12 text-center text-sm font-semibold tabular-nums"
                         aria-live="polite"
                         aria-label={`Used: ${row.usedQty} ${row.unit}`}
                       >
@@ -240,7 +273,12 @@ export const ReconcileSheet = ({
                       <button
                         type="button"
                         aria-label={`Increase used quantity of ${row.name}`}
-                        onClick={() => setUsed({ id: row.recipeIngredientId, delta: +1 })}
+                        onClick={() =>
+                          setUsed({
+                            id: row.recipeIngredientId,
+                            delta: +stepFor(row.plannedQty),
+                          })
+                        }
                         disabled={row.usedQty === row.plannedQty}
                         className={cn(
                           'flex size-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground',

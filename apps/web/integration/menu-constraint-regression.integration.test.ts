@@ -120,7 +120,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('menu constraint regression (integration)'
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Oatmeal',
-        meal_type: 'breakfast',
+        meal_types: ['breakfast'],
         difficulty: 'easy',
         servings: 1,
         ingredients: [
@@ -138,7 +138,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('menu constraint regression (integration)'
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Peanut noodles',
-        meal_type: 'dinner',
+        meal_types: ['dinner'],
         difficulty: 'easy',
         servings: 1,
         ingredients: [
@@ -155,7 +155,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('menu constraint regression (integration)'
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Tofu mushroom stir-fry',
-        meal_type: 'dinner',
+        meal_types: ['dinner'],
         difficulty: 'easy',
         servings: 1,
         ingredients: [
@@ -174,7 +174,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('menu constraint regression (integration)'
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Lentil curry',
-        meal_type: 'dinner',
+        meal_types: ['dinner'],
         difficulty: 'easy',
         servings: 1,
         ingredients: [

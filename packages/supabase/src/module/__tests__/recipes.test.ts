@@ -36,7 +36,7 @@ describe('createRecipe', () => {
       workspaceId: 'w1',
       payload: {
         name: 'Pasta',
-        meal_type: 'dinner',
+        meal_types: ['dinner'],
         difficulty: 'easy',
         servings: 2,
         cuisine: 'italian',
@@ -69,7 +69,7 @@ describe('createRecipe', () => {
       workspaceId: 'w1',
       payload: {
         name: 'Pasta',
-        meal_type: 'dinner',
+        meal_types: ['dinner'],
         difficulty: 'easy',
         servings: 2,
         dietary_tags: ['vegetarian', 'low_sodium'],
@@ -90,7 +90,7 @@ describe('createRecipe', () => {
         workspaceId: 'w1',
         payload: {
           name: 'Pasta',
-          meal_type: 'dinner',
+          meal_types: ['dinner'],
           difficulty: 'easy',
           servings: 2,
         },

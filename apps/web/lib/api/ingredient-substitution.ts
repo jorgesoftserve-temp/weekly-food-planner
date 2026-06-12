@@ -53,7 +53,11 @@ export const validateSubstituteForSlot = ({
     const syntheticRecipe: RecipeSnapshot = {
       id: 'substitute-probe',
       name: 'substitute-probe',
-      mealType: 'dinner',
+      // (v2.1) mealTypes replaces the dropped scalar mealType. An empty set
+      // is intentional here — we are validating substitute safety, not meal-
+      // type assignment, so forMealType is always undefined at the call site
+      // and the meal-type check is skipped by describeRecipeEligibility.
+      mealTypes: [],
       difficulty: 'easy',
       servings: 1,
       dietaryTags: requiredTags,

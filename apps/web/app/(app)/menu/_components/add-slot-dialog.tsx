@@ -100,7 +100,7 @@ export const AddSlotDialog = ({
   const candidates = useMemo<RecipeRecord[]>(() => {
     const term = search.trim().toLowerCase()
     return (recipesQuery.data ?? [])
-      .filter((r) => r.meal_type === mealType)
+      .filter((r) => r.recipe_kind === 'meal' && r.meal_types.includes(mealType))
       .filter((r) => (term === '' ? true : r.name.toLowerCase().includes(term)))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [recipesQuery.data, mealType, search])

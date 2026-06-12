@@ -133,7 +133,8 @@ export const GET = async (
       workspaceId,
       memberId: member.id,
       recipeId: recipe.id,
-      mealType: recipe.mealType,
+      // (v2.1) mealTypes is the set of timeframes; scalar mealType dropped.
+      mealTypes: recipe.mealTypes,
       forMealType: forMealType ?? null,
       eligible: eligibility.eligible,
       blockedBy: eligibility.blockedBy,

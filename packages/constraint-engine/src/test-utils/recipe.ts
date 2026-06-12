@@ -1,21 +1,30 @@
 import type {
+  MealType,
   RecipeIngredientSnapshot,
   RecipeSnapshot,
 } from '../types.js'
 
+// v2.1: recipes carry a SET of meal timeframes (mealTypes). For test ergonomics
+// the factory still accepts a scalar `mealType` convenience which is wrapped into
+// a one-element `mealTypes` array — proving the backfill is a no-op. Passing
+// `mealTypes` directly takes precedence.
 export const makeRecipe = ({
   id = 'r-1',
   name,
-  mealType = 'dinner',
+  mealType,
+  mealTypes,
   difficulty = 'easy',
   servings = 2,
   ingredients = [],
   dietaryTags = [],
   ...rest
-}: Partial<RecipeSnapshot> = {}): RecipeSnapshot => ({
+}: Partial<Omit<RecipeSnapshot, 'mealTypes'>> & {
+  mealType?: MealType
+  mealTypes?: MealType[]
+} = {}): RecipeSnapshot => ({
   id,
   name: name ?? `Recipe ${id}`,
-  mealType,
+  mealTypes: mealTypes ?? [mealType ?? 'dinner'],
   difficulty,
   servings,
   ingredients,

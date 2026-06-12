@@ -39,6 +39,10 @@
     --tag-neutral: 0 0% 30%;
     --tag-neutral-tint: 0 0% 91%;
     --tag-neutral-border: 0 0% 55%;
+    --addon: 172 45% 34%;
+    --addon-tint: 172 50% 93%;
+    --preference: 262 45% 40%;
+    --preference-tint: 262 55% 94%;
     --card-padding: 1.25rem;
     --sidebar-background: 0 0% 99%;
     --sidebar-foreground: 0 0% 26%;
@@ -99,6 +103,10 @@
     --tag-neutral: 0 0% 64%;
     --tag-neutral-tint: 0 0% 22%;
     --tag-neutral-border: 0 0% 44%;
+    --addon: 172 50% 72%;
+    --addon-tint: 172 30% 18%;
+    --preference: 262 55% 75%;
+    --preference-tint: 262 35% 18%;
     --user-accent: 351 84% 66%;
     --user-accent-strong: 351 85% 82%;
     --user-accent-tint: 351 40% 20%;

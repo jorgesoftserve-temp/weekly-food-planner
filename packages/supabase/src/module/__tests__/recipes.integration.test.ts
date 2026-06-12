@@ -29,7 +29,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('recipes (integration)', () => {
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Plain oatmeal',
-        meal_type: 'breakfast',
+        meal_types: ['breakfast'],
         difficulty: 'easy',
         servings: 1,
         cuisine: 'american',

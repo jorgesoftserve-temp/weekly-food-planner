@@ -41,17 +41,20 @@ auth.users (Supabase)
             ├── workspace_members (1—N)               // includes the creator
             │       ├── member_dietary_restrictions   (M—N → dietary_restriction label)
             │       ├── member_allergies              (M—N → food_allergy label)
-            │       └── member_ingredient_dislikes    (M—N → ingredients)
+            │       ├── member_ingredient_dislikes    (M—N → ingredients)
+            │       └── member_dietary_preferences    (1—N; v2.1 inclusive soft prefs; see §6.22)
             ├── recipes (1—N)                         // workspace-shared; no per-member ownership
             │       ├── recipe_ingredients   (M—N → ingredients)
             │       ├── recipe_instructions  (1—N)
-            │       └── recipe_dietary_tags  (M—N → dietary_tag label)
+            │       ├── recipe_dietary_tags  (M—N → dietary_tag label)
+            │       └── recipe_meal_types    (M—N; v2.1 multi-timeframe; see §6.23)
             ├── menus (1—N)                           // carries generation_options for audit
             │       ├── menu_slots       (1—N → recipes)
             │       │       ├── slot_completions (1—0..1)                    // (v2.0) cook-status; see §6.19
             │       │       └── menu_slot_ingredient_overrides (1—N)         // (v2.0) per-slot ingredient swap; see §6.20
+            │       ├── menu_addons      (1—N → recipes; v2.1 addon attachments; see §6.24)
             │       ├── grocery_lists    (1—N)
-            │       │       └── grocery_items (1—N → ingredients)
+            │       │       └── grocery_items (1—N → ingredients)            // gains source column (v2.1); see §6.14
             │       ├── shopping_sessions (1—N)                              // (v2.0) see §6.18
             │       │       └── shopping_item_status (1—N → grocery_items)  // (v2.0)
             │       └── generation_runs  (1—N)        // audit trail
@@ -89,6 +92,9 @@ Backed by native Postgres enums. Values can only be added via migration. Used wh
 | `acquired_status` **(v2.0)** | `pending`, `acquired`, `partial`, `skipped` |
 | `slot_cook_status` **(v2.0)** | `planned`, `cooked`, `skipped` |
 | `food_group_source` **(v2.0)** | `seed`, `ai`, `unset` |
+| `recipe_kind` **(v2.1)** | `meal`, `addon` — partitions recipes into engine-eligible meals vs accompaniment addons (see [§6.7](#67-recipes) and [PRODUCT_PRD.md §27](./PRODUCT_PRD.md)) |
+| `grocery_source` **(v2.1)** | `meal`, `addon`, `extra` — `meal` = line derived from a meal slot (default); `addon` = line derived from an attached addon (see [§6.24](#624-menu_addons-v21)); `extra` = dormant until [v2.2](../../.claude/plans/v2.2.md) manual grocery lines |
+| `preference_kind` **(v2.1)** | `dietary_tag`, `ingredient` — discriminates rows in `member_dietary_preferences` (see [§6.22](#622-member_dietary_preferences-v21)) |
 
 No user-suggestion path for these in MVP — a new value requires a migration. The `accent_color` set is a deliberately curated, contrast-safe palette (see [`docs/design/user-accent-colors.md`](../design/user-accent-colors.md)); it backs both the per-user accent (`profiles.accent_color`, §6.0) and the per-member accent (`workspace_members.accent_color`, §6.2).
 
@@ -228,7 +234,8 @@ Maps ingredients to the food allergens they contain. The engine joins this table
 | `name` | text NOT NULL | |
 | `description` | text | |
 | `image_url` | text NULL | Supabase Storage URL |
-| `meal_type` | `meal_type` NOT NULL | |
+| `meal_type` | `meal_type` NOT NULL | **Superseded (v2.1):** replaced by the `recipe_meal_types` junction (§6.23). This scalar column is kept for backfill reference; migrated rows gain a one-element `recipe_meal_types` row, then the scalar is dropped. Do not add new columns that depend on `recipes.meal_type` |
+| `recipe_kind` | `recipe_kind` NOT NULL DEFAULT `'meal'` | **(v2.1)** `meal` = fills menu slots (default, engine-eligible); `addon` = accompaniment (salsa, guacamole, dessert) — excluded from engine input at the `menu-input-builder` boundary, never in a `RecipeSnapshot`, never in `inputs_hash`. See [PRODUCT_PRD.md §27](./PRODUCT_PRD.md) and [ARCHITECTURE_PRD.md §23](./ARCHITECTURE_PRD.md) |
 | `cuisine` | text NULL | Label from the `cuisine_type` set; validated against `enum_metadata` |
 | `difficulty` | `difficulty` NOT NULL | |
 | `prep_time_minutes` | int | |
@@ -239,6 +246,8 @@ Maps ingredients to the food allergens they contain. The engine joins this table
 | `created_at`, `updated_at` | timestamptz | |
 
 No per-member recipe ownership. The engine handles per-member divergence at the slot layer via `menu_slots.target_member_id`.
+
+**v2.1 meal-type migration:** `recipes.meal_type` (scalar) → `recipe_meal_types` junction (§6.23). Backfill: for each existing recipe, insert one row into `recipe_meal_types(recipe_id, meal_type)` matching the current scalar value, then drop `recipes.meal_type`. The ≥1 meal-type constraint (enforced at the write/route layer, not via DB constraint) applies only to `recipe_kind='meal'`; addons may have zero `recipe_meal_types` rows.
 
 ## 6.8 `recipe_ingredients`
 
@@ -381,6 +390,7 @@ UNIQUE `(menu_id, target_member_id)`.
 | `quantity` | numeric NOT NULL | |
 | `unit` | `unit` NOT NULL | |
 | `scheduled_purchase_day` | `day_of_week` NULL | engine output for freshness scheduling |
+| `source` | `grocery_source` NOT NULL DEFAULT `'meal'` | **(v2.1)** Origin of the grocery line: `meal` = derived from a menu slot recipe (default, all pre-v2.1 rows); `addon` = derived from an attached addon recipe (see §6.24 and [PRODUCT_PRD.md §27.3](./PRODUCT_PRD.md)); `extra` = dormant until [v2.2](../../.claude/plans/v2.2.md) manual grocery lines. The grocery UI groups by `source` to produce the "Addons" section |
 | `note` | text NULL | **(v1.8)** Optional free-text shopper annotation (substitution / brand / reminder). Presentation-only — never feeds the engine or scaling. Any workspace member may set it. See [PRODUCT_PRD.md §7.2](./PRODUCT_PRD.md) and the recompute-preservation rule below |
 
 **Recompute preservation (v1.8).** Grocery items are derived from the accepted menu and rebuilt by `recomputeGroceryListsForMenu` whenever the underlying menu changes. Because a recompute deletes-and-reinserts `grocery_items` rows, a naive rebuild would discard user `note`s. The recompute must therefore **snapshot existing notes keyed by `(list scope, ingredient_id)` and re-apply them** to the matching rebuilt rows; a note whose ingredient no longer appears on the recomputed list is dropped. (If preservation proves fragile against the delete/reinsert cycle, the alternative is a sibling `grocery_item_notes(grocery_list_id, ingredient_id, note)` table that survives independently — decided at implementation time; see [ARCHITECTURE_PRD.md §7](./ARCHITECTURE_PRD.md).)
@@ -539,6 +549,62 @@ UNIQUE `(menu_slot_id, original_ingredient_id)` — one active substitute per or
 
 RLS: read = any active workspace member (via `menu_slots → menus.workspace_id` EXISTS); write = creator of the row or `creator`/`admin` role.
 
+## 6.22 `member_dietary_preferences` **(v2.1)**
+
+> Status: planned (v2.1). Behaviour: [PRODUCT_PRD.md §25](./PRODUCT_PRD.md). Architecture: [ARCHITECTURE_PRD.md §20](./ARCHITECTURE_PRD.md).
+
+Stores inclusive (soft) dietary preferences per member — distinct from hard `member_dietary_restrictions` / `member_allergies` (which remain unchanged). RLS mirrors the existing member-constraint sub-tables (workspace-scoped; self or creator/admin may write).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `member_id` | uuid NOT NULL | FK → `workspace_members.id` ON DELETE CASCADE |
+| `workspace_id` | uuid NOT NULL | FK → `workspaces.id` ON DELETE CASCADE. Denormalized for RLS |
+| `kind` | `preference_kind` NOT NULL | `dietary_tag` — matches a value from the `dietary_tag` label set; `ingredient` — references a specific ingredient |
+| `value` | text NOT NULL | For `kind='dietary_tag'`: a label string from the `dietary_tag` set. For `kind='ingredient'`: the ingredient id (as text, for uniform column type) |
+| `created_at` | timestamptz | |
+
+Composite PK `(member_id, kind, value)` — one row per (member, tag-or-ingredient) pair. No soft delete — use direct delete.
+
+RLS: read = any active workspace member; write (INSERT/DELETE) = self (`workspace_members.user_id = auth.uid()`) or `creator`/`admin` role.
+
+## 6.23 `recipe_meal_types` **(v2.1)**
+
+> Status: planned (v2.1). Behaviour: [PRODUCT_PRD.md §26](./PRODUCT_PRD.md). Architecture: [ARCHITECTURE_PRD.md §21](./ARCHITECTURE_PRD.md).
+
+Junction table replacing the scalar `recipes.meal_type` column for multi-timeframe recipe eligibility. Mirrors `recipe_dietary_tags` in structure and RLS.
+
+| Column | Type | Notes |
+|---|---|---|
+| `recipe_id` | uuid NOT NULL | FK → `recipes.id` ON DELETE CASCADE |
+| `meal_type` | `meal_type` NOT NULL | One of `breakfast`, `lunch`, `dinner`, `snack` |
+
+Composite PK `(recipe_id, meal_type)`. No `is_deleted` — visibility follows the parent recipe.
+
+**Backfill:** one row per existing recipe using its current `recipes.meal_type` value; then the scalar `recipes.meal_type` column is dropped. The ≥1 row constraint is enforced at the write/route layer for `recipe_kind='meal'` recipes only; addons may have zero rows.
+
+RLS: read = any active workspace member (via `recipes.workspace_id`); write = `creator`/`admin` (mirrors the recipe write policy).
+
+## 6.24 `menu_addons` **(v2.1)**
+
+> Status: planned (v2.1). Behaviour: [PRODUCT_PRD.md §27](./PRODUCT_PRD.md). Architecture: [ARCHITECTURE_PRD.md §23](./ARCHITECTURE_PRD.md).
+
+Post-accept menu state recording which addon recipes are attached to an accepted menu. Keyed by `menu_id`, structurally invisible to `accepted_seed` — analogous to `menu_slot_ingredient_overrides` (§6.21).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `menu_id` | uuid NOT NULL | FK → `menus.id` ON DELETE CASCADE |
+| `workspace_id` | uuid NOT NULL | FK → `workspaces.id` ON DELETE CASCADE. Denormalized for RLS |
+| `addon_recipe_id` | uuid NOT NULL | FK → `recipes.id`. Must have `recipe_kind='addon'`; enforced at the route layer |
+| `target_slot_id` | uuid NULL | FK → `menu_slots.id` ON DELETE SET NULL. NULL = week-wide addon; set = tied to a specific slot |
+| `servings` | numeric NULL | Optional scaling hint |
+| `note` | text NULL | Optional annotation |
+| `created_by` | uuid NULL | FK → `workspace_members.id` ON DELETE SET NULL |
+| `created_at`, `updated_at` | timestamptz | |
+
+RLS: read = any active workspace member (via `menus.workspace_id` EXISTS); write = creator of the row or `creator`/`admin` role.
+
 ---
 
 # 7. `meal_frequency` JSONB shape
@@ -597,6 +663,9 @@ Policy summary:
 | `shopping_sessions`, `shopping_item_status` **(v2.0)** | any active workspace member | any active workspace member (shared household action) |
 | `slot_completions` **(v2.0)** | any active workspace member (via `menu_slots → menus.workspace_id`) | any active workspace member (cook-status is a shared household action) |
 | `menu_slot_ingredient_overrides` **(v2.0)** | any active workspace member (via `menu_slots → menus.workspace_id`) | creator of row or `creator`/`admin` |
+| `member_dietary_preferences` **(v2.1)** | any active workspace member (workspace-scoped via `member_id → workspace_members.workspace_id`) | self (`workspace_members.user_id = auth.uid()`) or `creator`/`admin` |
+| `recipe_meal_types` **(v2.1)** | any active workspace member (via `recipe_id → recipes.workspace_id`) | `creator`/`admin` (mirrors recipe write policy) |
+| `menu_addons` **(v2.1)** | any active workspace member (via `menus.workspace_id` EXISTS) | creator of row or `creator`/`admin` |
 | `enum_metadata` | any authenticated user | service-role for official rows; users may insert pending rows via `sys_save_label` and delete their own pending rows via `sys_delete_enum_suggestion` (§10) |
 
 A helper SQL function `fn_user_workspace_role(user_id, workspace_id) RETURNS workspace_role` centralizes role lookups so policies stay simple.
@@ -700,7 +769,7 @@ The per-menu overlay never produces a failure — duplicate values are silently 
 
 - `workspaces (owner_id) WHERE is_deleted = false`
 - `workspace_members (workspace_id) WHERE is_deleted = false`, `(user_id) WHERE user_id IS NOT NULL AND is_deleted = false`
-- `recipes (workspace_id) WHERE is_deleted = false`, `(workspace_id, meal_type) WHERE is_deleted = false`
+- `recipes (workspace_id) WHERE is_deleted = false` *(the former `(workspace_id, meal_type)` partial index is dropped in **(v2.1)** along with the scalar `meal_type` column — superseded by the `recipe_kind` / `recipe_meal_types` indexes below)*
 - `recipes (cuisine) WHERE is_deleted = false` — supports filter/group by extensible label
 - `recipe_ingredients (recipe_id)`, `(ingredient_id)`
 - `recipe_dietary_tags (tag)` — supports filter by extensible label
@@ -721,6 +790,13 @@ The per-menu overlay never produces a failure — duplicate values are silently 
 - `slot_completions (menu_slot_id)` **(v2.0)** (unique; backs the partial unique constraint)
 - `slot_completions (workspace_id, status) WHERE status != 'planned'` **(v2.0)** — incomplete-alert derivation
 - `menu_slot_ingredient_overrides (menu_slot_id)` **(v2.0)** — override map lookup during grocery recompute
+- `recipes (workspace_id) WHERE recipe_kind = 'addon' AND is_deleted = false` **(v2.1)** — addon picker query (load workspace addon recipes for attachment)
+- `recipes (workspace_id) WHERE recipe_kind = 'meal' AND is_deleted = false` **(v2.1)** — engine input builder query (replaces the dropped `(workspace_id, meal_type)` partial index; meal-type filtering now joins `recipe_meal_types`)
+- `recipe_meal_types (recipe_id)` **(v2.1)** — engine input builder joins recipe meal-type set per recipe
+- `recipe_meal_types (meal_type)` **(v2.1)** — supports filter-by-meal-type query on the junction
+- `member_dietary_preferences (member_id)` **(v2.1)** — load inclusive prefs for a member during input assembly
+- `menu_addons (menu_id)` **(v2.1)** — addon-ingredient pass in `recomputeGroceryListsForMenu` loads addons by menu
+- `grocery_items (list_id, source)` **(v2.1)** — grocery UI section grouping by source (`meal` vs `addon`)
 
 ---
 

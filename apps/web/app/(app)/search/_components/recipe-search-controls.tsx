@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils'
 
 // All recipe search facets in one object so the page holds a single piece of
 // state. 'all' is the no-filter sentinel for the dropdown facets.
-type MealType = RecipeRecord['meal_type']
+// v2.1: MealType is defined locally — scalar meal_type was dropped from RecipeRecord.
+type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 type Difficulty = RecipeRecord['difficulty']
 
 export type RecipeSearchFilters = {

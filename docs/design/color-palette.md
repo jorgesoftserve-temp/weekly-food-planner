@@ -58,6 +58,10 @@ wrapper) to match the shadcn convention in `globals.css`. Edit `:root` and `.dar
 | `--tag-neutral` | `0 0% 30%` | Text color for neutral/gray tags (Pantry, unclassified). ~7.03:1 on `--tag-neutral-tint`. See §4.8. |
 | `--tag-neutral-tint` | `0 0% 91%` | Fill for neutral tags. Paired with `--tag-neutral-border` for card delineation. |
 | `--tag-neutral-border` | `0 0% 55%` | Border for neutral tags. ~3.33:1 against white card — passes WCAG 1.4.11. See §4.8. |
+| `--addon` | `172 45% 34%` | Teal-green — addon-origin grocery lines and the menu "Addons" section. **~6.65:1 on white, ~5.44:1 on `--addon-tint`.** Visually distinct from `--purchase` (205°) and `--success` (114°). See §4.13. |
+| `--addon-tint` | `172 50% 93%` | Soft background for addon-origin badges. |
+| `--preference` | `262 45% 40%` | Warm violet — inclusive (soft) dietary-preference sections. **~6.73:1 on white, ~5.58:1 on `--preference-tint`.** Distinct from red/destructive hard-restriction surfaces. See §4.13. |
+| `--preference-tint` | `262 55% 94%` | Soft background for preference-section badges / rows. |
 | `--card-padding` | `1.25rem` | Uniform card inner padding (CardHeader / CardContent / CardFooter). |
 
 ### Dark (`.dark`)
@@ -94,6 +98,10 @@ wrapper) to match the shadcn convention in `globals.css`. Edit `:root` and `.dar
 | `--tag-neutral` | `0 0% 64%` | Text color for neutral tags on dark surfaces. ~4.76:1 on `--tag-neutral-tint`. |
 | `--tag-neutral-tint` | `0 0% 22%` | Fill for neutral tags on dark card surfaces. |
 | `--tag-neutral-border` | `0 0% 44%` | Border for neutral tags. ~3.10:1 against dark card `hsl(20 6% 13%)` — passes WCAG 1.4.11. |
+| `--addon` | `172 50% 72%` | Teal-green lightened for dark-surface contrast. **~5.83:1 on `--addon-tint` (dark).** |
+| `--addon-tint` | `172 30% 18%` | Dark tinted surface for addon badges. |
+| `--preference` | `262 55% 75%` | Warm violet lightened for dark-surface contrast. **~6.67:1 on `--preference-tint` (dark).** |
+| `--preference-tint` | `262 35% 18%` | Dark tinted surface for preference-section badges. |
 
 The `--sidebar-*` family inherits these (warm-dark sidebar in dark, near-white sidebar in light).
 
@@ -260,6 +268,31 @@ white-on-solid on the two primitives (measured: ~2.90:1 — failed AA and 3:1). 
 
 **Light note:** In light mode both tokens share the same value (`0 72% 41%`). The split is
 architecturally correct but only materially visible in dark mode.
+
+### 4.13 `--addon` and `--preference` domain-semantic tokens (2026-06-11)
+Two new token pairs replacing the `--purchase` / `--success` stand-ins used in the design-lab mocks.
+
+**`--addon`** — teal-green (`172°`). Represents addon-origin grocery lines and the "Addons" menu section.
+Chosen to be visually distinct from `--purchase` (ocean-blue, 205°) and `--success` (moss, 114°).
+
+- **Light** `172 45% 34%`: text on white = **~6.65:1** ✓, text on `--addon-tint` = **~5.44:1** ✓ (AA small text).
+- **Dark** `172 50% 72%`: acts as light text on dark tinted surface. Text on `--addon-tint` (dark) = **~5.83:1** ✓.
+- **Tint light** `172 50% 93%` / **Tint dark** `172 30% 18%`.
+- Tailwind tokens: `bg-addon-tint`, `text-addon`, `border-addon/{opacity}`.
+- **Do not** substitute `--purchase` for addon; they represent different domains (pantry/inventory vs. added extras).
+
+**`--preference`** — warm violet (`262°`). Represents soft/inclusive dietary-preference sections, distinct from
+the deep-crimson `--destructive` used for hard allergen/restriction surfaces.
+
+- **Light** `262 45% 40%`: text on white = **~6.73:1** ✓, text on `--preference-tint` = **~5.58:1** ✓ (AA small text).
+- **Dark** `262 55% 75%`: acts as light text on dark tinted surface. Text on `--preference-tint` (dark) = **~6.67:1** ✓.
+- **Tint light** `262 55% 94%` / **Tint dark** `262 35% 18%`.
+- Tailwind tokens: `bg-preference-tint`, `text-preference`, `border-preference/{opacity}`.
+- **Do not** use `--success` for preferences — success signals completion/acceptance, not dietary preference.
+- **Do not** use `--preference` for hard dietary restrictions — those stay `--destructive` (the distinction is intentional).
+
+> **accessibility-auditor co-sign required** for production promotion. Ratios above are design-time calculations;
+> the auditor must measure rendered text in both modes at production font sizes before the mocks are promoted.
 
 ## 5. Do / Don't
 

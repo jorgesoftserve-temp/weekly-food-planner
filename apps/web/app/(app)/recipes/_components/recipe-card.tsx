@@ -1,6 +1,6 @@
 'use client'
 
-import { MoreHorizontal, Pencil, Trash2, Eye } from 'lucide-react'
+import { MoreHorizontal, Package, Pencil, Trash2, Eye } from 'lucide-react'
 import type { RecipeRecord } from '@weekly-food-planner/supabase'
 import { Button } from '@/components/ui/button'
 import {
@@ -35,11 +35,12 @@ export const RecipeCard = ({
   onEdit,
   onDelete,
 }: RecipeCardProps) => {
+  // Use first meal type for icon resolution; addons fall back to generic icon.
   const icon = resolveRecipeIcon({
     name: recipe.name,
     cuisine: recipe.cuisine ?? undefined,
     tags: recipe.recipe_dietary_tags.map((t) => t.tag),
-    meal: recipe.meal_type,
+    meal: recipe.meal_types[0] ?? undefined,
   })
 
   const totalMinutes =
@@ -132,9 +133,19 @@ export const RecipeCard = ({
 
         {/* Meta chips */}
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="rounded-pill bg-muted px-2 py-0.5 capitalize text-muted-foreground">
-            {recipe.meal_type}
-          </span>
+          {/* v2.1: recipe_kind badge — addon gets a distinct tint */}
+          {recipe.recipe_kind === 'addon' ? (
+            <span className="inline-flex items-center gap-1 rounded-pill bg-addon-tint px-2 py-0.5 font-medium text-addon">
+              <Package className="size-3" aria-hidden />
+              Addon
+            </span>
+          ) : null}
+          {/* v2.1: meal_types is now an array — show all timeframe badges */}
+          {recipe.meal_types.map((mt) => (
+            <span key={mt} className="rounded-pill bg-muted px-2 py-0.5 capitalize text-muted-foreground">
+              {mt}
+            </span>
+          ))}
           {recipe.cuisine ? (
             <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">
               {recipe.cuisine}

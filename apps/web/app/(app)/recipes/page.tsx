@@ -63,11 +63,13 @@ const RecipesPage = () => {
   }) => open({ kind: 'detail', recipeId, section })
 
   // Client-side filter — no extra network round-trip needed.
+  // v2.1: meal_type scalar replaced by meal_types array; filter matches any entry.
   const filteredRecipes = useMemo(() => {
     let result = recipes
     if (activeFilter !== 'All') {
-      result = result.filter(
-        (r) => r.meal_type.toLowerCase() === activeFilter.toLowerCase(),
+      const filterLower = activeFilter.toLowerCase()
+      result = result.filter((r) =>
+        r.meal_types.some((mt) => mt.toLowerCase() === filterLower),
       )
     }
     if (search.trim()) {

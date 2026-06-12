@@ -1,13 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Unit } from '../types/db.js'
+import type { GrocerySource, Unit } from '../types/db.js'
 import { isMenuStillUpcoming, todayYmd } from './date-utils.js'
 
 export type GroceryItem = {
   id: string
   ingredient_id: string
-  quantity: string | number
+  quantity: number
   unit: Unit
   scheduled_purchase_day: string | null
+  /** (v2.1) Which pass emitted this line: 'meal' (default), 'addon', or 'extra' (dormant v2.2). */
+  source: GrocerySource
 }
 
 export type GroceryListRecord = {
@@ -39,7 +41,7 @@ export const groceryKeys = {
 }
 
 const GROCERY_SELECT = `id, target_member_id,
-  grocery_items (id, ingredient_id, quantity, unit, scheduled_purchase_day)`
+  grocery_items (id, ingredient_id, quantity, unit, scheduled_purchase_day, source)`
 
 export const getActiveGroceryLists = async ({
   supabase,

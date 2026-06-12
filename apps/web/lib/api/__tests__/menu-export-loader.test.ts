@@ -20,6 +20,7 @@ const item = (
   quantity,
   unit,
   scheduled_purchase_day: scheduledPurchaseDay,
+  source: 'meal' as const,
 })
 
 describe('buildExportGroceryLists', () => {
@@ -93,6 +94,7 @@ describe('buildExportGroceryLists', () => {
               quantity: '3.5' as unknown as number,
               unit: 'piece',
               scheduled_purchase_day: null,
+              source: 'meal' as const,
             },
           ],
         },

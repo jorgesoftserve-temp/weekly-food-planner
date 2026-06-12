@@ -16,6 +16,8 @@ const member = (over: Partial<MemberSnapshot> = {}): MemberSnapshot => ({
   dietaryRestrictions: [],
   allergies: [],
   ingredientDislikes: [],
+  // (v2.1) required by the updated MemberSnapshot contract
+  dietaryPreferences: { tags: [], ingredients: [] },
   ...over,
 })
 

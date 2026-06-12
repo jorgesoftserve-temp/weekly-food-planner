@@ -164,7 +164,18 @@ Items 0–5, 7, 8, 9, 10 from the [v2 epic](../../.claude/plans/v2.md). Buildabl
 | 9 | Menu-level ingredient substitution (grocery reflects it; seed unchanged) |
 | 10 | Per-member menu switcher |
 
-**v2.1 follow-on** — smarter generation (inclusive preferences + per-generation overlay relax, multi-timeframe recipes), addons + on-the-fly cook mode, bulk recipe-create primitive. See [`.claude/plans/v2.1.md`](../../.claude/plans/v2.1.md).
+### v2.1 — Smarter generation + Addons **(v2.1)**
+
+Status: **shipped 2026-06-11** (v2.1). Buildable plan: [`.claude/plans/v2.1.md`](../../.claude/plans/v2.1.md).
+
+| Item | Feature |
+|---|---|
+| 11 | **Inclusive preferences** — soft dietary biasing (prefer fish, not required) alongside existing hard exclusive restrictions; both tunable per-generation without breaking determinism. Engine-touching: deterministic soft-bias in `assign.ts`; requires intentional golden-snapshot regen. |
+| 12 | **Multi-timeframe recipes** — a recipe declares the set of meal timeframes it can fill (sandwich = breakfast + snack + dinner); engine's meal check broadens from scalar equality to set membership. Engine-touching: batched into the same single regen as item 11. |
+| 13 | **Addons + on-the-fly cook mode** — a new recipe kind (`addon`: salsa, guacamole, dessert) that accompanies meals but is never a constraint-engine candidate; excluded at the input-builder boundary. Menu-attached addon ingredients appear in a dedicated "Addons" grocery section. On-the-fly cook mode opens Cook Sheet for any recipe without affecting the active menu. Engine-free. |
+| E | **Bulk recipe-create primitive** — transactional N-recipe insert (recipe + children in one call, all-or-nothing), returning created ids. Shared insert path for [v3](../../.claude/plans/v3.md) AI import and the [v4 community epic](../../.claude/plans/v4.md) deep-copy import. Engine-free. |
+
+Items 11 and 12 are the **only engine-touching items in the entire v2 epic**; both require one intentional golden-snapshot regen (batched). Items 13 and E are fully parallel and engine-free — they do not gate on the regen. The `grocery_items.source {meal,addon,extra}` column Addons introduces is also the seam for [v2.2 Extras](../../.claude/plans/v2.2.md).
 
 ---
 
@@ -201,7 +212,7 @@ The project is accepted when:
 # 9. Post-MVP roadmap
 
 > The 26-Jun-2026 MVP boundary (§6) is unchanged. The items below are **planned**, not shipped —
-> **except v2.0, which shipped 2026-06-11**; each release is specified in its own plan under
+> **except v2.0 and v2.1, which shipped 2026-06-11**; each release is specified in its own plan under
 > [`.claude/plans/`](../../.claude/plans/) and PRD'd section-by-section as it is built. This list is the
 > release line, not feature detail.
 
@@ -209,8 +220,8 @@ The project is accepted when:
 - **v2 — Execution & Pantry + platform readiness** ([v2 epic](../../.claude/plans/v2.md)):
   - **v2.0** *(shipped 2026-06-11)* — inventory/pantry, shopping confirmation + completeness, cook-status,
     leftovers, menu-level ingredient substitution, all-members/per-member views, food groups.
-  - **v2.1** — smarter generation (inclusive preferences + per-generation overrides, multi-timeframe
-    recipes), addons + on-the-fly cook mode, and the **bulk recipe-create primitive**.
+  - **v2.1** *(shipped 2026-06-11)* — smarter generation (inclusive preferences + per-generation overrides,
+    multi-timeframe recipes), addons + on-the-fly cook mode, and the **bulk recipe-create primitive**.
   - **v2.2** — Extras (manual / non-food grocery lines).
   - **v2.3** — **demo-lab + Bruno tooling**: a production-gated, mock walkthrough harness to demo the whole
     product to prospects (with the version it represents shown on top), plus a kept-current API test

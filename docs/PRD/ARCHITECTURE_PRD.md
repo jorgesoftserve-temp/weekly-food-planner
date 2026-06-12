@@ -85,6 +85,7 @@ Must NOT:
 - Depend on any app package
 - Read execution or inventory state — `slot_completions`, `inventory_items`, `shopping_sessions`, `shopping_item_status`, and `menu_slot_ingredient_overrides` are **post-accept mutable state; the engine sees none of them** **(v2.0)**
 - Accept ingredient substitutions as input — substitutions are menu state consumed only by the grocery recompute path, never by the constraint engine; they are structurally invisible to `accepted_seed` **(v2.0)**
+- Receive addon recipes as candidates — `recipe_kind='addon'` recipes are excluded at the `menu-input-builder` boundary before the engine is invoked; they never appear in `RecipeSnapshot[]`, never affect `inputs_hash`, and never appear in a golden snapshot **(v2.1)**
 
 ### Public API: TypeScript-first domain, JSON-serializable DTO
 
@@ -150,8 +151,8 @@ Three modes share a single `POST /api/workspaces/[id]/menus` route, distinguishe
 1. **Authorize and validate pre-conditions** — verify the caller holds a role permitted to generate menus (`creator` or `admin`), and that the workspace contains at least one non-deleted recipe (else 412 `empty_workspace`). This is the only pre-engine validation path: on failure the engine is not invoked and no `generation_runs` row is written. The UI mirrors the check inline so users hit it before submitting.
 2. **Input assembly with overlay dedup + participant filter** — load workspace, members (with role, dietary restrictions, allergies, dislikes, calorie target, meal frequency), available recipes (`is_deleted = false`), ingredient catalog with allergen labels. **Resolve participants**: `participantMemberIds` from the request, falling back to every active member when omitted (an explicit empty array is rejected). Filter `members` down to that set before the engine sees them. Compute the **effective** per-menu overlay against the participant set: filter `additionalDietaryRestrictions` and `additionalAllergies` to drop any value already present on any participating member's matching profile field (silent dedup; see [PRODUCT_PRD.md §4.2](./PRODUCT_PRD.md)); filter `memberFrequencyOverrides` to drop any entry whose `memberId` isn't a participant. `ingredientExclusions` passes through unchanged (no member equivalent). Build a canonical `GenerateMenuInput` with the effective overlay in `options`, the requested `durationDays` (1..7, default 7), and compute its `inputsHash` (SHA-256 of canonical JSON — participants and duration are both part of the hash, so changing either reshapes the result).
 3. **Slot enumeration** (engine) — derive the start day-of-week from `weekStartDate` and walk `durationDays` consecutive days (wrapping past Sunday → Monday if needed). For each (day, member, mealFrequency entry) produce one slot. `members` is already filtered to the menu's **participants** at the route layer; the engine never sees non-participating members. The mealFrequency cascade is **override → member > workspace > empty**, where the override comes from `options.memberFrequencyOverrides` (see [PRODUCT_PRD.md §4.1.3](./PRODUCT_PRD.md)).
-4. **Hard-constraint filtering** (engine) — drop any recipe that violates allergies, dietary restrictions, ingredient exclusions, or meal-type assignment. The effective hard-constraint set for each slot is the **union** of the relevant member's profile constraints and the per-menu overlay (`options.additionalDietaryRestrictions`, `options.additionalAllergies`, `options.ingredientExclusions`). Allergy checks join `member_allergies` with `ingredient_allergens` by exact string match. An allergen label not present in `ingredient_allergens` is silently skipped during filtering — see [PRODUCT_PRD.md §11.3](./PRODUCT_PRD.md) for the user-facing implication.
-5. **Greedy slot assignment** (engine) — walk slots in deterministic order; for each slot pick the highest-scoring recipe among those passing hard constraints, breaking ties with the seeded RNG. See §6.1.
+4. **Hard-constraint filtering** (engine) — drop any recipe that violates allergies, dietary restrictions, ingredient exclusions, or meal-type assignment. The effective hard-constraint set for each slot is the **union** of the relevant member's profile constraints and the per-menu overlay (`options.additionalDietaryRestrictions`, `options.additionalAllergies`, `options.ingredientExclusions`). Allergy checks join `member_allergies` with `ingredient_allergens` by exact string match. An allergen label not present in `ingredient_allergens` is silently skipped during filtering — see [PRODUCT_PRD.md §11.3](./PRODUCT_PRD.md) for the user-facing implication. **v2.1 (inclusive preferences):** `options.relaxedDietaryRestrictions` and `options.relaxedAllergies` are applied here by removing those values from the member's effective hard set before filtering. Inclusive preferences (`options.additionalDietaryPreferences`) are **not applied in this step** — they are a soft bias applied in step 5. **v2.1 (meal-type):** the meal-type filter changes from scalar equality to **set membership** — a recipe is meal-eligible when the slot's `mealType` is in `recipe.mealTypes` (i.e. `recipe.mealTypes.includes(slot.mealType)`); see [§21](#21-multi-timeframe-recipe-eligibility-v21).
+5. **Greedy slot assignment** (engine) — walk slots in deterministic order; for each slot pick the highest-scoring recipe among those passing hard constraints, breaking ties with the seeded RNG. See §6.1. **(v2.1)** Inclusive preferences apply here as a deterministic soft bias: among the hard-valid candidates, the engine partitions into "preferred" (matches an inclusive tag/ingredient from `MemberSnapshot.dietaryPreferences` + `options.additionalDietaryPreferences`) vs "rest"; the seeded RNG picks from "preferred" when non-empty, else from "rest". A valid recipe is never excluded. See [§20](#20-preferences--generation-time-constraint-overrides-v21).
 6. **Local-search refinement** (engine) — run deterministic improvement passes (swap a slot's recipe with an alternative; pairwise-swap two slots) and keep any move that strictly improves the soft-constraint score. Stop when no improving move exists or a step budget is reached. Uses `recipes.calories_per_serving` for calorie balancing.
 7. **Grocery aggregation** (engine) — produce a shared list and per-member lists; assign `scheduled_purchase_day` for perishable items using ingredient freshness flags.
 8. **Persist as DRAFT** — within a single transaction:
@@ -630,6 +631,227 @@ Before accepting a substitution, the route handler validates that the substitute
 
 **This is route-layer reuse of engine utilities, not an engine edit.** v2.0 is engine-free.
 
-> **§20 — Preference architecture** (inclusive prefs + per-generation relax) is authored in **[v2.1](../../.claude/plans/v2.1.md)**.
-> **§21 — Multi-timeframe architecture** is authored in **[v2.1](../../.claude/plans/v2.1.md)**.
 > **§22 — Community/seed-pack architecture** moves to the **[v4 epic](../../.claude/plans/v4.md)**.
+
+---
+
+# 20. Preferences & generation-time constraint overrides **(v2.1)**
+
+> Status: planned (v2.1). Behaviour: [PRODUCT_PRD.md §25](./PRODUCT_PRD.md). Schema: [DATABASE_PRD.md §6.22](./DATABASE_PRD.md).
+
+## 20.1 Exclusive vs inclusive split
+
+Two distinct modes govern constraint application:
+
+- **Exclusive (hard)** — current behavior; unchanged. Values from `member_dietary_restrictions`, `member_allergies`, and the per-menu overlay. Applied in step 4 (hard-constraint filtering). A recipe that violates any exclusive constraint is never assigned.
+- **Inclusive (soft)** — new in v2.1. Values from `member_dietary_preferences` (`kind='dietary_tag'` or `kind='ingredient'`) plus `options.additionalDietaryPreferences`. Applied in step 5 (greedy assignment) as a deterministic partition, not a filter. A recipe that doesn't match an inclusive preference is still eligible.
+
+## 20.2 Engine type extensions
+
+`MemberSnapshot` gains:
+
+```ts
+dietaryPreferences: {
+  tags: string[]        // liked dietary_tag values (inclusive)
+  ingredients: string[] // liked ingredient ids (inclusive)
+}
+```
+
+`GenerateMenuOptions` gains:
+
+```ts
+additionalDietaryPreferences?: {
+  tags?: string[]
+  ingredients?: string[]
+}
+relaxedDietaryRestrictions?: string[]  // subtractive: remove from member's effective hard set
+relaxedAllergies?: string[]            // subtractive: remove from member's effective hard allergens
+```
+
+All fields JSON-serializable. Empty arrays and omitted fields are equivalent — no sentinel values.
+
+## 20.3 Deterministic soft-bias in `assign.ts`
+
+For each hard-valid candidate set:
+
+```
+preferredCandidates = candidates.filter(recipe =>
+  recipe.dietaryTags.some(t => effectiveInclusivePrefs.tags.includes(t)) ||
+  recipe.ingredientIds.some(i => effectiveInclusivePrefs.ingredients.includes(i))
+)
+pickFrom = preferredCandidates.length > 0 ? preferredCandidates : candidates
+winner = highestScoring(pickFrom) || rng.pick(pickFrom)  // ties broken by seeded RNG
+```
+
+This is the first real use of the soft-constraint hook in `assign.ts`. It is **fully deterministic** — same inputs + same seed = same partition = same winner. `filter.ts` is unchanged for inclusive prefs.
+
+## 20.4 Overlay extension
+
+`computeEffectiveOverlay` in `apps/web/lib/api/menu-overlay.ts` is extended to:
+
+- **Add** inclusive preferences from the per-generation request (additive dedup with profile prefs: if a tag is already in the member's `member_dietary_preferences`, it is not added again, no error).
+- **Subtract** `relaxedDietaryRestrictions` / `relaxedAllergies` from the member's effective exclusive set for this generation only (these values are removed from the hard-constraint set before the engine is invoked; the profile row is never modified).
+
+Everything flows through `inputs_hash` — a generation with relaxed restrictions or extra inclusive prefs is a legitimately different generation; same inputs + same seed will reproduce it.
+
+`menus.generation_options` snapshot includes `additionalDietaryPreferences`, `relaxedDietaryRestrictions`, and `relaxedAllergies` in the effective overlay blob, so the audit trail is complete.
+
+## 20.5 No golden-snapshot regen for relaxed-only or inclusive-only
+
+A generation where `relaxedDietaryRestrictions`, `relaxedAllergies`, and `additionalDietaryPreferences` are all empty or absent is **byte-identical** to the pre-v2.1 output (the preference partition degrades to "pick from all hard-valid candidates", which is the existing behavior). The mandatory regen covers tests that explicitly exercise these fields. See Track C determinism regen in [`.claude/plans/v2.1.md`](../../.claude/plans/v2.1.md).
+
+---
+
+# 21. Multi-timeframe recipe eligibility **(v2.1)**
+
+> Status: planned (v2.1). Behaviour: [PRODUCT_PRD.md §26](./PRODUCT_PRD.md). Schema: [DATABASE_PRD.md §6.23](./DATABASE_PRD.md).
+
+## 21.1 Type change
+
+`RecipeSnapshot` changes from:
+
+```ts
+mealType: MealType   // scalar — pre-v2.1
+```
+
+to:
+
+```ts
+mealTypes: MealType[]   // set — v2.1+
+```
+
+JSON-round-trip still holds (array of strings). The input builder (`menu-input-builder.ts`) fetches `recipe_meal_types` for each recipe and populates the array; backfilled recipes yield a one-element array.
+
+## 21.2 Engine filter change
+
+In `packages/constraint-engine/src/filter.ts`, `isRecipeValidForSlot`:
+
+```ts
+// pre-v2.1
+recipe.mealType !== slot.mealType   // scalar equality
+
+// v2.1
+!recipe.mealTypes.includes(slot.mealType)   // set membership
+```
+
+This is the **only** engine logic change for multi-timeframe. Slot enumeration (`slots.ts`) is untouched — slots are still enumerated from `meal_frequency` entries, and each slot still has exactly one `mealType`.
+
+## 21.3 Backfill semantics
+
+Every existing recipe is backfilled to a one-element `recipe_meal_types` set before the scalar column is dropped. A one-element set with `mealTypes.includes(slot.mealType)` produces the same boolean as the pre-v2.1 scalar equality check. The golden-snapshot regen proves byte-identical output for all backfilled recipes.
+
+A recipe broadened to multiple meal types becomes a candidate for **each matching slot type** — this is the intentional snapshot delta. The delta is scoped to recipes that were explicitly broadened; the regen documents it.
+
+## 21.4 Snapshot-regen implication
+
+Both item 11 (inclusive preferences) and item 12 (multi-timeframe) are engine-touching. They are batched into **one** intentional golden-snapshot regen after both land, executed by `determinism-snapshot-curator`. The regen must prove:
+
+- With empty preferences and every recipe a one-element set: output is byte-identical to the pre-v2.1 snapshots.
+- With inclusive prefs or relaxed restrictions: output is stable for a fixed seed and never includes a hard-excluded recipe.
+- A recipe broadened to multiple meals: appears as a candidate for each matching slot; the delta is intentional and scoped.
+
+---
+
+# 23. Addons & grocery sourcing architecture **(v2.1)**
+
+> Status: planned (v2.1). Behaviour: [PRODUCT_PRD.md §27](./PRODUCT_PRD.md). Schema: [DATABASE_PRD.md §6.24](./DATABASE_PRD.md).
+
+## 23.1 Engine exclusion boundary
+
+`recipe_kind` partitions recipes at the **input-builder boundary**:
+
+```
+menu-input-builder.ts:
+  recipes = supabase
+    .from('recipes')
+    .select(RECIPE_SELECT)
+    .eq('workspace_id', workspaceId)
+    .eq('recipe_kind', 'meal')   // ← the only change; addons never enter the engine
+    .eq('is_deleted', false)
+```
+
+Addons never appear in `RecipeSnapshot[]`. They never affect `inputs_hash`. They never appear in a golden snapshot. This is an **input-selection change only** — `packages/constraint-engine/*` is unchanged by Track D.
+
+## 23.2 `menu_addons` as post-accept menu state
+
+`menu_addons` (see [DATABASE_PRD.md §6.24](./DATABASE_PRD.md)) is keyed by `menu_id`. The `accepted_seed` computation (in `apps/web/lib/api/menu-accept.ts`) hashes only `(inputs_hash, sorted slot recipe-tuples { day, meal_key, target_member_id, recipe_id })` — `menu_addons` rows are not part of the hash. Therefore:
+
+- Writing or deleting a `menu_addons` row **cannot change `accepted_seed`**.
+- Addon attachment/detachment is structurally invisible to the engine and to the seed, exactly like `menu_slot_ingredient_overrides` (§19.1).
+- No golden-snapshot regen is required for Track D.
+
+## 23.3 Grocery sourcing
+
+`recomputeGroceryListsForMenu` gains an **addon-ingredient pass** after the meal-slot aggregation:
+
+```
+1. Load menu_addons for the menu.
+2. For each addon row, load recipe_ingredients for addon_recipe_id.
+3. Emit grocery lines tagged grocery_items.source='addon'.
+4. Merge with existing lines (same (ingredient_id, unit) key):
+   - If the ingredient already has a 'meal' line, emit a SEPARATE 'addon' line
+     (keep provenance distinct — the grocery UI groups by source).
+5. Meal lines stay source='meal'; their quantities are unchanged by addon attachment.
+```
+
+The addon pass is **engine-agnostic** and **inventory-agnostic** — same isolation rules as the existing override pass (§5.5). The `source='extra'` value is dormant until [v2.2](../../.claude/plans/v2.2.md).
+
+## 23.4 On-the-fly cook mode
+
+A "Cook now" entry point on the recipe detail page opens the v1.9 Cook Sheet over an arbitrary recipe (meal or addon) with **no menu write**:
+
+- The Cook Sheet receives the recipe's ingredients and instructions directly (no slot context).
+- `menu_slots.cooked_at` is **not written** — this is ephemeral, distinct from v1.9 slot-based Cook mode.
+- Optional: at the end, the user may save leftover entries via the v2.0 §16 Leftovers flow (`inventory_items(source='leftover')`). This write does not trigger a grocery recompute.
+- The active menu is fully untouched.
+
+## 23.5 API surface additions
+
+```
+# (v2.1) Addon endpoints
+/api/workspaces/:id/recipes?kind=addon       → GET (addon picker — recipes filtered to recipe_kind='addon')
+/api/workspaces/:id/menus/:menuId/addons     → POST (attach addon; triggers recomputeGroceryListsForMenu on accepted menus)
+/api/workspaces/:id/menus/:menuId/addons/:addonId → DELETE (detach; triggers recompute)
+# on-the-fly cook mode reuses the existing Cook Sheet UI; no new API endpoint needed
+```
+
+---
+
+# 24. Bulk recipe-create primitive **(v2.1)**
+
+> Status: planned (v2.1). Behaviour: [PRODUCT_PRD.md §28](./PRODUCT_PRD.md).
+
+## 24.1 Route and transaction shape
+
+`POST /api/workspaces/:id/recipes/bulk` accepts `{ recipes: RecipePayload[] }`. Each element is validated by the **same Zod schema** as the single-create form. The handler wraps all inserts in **one transaction**:
+
+```
+for each payload:
+  insert recipes row
+  insert recipe_ingredients rows
+  insert recipe_instructions rows
+  insert recipe_dietary_tags rows
+  insert recipe_meal_types rows   (one per meal type in the payload's mealTypes array)
+  recipe_kind defaults to 'meal' unless payload specifies 'addon'
+```
+
+If any payload fails validation or any insert fails, the transaction is rolled back and **nothing is written**. The response returns `{ recipeIds: uuid[] }` in input order on success, or a structured error identifying the first failing payload (index + validation message) on failure.
+
+## 24.2 Engine-free by construction
+
+New recipes are ordinary catalog rows. Nothing here touches `inputs_hash`, the engine, or a golden snapshot. Track E needs no snapshot regen and runs fully parallel to Track C.
+
+## 24.3 Module extension
+
+`packages/supabase/src/module/recipes.ts` gains `createRecipesBulk({ workspaceId, recipes: RecipeCreatePayload[] }) → { recipeIds: string[] }` — a RO-RO fat-arrow function that wraps the existing single-create child-row logic in a transaction over an array. Exported from the barrel + `.react.ts` hook.
+
+## 24.4 Consumers (later releases)
+
+- **[v3](../../.claude/plans/v3.md)** — AI import materializes parsed recipes through this primitive.
+- **[v4.0](../../.claude/plans/v4.0.md)** — community import = this primitive + provenance copy (no new table in v2.1; provenance columns are authored in v4.0).
+
+## 24.5 Hand-offs
+
+- Route implementation → `route-handler-engineer`.
+- Module work → `supabase-module-author`.
+- Integration tests (N valid, 1-invalid-rolls-back) → `vitest-integration-author`.

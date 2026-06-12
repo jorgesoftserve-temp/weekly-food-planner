@@ -71,7 +71,10 @@ type MenuRow = {
 
 type RecipeRow = {
   id: string
-  meal_type: MealType
+  // (v2.1) The scalar recipes.meal_type column was dropped in favour of the
+  // recipe_meal_types junction — a recipe can fill multiple timeframes. Slot
+  // eligibility is now set membership against this array.
+  recipe_meal_types: Array<{ meal_type: MealType }>
   is_deleted: boolean
   workspace_id: string
 }
@@ -138,10 +141,12 @@ export const addSlotToDraftMenu = async ({
     }
   }
 
-  // Verify the recipe belongs to this workspace and its meal_type matches.
+  // Verify the recipe belongs to this workspace and one of its meal timeframes
+  // matches the requested slot. (v2.1) Eligibility is set membership over the
+  // recipe_meal_types junction, not scalar equality.
   const { data: recipeRow, error: recipeErr } = await admin
     .from('recipes')
-    .select('id, meal_type, is_deleted, workspace_id')
+    .select('id, is_deleted, workspace_id, recipe_meal_types (meal_type)')
     .eq('id', body.recipeId)
     .maybeSingle()
   if (recipeErr) return { ok: false, reason: 'db_error', detail: recipeErr.message }
@@ -150,11 +155,12 @@ export const addSlotToDraftMenu = async ({
   if (recipe.workspace_id !== workspaceId || recipe.is_deleted) {
     return { ok: false, reason: 'recipe_not_in_workspace' }
   }
-  if (recipe.meal_type !== body.mealType) {
+  const recipeMealTypes = recipe.recipe_meal_types.map((r) => r.meal_type)
+  if (!recipeMealTypes.includes(body.mealType)) {
     return {
       ok: false,
       reason: 'meal_type_mismatch',
-      detail: `Recipe is a ${recipe.meal_type} recipe; slot expected ${body.mealType}.`,
+      detail: `Recipe covers ${recipeMealTypes.join(', ') || 'no'} timeframe(s); slot expected ${body.mealType}.`,
     }
   }
 

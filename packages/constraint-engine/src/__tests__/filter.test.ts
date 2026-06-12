@@ -78,7 +78,9 @@ describe('isRecipeValidForSlot', () => {
     expect(isRecipeValidForSlot({ recipe: peanutRecipe, slot, ctx })).toBe(false)
   })
 
-  it('fails when meal_type does not match the slot', () => {
+  it('fails when slot meal type is not in the recipe meal-types set', () => {
+    // veganTofuRecipe is a one-element ['dinner'] set — proves the backfill
+    // (scalar→one-element array) behaves exactly like the old scalar equality.
     const breakfastSlot: SlotSpec = { ...slot, mealType: 'breakfast' }
     const ctx = createFilterContext({
       member: veganMember,
@@ -86,6 +88,36 @@ describe('isRecipeValidForSlot', () => {
       ingredients: [tofuIngredient],
     })
     expect(isRecipeValidForSlot({ recipe: veganTofuRecipe, slot: breakfastSlot, ctx })).toBe(false)
+  })
+
+  it('passes when the slot meal type is one of several recipe meal-types (multi-timeframe)', () => {
+    // v2.1: a recipe eligible for breakfast + dinner is a candidate for either.
+    const multiTimeframeRecipe: RecipeSnapshot = {
+      ...veganTofuRecipe,
+      mealTypes: ['breakfast', 'dinner'],
+    }
+    const breakfastSlot: SlotSpec = { ...slot, mealType: 'breakfast' }
+    const ctx = createFilterContext({
+      member: veganMember,
+      options: undefined,
+      ingredients: [tofuIngredient],
+    })
+    expect(isRecipeValidForSlot({ recipe: multiTimeframeRecipe, slot, ctx })).toBe(true)
+    expect(isRecipeValidForSlot({ recipe: multiTimeframeRecipe, slot: breakfastSlot, ctx })).toBe(true)
+  })
+
+  it('fails when the slot meal type is in none of several recipe meal-types', () => {
+    const multiTimeframeRecipe: RecipeSnapshot = {
+      ...veganTofuRecipe,
+      mealTypes: ['breakfast', 'snack'],
+    }
+    const ctx = createFilterContext({
+      member: veganMember,
+      options: undefined,
+      ingredients: [tofuIngredient],
+    })
+    // slot is a 'dinner' slot — not in ['breakfast','snack']
+    expect(isRecipeValidForSlot({ recipe: multiTimeframeRecipe, slot, ctx })).toBe(false)
   })
 
   it('applies overlay additional dietary restrictions on top of profile', () => {
@@ -110,6 +142,75 @@ describe('isRecipeValidForSlot', () => {
     })
     expect(isRecipeValidForSlot({ recipe: veganTofuRecipe, slot, ctx })).toBe(false)
   })
+
+  // v2.1: relaxed* subtracts a profile hard restriction/allergy for this generation only.
+  it('relaxedDietaryRestrictions lifts a profile dietary restriction for this generation', () => {
+    // vegan member; a vegetarian-only recipe normally fails the vegan hard tag.
+    const vegetarianRecipe: RecipeSnapshot = { ...veganTofuRecipe, dietaryTags: ['vegetarian'] }
+    const blockedCtx = createFilterContext({
+      member: veganMember,
+      options: undefined,
+      ingredients: [tofuIngredient],
+    })
+    expect(isRecipeValidForSlot({ recipe: vegetarianRecipe, slot, ctx: blockedCtx })).toBe(false)
+
+    const relaxedCtx = createFilterContext({
+      member: veganMember,
+      options: { relaxedDietaryRestrictions: ['vegan'] },
+      ingredients: [tofuIngredient],
+    })
+    expect(isRecipeValidForSlot({ recipe: vegetarianRecipe, slot, ctx: relaxedCtx })).toBe(true)
+  })
+
+  it('relaxedAllergies lifts a profile allergy for this generation', () => {
+    // veganMember is allergic to peanut; a peanut recipe normally fails.
+    const peanutRecipe: RecipeSnapshot = {
+      ...veganTofuRecipe,
+      ingredients: [makeRecipeIngredient({ ingredientId: 'i-peanut', quantity: 1, unit: 'tbsp' })],
+    }
+    const blockedCtx = createFilterContext({
+      member: veganMember,
+      options: undefined,
+      ingredients: [peanutIngredient],
+    })
+    expect(isRecipeValidForSlot({ recipe: peanutRecipe, slot, ctx: blockedCtx })).toBe(false)
+
+    const relaxedCtx = createFilterContext({
+      member: veganMember,
+      options: { relaxedAllergies: ['peanut'] },
+      ingredients: [peanutIngredient],
+    })
+    expect(isRecipeValidForSlot({ recipe: peanutRecipe, slot, ctx: relaxedCtx })).toBe(true)
+  })
+
+  it('relaxedAllergies overrides an overlay-added allergy (subtraction is applied last)', () => {
+    const member = makeMember({ role: 'member' })
+    const peanutRecipe: RecipeSnapshot = {
+      ...veganTofuRecipe,
+      dietaryTags: ['vegan'],
+      ingredients: [makeRecipeIngredient({ ingredientId: 'i-peanut', quantity: 1, unit: 'tbsp' })],
+    }
+    const ctx = createFilterContext({
+      member,
+      options: { additionalAllergies: ['peanut'], relaxedAllergies: ['peanut'] },
+      ingredients: [peanutIngredient],
+    })
+    expect(isRecipeValidForSlot({ recipe: peanutRecipe, slot, ctx })).toBe(true)
+  })
+
+  it('inclusive preferences never hard-filter (filter.ts ignores them)', () => {
+    // A member with a fish preference but a recipe with no fish is still valid.
+    const member = makeMember({
+      role: 'member',
+      dietaryPreferences: { tags: ['pescatarian'], ingredients: ['i-fish'] },
+    })
+    const ctx = createFilterContext({
+      member,
+      options: { additionalDietaryPreferences: { tags: ['high_protein'], ingredients: ['i-salmon'] } },
+      ingredients: [tofuIngredient],
+    })
+    expect(isRecipeValidForSlot({ recipe: veganTofuRecipe, slot, ctx })).toBe(true)
+  })
 })
 
 describe('describeRecipeEligibility', () => {
@@ -128,7 +229,7 @@ describe('describeRecipeEligibility', () => {
   it('reports meal_type_mismatch and continues to collect further blockers', () => {
     const peanutDinnerRecipe: RecipeSnapshot = {
       ...veganTofuRecipe,
-      mealType: 'dinner',
+      mealTypes: ['dinner'],
       ingredients: [makeRecipeIngredient({ ingredientId: 'i-peanut', quantity: 1, unit: 'tbsp' })],
       dietaryTags: ['vegan'],
     }
@@ -139,7 +240,7 @@ describe('describeRecipeEligibility', () => {
     })
     const result = describeRecipeEligibility({ recipe: peanutDinnerRecipe, ctx, forMealType: 'breakfast' })
     expect(result.eligible).toBe(false)
-    expect(result.blockedBy).toContainEqual({ kind: 'meal_type_mismatch', expected: 'breakfast', actual: 'dinner' })
+    expect(result.blockedBy).toContainEqual({ kind: 'meal_type_mismatch', expected: 'breakfast', actual: ['dinner'] })
     expect(result.blockedBy).toContainEqual({ kind: 'allergen_present', allergen: 'peanut', viaIngredientId: 'i-peanut' })
   })
 

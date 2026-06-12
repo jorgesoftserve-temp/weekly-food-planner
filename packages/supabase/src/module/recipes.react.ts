@@ -8,12 +8,14 @@ import {
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   createRecipe,
+  createRecipesBulk,
   getRecipe,
   listRecipes,
   recipeKeys,
   replaceRecipeDietaryTags,
   replaceRecipeIngredients,
   replaceRecipeInstructions,
+  replaceRecipeMealTypes,
   softDeleteRecipe,
   updateRecipe,
   type CreateRecipePayload,
@@ -22,6 +24,7 @@ import {
   type RecipeRecord,
   type UpdateRecipePatch,
 } from './recipes.js'
+import type { MealType } from '../types/db.js'
 
 export const useRecipesList = ({
   supabase,
@@ -71,6 +74,26 @@ export const useCreateRecipe = ({
   return useMutation({
     mutationFn: (payload: CreateRecipePayload) =>
       createRecipe({ supabase, workspaceId, payload }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: recipeKeys.list(workspaceId),
+      })
+    },
+  })
+}
+
+// (v2.1 Track E) Bulk-create N recipes + all child rows in one compensated batch.
+export const useCreateRecipesBulk = ({
+  supabase,
+  workspaceId,
+}: {
+  supabase: SupabaseClient
+  workspaceId: string
+}): UseMutationResult<{ ids: string[] }, Error, { recipes: CreateRecipePayload[] }> => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ recipes }: { recipes: CreateRecipePayload[] }) =>
+      createRecipesBulk({ supabase, workspaceId, recipes }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: recipeKeys.list(workspaceId),
@@ -193,6 +216,31 @@ export const useReplaceRecipeDietaryTags = ({
   return useMutation({
     mutationFn: ({ tags }) =>
       replaceRecipeDietaryTags({ supabase, recipeId, tags }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: recipeKeys.list(workspaceId),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: recipeKeys.detail(workspaceId, recipeId),
+      })
+    },
+  })
+}
+
+// (v2.1 Phase 8) Replace the full meal-type set for a recipe.
+export const useReplaceRecipeMealTypes = ({
+  supabase,
+  workspaceId,
+  recipeId,
+}: {
+  supabase: SupabaseClient
+  workspaceId: string
+  recipeId: string
+}): UseMutationResult<void, Error, { mealTypes: MealType[] }> => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ mealTypes }) =>
+      replaceRecipeMealTypes({ supabase, recipeId, mealTypes }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: recipeKeys.list(workspaceId),

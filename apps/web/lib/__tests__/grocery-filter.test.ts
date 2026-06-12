@@ -20,9 +20,11 @@ const list = ({
   grocery_items: items.map((i) => ({
     id: i.id,
     ingredient_id: i.ingredientId,
-    quantity: i.quantity,
+    // quantity may be a string to test coercion — cast through unknown so TS accepts it
+    quantity: i.quantity as unknown as number,
     unit: (i.unit ?? 'g') as GroceryListRecord['grocery_items'][number]['unit'],
     scheduled_purchase_day: i.day ?? null,
+    source: 'meal' as const,
   })),
 })
 

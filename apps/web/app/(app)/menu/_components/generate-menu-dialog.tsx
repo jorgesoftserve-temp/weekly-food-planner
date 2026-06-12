@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Loader2, Sparkles, Wand2 } from 'lucide-react'
+import { AlertCircle, ChevronDown, Info, Loader2, Shield, Smile, Sparkles, Wand2, X } from 'lucide-react'
 import {
   useGenerateMenu,
   type GenerateMenuResponse,
 } from '@/lib/hooks/use-generate-menu'
 import { useCustomMenu } from '@/lib/hooks/use-custom-menu'
+import { useMembersList } from '@weekly-food-planner/supabase/react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -18,8 +20,11 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
 import { MultiLabelCombobox } from '@/components/forms/multi-label-combobox'
+import { useSupabase } from '@/lib/hooks/use-supabase'
 import { notifyError, notifySuccess } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 import { CustomMenuBuilder, type CustomBuilderSlot } from './custom-menu-builder'
 import {
   ParticipantsFrequencyPanel,
@@ -60,12 +65,268 @@ export type GenerateMenuDialogProps = {
   mode: 'create' | 'regenerate'
 }
 
+// ── Per-generation override panel ─────────────────────────────────────────────
+// Collapsible per-member override panel — add inclusive prefs, add extra
+// exclusive restrictions, relax existing profile restrictions for this run only.
+// Wired into the overlay via additionalDietaryPreferences / relaxedDietaryRestrictions
+// / relaxedAllergies (RawOverlay fields consumed by computeEffectiveOverlay).
+
+type MemberOverride = {
+  additionalPrefs: string[]
+  extraRestrictions: string[]
+  relaxedRestrictions: Set<string>
+  relaxedAllergies: Set<string>
+}
+
+const emptyOverride = (): MemberOverride => ({
+  additionalPrefs: [],
+  extraRestrictions: [],
+  relaxedRestrictions: new Set(),
+  relaxedAllergies: new Set(),
+})
+
+type ChipTagProps = { tag: string; onRemove: ({ tag }: { tag: string }) => void }
+const ChipTag = ({ tag, onRemove }: ChipTagProps) => (
+  <span className="inline-flex items-center gap-1 rounded-full bg-accent-tint px-2.5 py-1 text-xs font-medium text-accent-strong">
+    {tag}
+    <button
+      type="button"
+      onClick={() => onRemove({ tag })}
+      aria-label={`Remove ${tag}`}
+      className="ml-0.5 rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <X className="size-3" aria-hidden />
+    </button>
+  </span>
+)
+
+type InlineChipInputProps = {
+  value: string[]
+  onChange: ({ value }: { value: string[] }) => void
+  placeholder: string
+}
+const InlineChipInput = ({ value, onChange, placeholder }: InlineChipInputProps) => {
+  const [input, setInput] = useState('')
+  const add = (tag: string) => {
+    const t = tag.trim()
+    if (!t || value.includes(t)) return
+    onChange({ value: [...value, t] })
+    setInput('')
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {value.map((t) => (
+            <ChipTag
+              key={t}
+              tag={t}
+              onRemove={({ tag }) => onChange({ value: value.filter((v) => v !== tag) })}
+            />
+          ))}
+        </div>
+      )}
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(input) } }}
+        onBlur={() => { if (input.trim()) add(input) }}
+        placeholder={placeholder}
+        className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+    </div>
+  )
+}
+
+type MemberOverridePanelProps = {
+  memberId: string
+  memberName: string
+  restrictions: string[]
+  allergies: string[]
+  override: MemberOverride
+  onChange: ({ memberId, override }: { memberId: string; override: MemberOverride }) => void
+}
+
+const MemberOverridePanel = ({
+  memberId,
+  memberName,
+  restrictions,
+  allergies,
+  override,
+  onChange,
+}: MemberOverridePanelProps) => {
+  const [expanded, setExpanded] = useState(false)
+
+  const toggleRelaxRestriction = (tag: string) => {
+    const next = new Set(override.relaxedRestrictions)
+    if (next.has(tag)) next.delete(tag)
+    else next.add(tag)
+    onChange({ memberId, override: { ...override, relaxedRestrictions: next } })
+  }
+
+  const toggleRelaxAllergy = (tag: string) => {
+    const next = new Set(override.relaxedAllergies)
+    if (next.has(tag)) next.delete(tag)
+    else next.add(tag)
+    onChange({ memberId, override: { ...override, relaxedAllergies: next } })
+  }
+
+  const overrideCount =
+    override.additionalPrefs.length +
+    override.extraRestrictions.length +
+    override.relaxedRestrictions.size +
+    override.relaxedAllergies.size
+
+  return (
+    <div className="flex flex-col gap-0 overflow-hidden rounded-xl border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/40 transition text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{memberName}</span>
+          {overrideCount > 0 && (
+            <Badge variant="outline" className="bg-warning-tint text-warning border-warning/30 text-[10px] px-1.5 py-0">
+              {overrideCount} override{overrideCount === 1 ? '' : 's'}
+            </Badge>
+          )}
+        </div>
+        <ChevronDown
+          className={cn('size-4 text-muted-foreground motion-safe:transition-transform', expanded && 'rotate-180')}
+          aria-hidden
+        />
+      </button>
+
+      {expanded && (
+        <div className="flex flex-col gap-4 px-4 pb-4 pt-1">
+          {/* "This generation only" banner */}
+          <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-tint/50 px-3 py-2">
+            <Info className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />
+            <p className="text-xs text-foreground">
+              <span className="font-semibold">This generation only.</span> These overrides
+              apply once and are not saved to {memberName}&apos;s profile.
+            </p>
+          </div>
+
+          {/* Add inclusive preferences */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <Smile className="size-3.5 text-success" aria-hidden />
+              <Label className="text-xs font-medium text-success">Add preferences for this generation</Label>
+            </div>
+            <InlineChipInput
+              value={override.additionalPrefs}
+              onChange={({ value }) => onChange({ memberId, override: { ...override, additionalPrefs: value } })}
+              placeholder="e.g. fish, Mediterranean…"
+            />
+          </div>
+
+          {/* Add extra exclusive restrictions */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <Shield className="size-3.5 text-destructive" aria-hidden />
+              <Label className="text-xs font-medium text-destructive">Add restrictions for this generation</Label>
+            </div>
+            <InlineChipInput
+              value={override.extraRestrictions}
+              onChange={({ value }) => onChange({ memberId, override: { ...override, extraRestrictions: value } })}
+              placeholder="e.g. dairy-free, no red meat…"
+            />
+          </div>
+
+          {/* Relax existing profile restrictions */}
+          {(restrictions.length > 0 || allergies.length > 0) && (
+            <>
+              <Separator />
+              <div className="flex flex-col gap-2">
+                <Label className="text-xs font-medium">Relax profile restrictions</Label>
+                <p className="text-xs text-muted-foreground">
+                  Toggle to temporarily lift for this run. Profile is unchanged.
+                </p>
+                {restrictions.map((r) => {
+                  const relaxed = override.relaxedRestrictions.has(r)
+                  return (
+                    <div
+                      key={r}
+                      className={cn(
+                        'flex items-center justify-between gap-2 rounded-lg border px-3 py-1.5',
+                        relaxed ? 'border-warning/30 bg-warning-tint/40' : 'border-border',
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Shield className={cn('size-3 shrink-0', relaxed ? 'text-warning' : 'text-destructive')} aria-hidden />
+                        <span className={cn('text-xs', relaxed ? 'line-through text-muted-foreground' : 'font-medium')}>{r}</span>
+                        {relaxed && <span className="text-[10px] font-medium text-warning">Relaxed</span>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleRelaxRestriction(r)}
+                        aria-pressed={relaxed}
+                        className={cn(
+                          'rounded-full px-2 py-0.5 text-[10px] font-medium transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                          relaxed
+                            ? 'bg-warning-tint text-warning'
+                            : 'border border-border text-muted-foreground hover:border-destructive/40 hover:text-destructive',
+                        )}
+                      >
+                        {relaxed ? 'Restore' : 'Relax'}
+                      </button>
+                    </div>
+                  )
+                })}
+                {allergies.map((a) => {
+                  const relaxed = override.relaxedAllergies.has(a)
+                  return (
+                    <div
+                      key={a}
+                      className={cn(
+                        'flex items-center justify-between gap-2 rounded-lg border px-3 py-1.5',
+                        relaxed ? 'border-warning/30 bg-warning-tint/40' : 'border-border',
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Shield className={cn('size-3 shrink-0', relaxed ? 'text-warning' : 'text-destructive')} aria-hidden />
+                        <span className={cn('text-xs', relaxed ? 'line-through text-muted-foreground' : 'font-medium')}>{a}</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-destructive/30 text-destructive">allergy</Badge>
+                        {relaxed && <span className="text-[10px] font-medium text-warning">Relaxed</span>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleRelaxAllergy(a)}
+                        aria-pressed={relaxed}
+                        className={cn(
+                          'rounded-full px-2 py-0.5 text-[10px] font-medium transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                          relaxed
+                            ? 'bg-warning-tint text-warning'
+                            : 'border border-border text-muted-foreground hover:border-destructive/40 hover:text-destructive',
+                        )}
+                      >
+                        {relaxed ? 'Restore' : 'Relax'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Dialog ─────────────────────────────────────────────────────────────────────
+
 export const GenerateMenuDialog = ({
   workspaceId,
   open,
   onOpenChange,
   mode,
 }: GenerateMenuDialogProps) => {
+  const supabase = useSupabase()
   const [dialogMode, setDialogMode] = useState<DialogMode>('auto')
   const [weekStartDate, setWeekStartDate] = useState<string>(() => today())
   const [durationDays, setDurationDays] = useState<number>(7)
@@ -80,10 +341,36 @@ export const GenerateMenuDialog = ({
   const [frequencyOverrides, setFrequencyOverrides] = useState<
     FrequencyOverrideEntry[]
   >([])
+  // (v2.1) Per-member constraint overrides for this generation only.
+  const [memberOverrides, setMemberOverrides] = useState<Map<string, MemberOverride>>(
+    new Map(),
+  )
+
+  // Members list for the override panel — loaded lazily (only when the dialog opens).
+  const membersQuery = useMembersList({
+    supabase,
+    workspaceId,
+    enabled: open,
+  })
+  const members = membersQuery.data ?? []
 
   const autoMutation = useGenerateMenu({ workspaceId })
   const customMutation = useCustomMenu({ workspaceId })
   const isPending = autoMutation.isPending || customMutation.isPending
+
+  const handleMemberOverrideChange = ({
+    memberId,
+    override,
+  }: {
+    memberId: string
+    override: MemberOverride
+  }) => {
+    setMemberOverrides((prev) => {
+      const next = new Map(prev)
+      next.set(memberId, override)
+      return next
+    })
+  }
 
   const reset = () => {
     setFailure(null)
@@ -95,6 +382,7 @@ export const GenerateMenuDialog = ({
     setCustomSlots([])
     setParticipantIds(null)
     setFrequencyOverrides([])
+    setMemberOverrides(new Map())
   }
 
   // When the dialog re-opens, reset the form to a fresh state. We do this on
@@ -115,8 +403,48 @@ export const GenerateMenuDialog = ({
     if (frequencyOverrides.length > 0) {
       out.memberFrequencyOverrides = frequencyOverrides
     }
+
+    // (v2.1) Merge per-member overrides into the overlay fields.
+    // additionalDietaryPreferences, relaxedDietaryRestrictions, relaxedAllergies
+    // are flattened across all members and de-duped at the overlay layer
+    // (computeEffectiveOverlay handles the rest at the route level).
+    const allPrefTags: string[] = []
+    const allExtraRestrictions: string[] = []
+    const allRelaxedRestrictions: string[] = []
+    const allRelaxedAllergies: string[] = []
+
+    for (const override of memberOverrides.values()) {
+      for (const tag of override.additionalPrefs) {
+        if (!allPrefTags.includes(tag)) allPrefTags.push(tag)
+      }
+      for (const r of override.extraRestrictions) {
+        if (!allExtraRestrictions.includes(r)) allExtraRestrictions.push(r)
+      }
+      for (const r of override.relaxedRestrictions) {
+        if (!allRelaxedRestrictions.includes(r)) allRelaxedRestrictions.push(r)
+      }
+      for (const a of override.relaxedAllergies) {
+        if (!allRelaxedAllergies.includes(a)) allRelaxedAllergies.push(a)
+      }
+    }
+
+    if (allPrefTags.length > 0) {
+      out.additionalDietaryPreferences = { tags: allPrefTags }
+    }
+    if (allExtraRestrictions.length > 0) {
+      const existing = (out.additionalDietaryRestrictions as string[] | undefined) ?? []
+      const merged = Array.from(new Set([...existing, ...allExtraRestrictions]))
+      out.additionalDietaryRestrictions = merged
+    }
+    if (allRelaxedRestrictions.length > 0) {
+      out.relaxedDietaryRestrictions = allRelaxedRestrictions
+    }
+    if (allRelaxedAllergies.length > 0) {
+      out.relaxedAllergies = allRelaxedAllergies
+    }
+
     return Object.keys(out).length > 0 ? out : undefined
-  }, [dietaryRestrictions, allergies, frequencyOverrides])
+  }, [dietaryRestrictions, allergies, frequencyOverrides, memberOverrides])
 
   // The server treats `undefined` participantMemberIds as "every active
   // member". Only send an explicit list when the user actually customized
@@ -212,9 +540,11 @@ export const GenerateMenuDialog = ({
             aria-label="Menu generation mode"
           >
             <button
+              id="tab-auto"
               role="tab"
               type="button"
               aria-selected={dialogMode === 'auto'}
+              aria-controls="panel-auto"
               onClick={() => setDialogMode('auto')}
               className={`flex items-center justify-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 dialogMode === 'auto'
@@ -226,9 +556,11 @@ export const GenerateMenuDialog = ({
               Auto
             </button>
             <button
+              id="tab-custom"
               role="tab"
               type="button"
               aria-selected={dialogMode === 'custom'}
+              aria-controls="panel-custom"
               onClick={() => setDialogMode('custom')}
               className={`flex items-center justify-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 dialogMode === 'custom'
@@ -317,22 +649,53 @@ export const GenerateMenuDialog = ({
             </div>
           </details>
 
+          {/* v2.1 — Per-generation constraint overrides (per-member) */}
+          {members.length > 0 && (
+            <details className="rounded-xl border border-border bg-card/40 px-3 py-2 text-sm">
+              <summary className="cursor-pointer select-none font-medium">
+                Per-generation constraint overrides
+              </summary>
+              <div className="flex flex-col gap-2 pt-3">
+                <p className="text-xs text-muted-foreground">
+                  Tweak any member&apos;s constraints for this generation only — add
+                  preferences, extra restrictions, or temporarily relax a hard restriction.
+                  Changes here do not update any member&apos;s saved profile.
+                </p>
+                {members.map((m) => (
+                  <MemberOverridePanel
+                    key={m.id}
+                    memberId={m.id}
+                    memberName={m.name}
+                    restrictions={m.member_dietary_restrictions.map((r) => r.restriction)}
+                    allergies={m.member_allergies.map((a) => a.allergy)}
+                    override={memberOverrides.get(m.id) ?? emptyOverride()}
+                    onChange={handleMemberOverrideChange}
+                  />
+                ))}
+              </div>
+            </details>
+          )}
+
           {dialogMode === 'auto' ? (
-            <RecipePreviewPanel workspaceId={workspaceId} />
+            <div id="panel-auto" role="tabpanel" aria-labelledby="tab-auto" tabIndex={0}>
+              <RecipePreviewPanel workspaceId={workspaceId} />
+            </div>
           ) : null}
 
           {dialogMode === 'custom' ? (
-            <CustomMenuBuilder
-              workspaceId={workspaceId}
-              weekStartDate={weekStartDate}
-              durationDays={durationDays}
-              slots={customSlots}
-              onChange={setCustomSlots}
-            />
+            <div id="panel-custom" role="tabpanel" aria-labelledby="tab-custom" tabIndex={0}>
+              <CustomMenuBuilder
+                workspaceId={workspaceId}
+                weekStartDate={weekStartDate}
+                durationDays={durationDays}
+                slots={customSlots}
+                onChange={setCustomSlots}
+              />
+            </div>
           ) : null}
 
           {failure && !failure.ok ? (
-            <div className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            <div role="alert" className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
               <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
               <div className="flex flex-col gap-1">
                 <p className="font-medium text-destructive">

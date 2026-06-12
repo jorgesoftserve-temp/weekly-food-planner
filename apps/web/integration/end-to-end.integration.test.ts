@@ -131,7 +131,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('end-to-end determinism (integration)', ()
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Oatmeal',
-        meal_type: 'breakfast',
+        meal_types: ['breakfast'],
         difficulty: 'easy',
         servings: 1,
         ingredients: [
@@ -145,7 +145,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('end-to-end determinism (integration)', ()
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Buttered toast',
-        meal_type: 'breakfast',
+        meal_types: ['breakfast'],
         difficulty: 'easy',
         servings: 1,
         ingredients: [{ ingredient_id: milk.id, quantity: 0.25, unit: 'cup' }],
@@ -156,7 +156,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('end-to-end determinism (integration)', ()
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Tomato pasta',
-        meal_type: 'dinner',
+        meal_types: ['dinner'],
         difficulty: 'easy',
         servings: 2,
         ingredients: [
@@ -170,7 +170,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('end-to-end determinism (integration)', ()
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Simple stew',
-        meal_type: 'dinner',
+        meal_types: ['dinner'],
         difficulty: 'medium',
         servings: 2,
         ingredients: [{ ingredient_id: tomato.id, quantity: 2, unit: 'piece' }],

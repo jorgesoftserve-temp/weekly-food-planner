@@ -20,6 +20,12 @@ export type ShoppingStatus = 'in_progress' | 'complete' | 'incomplete'
 export type AcquiredStatus = 'pending' | 'acquired' | 'partial' | 'skipped'
 /** (v2.0 Phase 4) Execution state of an accepted-menu slot. Absent row = planned. DATABASE_PRD §6.21 */
 export type SlotCookStatus = 'planned' | 'cooked' | 'skipped'
+/** (v2.1) Partitions recipes into engine-eligible meals vs accompaniment addons. DATABASE_PRD §5.1, §6.7 */
+export type RecipeKind = 'meal' | 'addon'
+/** (v2.1) Source of a grocery line: meal slot, attached addon, or extra (dormant until v2.2). DATABASE_PRD §5.1, §6.14 */
+export type GrocerySource = 'meal' | 'addon' | 'extra'
+/** (v2.1) Discriminates rows in member_dietary_preferences. DATABASE_PRD §5.1, §6.22 */
+export type PreferenceKind = 'dietary_tag' | 'ingredient'
 
 export type AccentColor =
   | 'strawberry'
@@ -74,7 +80,8 @@ export type RecipeRow = {
   name: string
   description: string | null
   image_url: string | null
-  meal_type: MealType
+  /** (v2.1) Replaced scalar meal_type; timeframes now live in recipe_meal_types junction. DATABASE_PRD §6.7 */
+  recipe_kind: RecipeKind
   cuisine: string | null
   difficulty: Difficulty
   prep_time_minutes: number | null
@@ -145,11 +152,14 @@ export type GroceryListRow = {
 
 export type GroceryItemRow = {
   id: string
-  grocery_list_id: string
+  /** FK to grocery_lists.id. Column name in DB is list_id. */
+  list_id: string
   ingredient_id: string
-  quantity: string | number
+  quantity: number
   unit: Unit
   scheduled_purchase_day: string | null
+  /** (v2.1) Which pass emitted this line: meal slot, addon, or extra (dormant). DATABASE_PRD §6.14 */
+  source: GrocerySource
 }
 
 export type ProfileRow = {
@@ -344,4 +354,86 @@ export type CreateMenuSlotIngredientOverridePayload = {
   unit?: Unit | null
   note?: string | null
   created_by?: string | null
+}
+
+// ---------------------------------------------------------------------------
+// member_dietary_preferences (v2.1 Track C) — DATABASE_PRD §6.22
+// ---------------------------------------------------------------------------
+
+/**
+ * (v2.1) Inclusive (soft-bias) preference for a member: liked dietary tags or
+ * ingredients. Does NOT hard-exclude; used as a soft-bias at generation time.
+ * Database has an additional workspace_id column (for RLS) not present in the
+ * sibling hard-constraint tables.
+ */
+export type MemberDietaryPreferenceRow = {
+  id: string
+  member_id: string
+  workspace_id: string
+  kind: PreferenceKind
+  value: string
+  created_at: string
+}
+
+/** Payload for inserting a new inclusive dietary preference. id/created_at are DB-generated. */
+export type CreateMemberDietaryPreferencePayload = {
+  member_id: string
+  workspace_id: string
+  kind: PreferenceKind
+  value: string
+}
+
+// ---------------------------------------------------------------------------
+// recipe_meal_types (v2.1 Phase 8) — DATABASE_PRD §6.23
+// ---------------------------------------------------------------------------
+
+/**
+ * (v2.1) Pure junction: one row per (recipe_id, meal_type) declaring which
+ * meal timeframes a recipe is eligible for. No timestamps; mirrors
+ * recipe_dietary_tags. ≥1 row required for recipe_kind='meal'.
+ */
+export type RecipeMealTypeRow = {
+  recipe_id: string
+  meal_type: MealType
+}
+
+// ---------------------------------------------------------------------------
+// menu_addons (v2.1 Track D) — DATABASE_PRD §6.24
+// ---------------------------------------------------------------------------
+
+/**
+ * (v2.1) Addon attachment to an accepted menu. target_slot_id=NULL means
+ * whole-week; set = tied to a specific slot. Keyed by menu_id so it is
+ * structurally invisible to accepted_seed. DATABASE_PRD §6.24.
+ */
+export type MenuAddonRow = {
+  id: string
+  menu_id: string
+  workspace_id: string
+  addon_recipe_id: string
+  target_slot_id: string | null
+  servings: number | null
+  note: string | null
+  /** workspace_members.id of the attacher, or null if that member was deleted. */
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Payload for inserting a menu_addons row. id/created_at/updated_at are DB-generated. */
+export type CreateMenuAddonPayload = {
+  menu_id: string
+  workspace_id: string
+  addon_recipe_id: string
+  target_slot_id?: string | null
+  servings?: number | null
+  note?: string | null
+  created_by?: string | null
+}
+
+/** Patch shape for PATCH / UPDATE on menu_addons. All fields optional. */
+export type UpdateMenuAddonPatch = {
+  servings?: number | null
+  note?: string | null
+  target_slot_id?: string | null
 }

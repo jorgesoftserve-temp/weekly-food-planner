@@ -53,8 +53,11 @@ export const RecipePreviewPanel = ({
       snack: [],
     }
     for (const r of recipes) {
-      const bucket = map[r.meal_type as MealType]
-      if (bucket) bucket.push(r)
+      if (r.recipe_kind !== 'meal') continue
+      for (const mt of r.meal_types) {
+        const bucket = map[mt as MealType]
+        if (bucket && !bucket.includes(r)) bucket.push(r)
+      }
     }
     return map
   }, [recipes])

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Check, ChevronsUpDown, Plus, X } from 'lucide-react'
 import {
   Command,
@@ -40,6 +40,7 @@ export const MultiLabelCombobox = ({
   disabled,
 }: MultiLabelComboboxProps) => {
   const supabase = useSupabase()
+  const listboxId = useId()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -108,6 +109,7 @@ export const MultiLabelCombobox = ({
             variant="outline"
             role="combobox"
             aria-expanded={open}
+            aria-controls={open ? listboxId : undefined}
             disabled={disabled}
             className="w-full justify-between"
           >
@@ -124,7 +126,7 @@ export const MultiLabelCombobox = ({
               value={query}
               onValueChange={setQuery}
             />
-            <CommandList>
+            <CommandList id={listboxId}>
               <CommandEmpty>
                 {labelsQuery.isLoading ? 'Loading…' : emptyPlaceholder}
               </CommandEmpty>

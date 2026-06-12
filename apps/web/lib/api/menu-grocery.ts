@@ -190,6 +190,55 @@ export const recomputeGroceryListsForMenu = async ({
     }
   }
 
+  // (v2.1 Track D) Menu addons. Attached addon recipes contribute their
+  // ingredients as a separate source='addon' set on the grocery list, kept
+  // entirely apart from meal-derived (source='meal') lines so attaching or
+  // detaching an addon NEVER alters meal totals. Addons are post-accept menu
+  // state keyed by menu_id — structurally invisible to accepted_seed and the
+  // engine, exactly like the Phase-6 override table. We load them here (before
+  // the perishability fetch) so their ingredients get scheduled_purchase_day
+  // treatment too.
+  type AddonRow = {
+    addon_recipe_id: string
+    target_slot_id: string | null
+    servings: number | null
+  }
+  const { data: addonRows, error: addonErr } = await admin
+    .from('menu_addons')
+    .select('addon_recipe_id, target_slot_id, servings')
+    .eq('menu_id', menuId)
+  if (addonErr) return { ok: false, detail: addonErr.message }
+  const addons = (addonRows ?? []) as AddonRow[]
+  const addonRecipeIds = Array.from(
+    new Set(addons.map((a) => a.addon_recipe_id)),
+  )
+  const addonIngsByRecipe = new Map<string, RecipeIngRow[]>()
+  const addonServingsByRecipe = new Map<string, number>()
+  if (addonRecipeIds.length > 0) {
+    const { data: aRiRows, error: aRiErr } = await admin
+      .from('recipe_ingredients')
+      .select('recipe_id, ingredient_id, quantity, unit')
+      .in('recipe_id', addonRecipeIds)
+    if (aRiErr) return { ok: false, detail: aRiErr.message }
+    for (const row of (aRiRows ?? []) as RecipeIngRow[]) {
+      const list = addonIngsByRecipe.get(row.recipe_id) ?? []
+      list.push(row)
+      addonIngsByRecipe.set(row.recipe_id, list)
+      ingredientIds.add(row.ingredient_id)
+    }
+    const { data: aRecipeRows, error: aRecipeErr } = await admin
+      .from('recipes')
+      .select('id, servings')
+      .in('id', addonRecipeIds)
+    if (aRecipeErr) return { ok: false, detail: aRecipeErr.message }
+    for (const row of (aRecipeRows ?? []) as Array<{
+      id: string
+      servings: number
+    }>) {
+      addonServingsByRecipe.set(row.id, row.servings > 0 ? row.servings : 1)
+    }
+  }
+
   // Recipe servings drive the cook-once scaling factor (PRODUCT_PRD §7).
   // The DB enforces CHECK (servings > 0) at the recipes table, but we guard
   // against 0/missing here too — a fallback of 1 yields raw quantities,
@@ -375,6 +424,9 @@ export const recomputeGroceryListsForMenu = async ({
 
   const listIds: string[] = []
   let totalItems = 0
+  // Captured so the addon pass below can append source='addon' lines to the
+  // household-shared list (the dedicated "Addons" grocery section).
+  let sharedListId: string | null = null
   for (const bucket of bucketRows) {
     const { data: inserted, error: insListErr } = await admin
       .from('grocery_lists')
@@ -389,6 +441,7 @@ export const recomputeGroceryListsForMenu = async ({
     }
     const listId = (inserted as { id: string }).id
     listIds.push(listId)
+    if (bucket.target_member_id === null) sharedListId = listId
 
     if (bucket.items.length === 0) continue
     // grocery_items has CHECK (quantity > 0); drop any aggregates that sum
@@ -406,6 +459,7 @@ export const recomputeGroceryListsForMenu = async ({
           quantity: a.quantity,
           unit: a.unit,
           scheduled_purchase_day: scheduledDay,
+          source: 'meal' as const,
         }
       })
     if (itemRows.length === 0) continue
@@ -414,6 +468,77 @@ export const recomputeGroceryListsForMenu = async ({
       .insert(itemRows)
     if (insItemsErr) return { ok: false, detail: insItemsErr.message }
     totalItems += itemRows.length
+  }
+
+  // (v2.1 Track D) Append attached addon ingredients to the shared list as
+  // source='addon' rows. These are additive only — meal lines (source='meal')
+  // were already inserted above and are never recombined with addon lines, so
+  // meal-line totals are unchanged by attaching/detaching an addon. Addon lines
+  // are their own grocery_items rows even when they share an (ingredient, unit)
+  // with a meal line, which is what backs the dedicated "Addons" grocery
+  // section. Scaling: menu_addons.servings (when set) scales the addon recipe's
+  // per-batch quantities; otherwise one batch is assumed.
+  if (addons.length > 0 && sharedListId) {
+    const slotDayIdxById = new Map<string, number>()
+    for (const s of slots) {
+      slotDayIdxById.set(s.id, dayOrder.get(s.day_of_week) ?? 0)
+    }
+    const addonAgg = new Map<string, Aggregate>()
+    for (const addon of addons) {
+      const ings = addonIngsByRecipe.get(addon.addon_recipe_id) ?? []
+      const recipeServings =
+        addonServingsByRecipe.get(addon.addon_recipe_id) ?? 1
+      const scale =
+        addon.servings != null && addon.servings > 0
+          ? addon.servings / recipeServings
+          : 1
+      // Slot-tied addon → its slot's day; week-wide addon → earliest day.
+      const dayIdx = addon.target_slot_id
+        ? slotDayIdxById.get(addon.target_slot_id) ?? 0
+        : 0
+      for (const ri of ings) {
+        const qty =
+          typeof ri.quantity === 'string'
+            ? Number.parseFloat(ri.quantity)
+            : ri.quantity
+        if (qty == null || !Number.isFinite(qty)) continue
+        const itemKey = `${ri.ingredient_id}::${ri.unit}`
+        const existing = addonAgg.get(itemKey)
+        if (existing) {
+          existing.quantity += qty * scale
+          if (dayIdx < existing.earliestDayIdx) existing.earliestDayIdx = dayIdx
+        } else {
+          addonAgg.set(itemKey, {
+            ingredient_id: ri.ingredient_id,
+            unit: ri.unit,
+            quantity: qty * scale,
+            earliestDayIdx: dayIdx,
+          })
+        }
+      }
+    }
+    const addonItemRows = Array.from(addonAgg.values())
+      .filter((a) => a.quantity > 0)
+      .map((a) => {
+        const needsDay = perishableById.get(a.ingredient_id) ?? false
+        return {
+          list_id: sharedListId as string,
+          ingredient_id: a.ingredient_id,
+          quantity: a.quantity,
+          unit: a.unit,
+          scheduled_purchase_day: needsDay
+            ? dayByIdx.get(a.earliestDayIdx) ?? null
+            : null,
+          source: 'addon' as const,
+        }
+      })
+    if (addonItemRows.length > 0) {
+      const { error: insAddonErr } = await admin
+        .from('grocery_items')
+        .insert(addonItemRows)
+      if (insAddonErr) return { ok: false, detail: insAddonErr.message }
+      totalItems += addonItemRows.length
+    }
   }
 
   return { ok: true, listIds, itemCount: totalItems }

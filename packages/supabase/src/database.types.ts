@@ -108,6 +108,7 @@ export type Database = {
           scheduled_purchase_day:
             | Database["public"]["Enums"]["day_of_week"]
             | null
+          source: Database["public"]["Enums"]["grocery_source"]
           unit: Database["public"]["Enums"]["unit"]
         }
         Insert: {
@@ -118,6 +119,7 @@ export type Database = {
           scheduled_purchase_day?:
             | Database["public"]["Enums"]["day_of_week"]
             | null
+          source?: Database["public"]["Enums"]["grocery_source"]
           unit: Database["public"]["Enums"]["unit"]
         }
         Update: {
@@ -128,6 +130,7 @@ export type Database = {
           scheduled_purchase_day?:
             | Database["public"]["Enums"]["day_of_week"]
             | null
+          source?: Database["public"]["Enums"]["grocery_source"]
           unit?: Database["public"]["Enums"]["unit"]
         }
         Relationships: [
@@ -355,6 +358,48 @@ export type Database = {
           },
         ]
       }
+      member_dietary_preferences: {
+        Row: {
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["preference_kind"]
+          member_id: string
+          value: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["preference_kind"]
+          member_id: string
+          value: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["preference_kind"]
+          member_id?: string
+          value?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_dietary_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_dietary_preferences_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_dietary_restrictions: {
         Row: {
           member_id: string
@@ -404,6 +449,81 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_addons: {
+        Row: {
+          addon_recipe_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          menu_id: string
+          note: string | null
+          servings: number | null
+          target_slot_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          addon_recipe_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          menu_id: string
+          note?: string | null
+          servings?: number | null
+          target_slot_id?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          addon_recipe_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          menu_id?: string
+          note?: string | null
+          servings?: number | null
+          target_slot_id?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_addons_addon_recipe_id_fkey"
+            columns: ["addon_recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_addons_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_addons_menu_id_fkey"
+            columns: ["menu_id"]
+            isOneToOne: false
+            referencedRelation: "menus"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_addons_target_slot_id_fkey"
+            columns: ["target_slot_id"]
+            isOneToOne: false
+            referencedRelation: "menu_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_addons_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -790,6 +910,29 @@ export type Database = {
           },
         ]
       }
+      recipe_meal_types: {
+        Row: {
+          meal_type: Database["public"]["Enums"]["meal_type"]
+          recipe_id: string
+        }
+        Insert: {
+          meal_type: Database["public"]["Enums"]["meal_type"]
+          recipe_id: string
+        }
+        Update: {
+          meal_type?: Database["public"]["Enums"]["meal_type"]
+          recipe_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_meal_types_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recipes: {
         Row: {
           calories_per_serving: number | null
@@ -801,9 +944,9 @@ export type Database = {
           id: string
           image_url: string | null
           is_deleted: boolean
-          meal_type: Database["public"]["Enums"]["meal_type"]
           name: string
           prep_time_minutes: number | null
+          recipe_kind: Database["public"]["Enums"]["recipe_kind"]
           servings: number
           updated_at: string
           workspace_id: string
@@ -818,9 +961,9 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_deleted?: boolean
-          meal_type: Database["public"]["Enums"]["meal_type"]
           name: string
           prep_time_minutes?: number | null
+          recipe_kind?: Database["public"]["Enums"]["recipe_kind"]
           servings: number
           updated_at?: string
           workspace_id: string
@@ -835,9 +978,9 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_deleted?: boolean
-          meal_type?: Database["public"]["Enums"]["meal_type"]
           name?: string
           prep_time_minutes?: number | null
+          recipe_kind?: Database["public"]["Enums"]["recipe_kind"]
           servings?: number
           updated_at?: string
           workspace_id?: string
@@ -1142,9 +1285,12 @@ export type Database = {
       difficulty: "easy" | "medium" | "hard"
       food_group_source: "seed" | "ai" | "unset"
       generation_status: "pending" | "running" | "success" | "failed"
+      grocery_source: "meal" | "addon" | "extra"
       inventory_source: "manual" | "purchase" | "leftover" | "cook_remainder"
       meal_type: "breakfast" | "lunch" | "dinner" | "snack"
       menu_type: "weekly" | "custom"
+      preference_kind: "dietary_tag" | "ingredient"
+      recipe_kind: "meal" | "addon"
       shopping_status: "in_progress" | "complete" | "incomplete"
       slot_cook_status: "planned" | "cooked" | "skipped"
       unit:
@@ -1305,9 +1451,12 @@ export const Constants = {
       difficulty: ["easy", "medium", "hard"],
       food_group_source: ["seed", "ai", "unset"],
       generation_status: ["pending", "running", "success", "failed"],
+      grocery_source: ["meal", "addon", "extra"],
       inventory_source: ["manual", "purchase", "leftover", "cook_remainder"],
       meal_type: ["breakfast", "lunch", "dinner", "snack"],
       menu_type: ["weekly", "custom"],
+      preference_kind: ["dietary_tag", "ingredient"],
+      recipe_kind: ["meal", "addon"],
       shopping_status: ["in_progress", "complete", "incomplete"],
       slot_cook_status: ["planned", "cooked", "skipped"],
       unit: [

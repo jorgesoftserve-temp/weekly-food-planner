@@ -10,6 +10,7 @@ export const makeMember = ({
   dietaryRestrictions = [],
   allergies = [],
   ingredientDislikes = [],
+  dietaryPreferences = { tags: [], ingredients: [] },
 }: Partial<MemberSnapshot> = {}): MemberSnapshot => ({
   id,
   name,
@@ -20,4 +21,5 @@ export const makeMember = ({
   dietaryRestrictions,
   allergies,
   ingredientDislikes,
+  dietaryPreferences,
 })

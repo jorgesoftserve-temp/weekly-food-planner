@@ -8,9 +8,11 @@ import { z } from 'zod'
 import {
   useCreateMember,
   useSetMemberAllergies,
+  useSetMemberDietaryPreferences,
   useSetMemberDietaryRestrictions,
   useSetMemberIngredientDislikes,
   useUpdateMember,
+  useMemberDietaryPreferences,
 } from '@weekly-food-planner/supabase/react'
 import type {
   AccentColor,
@@ -99,6 +101,7 @@ const memberFormSchema = z.object({
     ),
   dietary_restrictions: z.array(z.string()),
   allergies: z.array(z.string()),
+  dietary_preferences: z.array(z.string()),
   ingredient_dislikes: z.array(z.object({ ingredient_id: z.string() })),
 })
 
@@ -120,10 +123,14 @@ const emptyDefaults: MemberFormValues = {
   meal_frequency: DEFAULT_FREQUENCY,
   dietary_restrictions: [],
   allergies: [],
+  dietary_preferences: [],
   ingredient_dislikes: [],
 }
 
-const valuesFromRecord = (record: MemberRecord): MemberFormValues => {
+const valuesFromRecord = (
+  record: MemberRecord,
+  dietaryPreferences: string[] = [],
+): MemberFormValues => {
   // Members with role=creator come through the API as such; the form blocks
   // editing the role for them but the rest of the fields are still editable.
   const role: MemberFormValues['role'] =
@@ -141,6 +148,7 @@ const valuesFromRecord = (record: MemberRecord): MemberFormValues => {
     meal_frequency: record.meal_frequency ?? DEFAULT_FREQUENCY,
     dietary_restrictions: record.member_dietary_restrictions.map((r) => r.restriction),
     allergies: record.member_allergies.map((a) => a.allergy),
+    dietary_preferences: dietaryPreferences,
     ingredient_dislikes: record.member_ingredient_dislikes.map((d) => ({
       ingredient_id: d.ingredient_id,
     })),
@@ -182,11 +190,37 @@ export const MemberForm = (props: MemberFormProps) => {
   const memberId = props.mode === 'edit' ? props.member.id : ''
   const isCreatorMember = props.mode === 'edit' && props.member.role === 'creator'
 
+  // Load saved inclusive preferences when editing an existing member.
+  const prefsQuery = useMemberDietaryPreferences({
+    supabase,
+    workspaceId: props.workspaceId,
+    memberId: memberId || null,
+    enabled: props.mode === 'edit' && !!memberId,
+  })
+  const savedPrefValues = (prefsQuery.data ?? [])
+    .filter((p) => p.kind === 'dietary_tag')
+    .map((p) => p.value)
+
   const form = useForm<MemberFormValues>({
     resolver: zodResolver(memberFormSchema),
     defaultValues:
-      props.mode === 'edit' ? valuesFromRecord(props.member) : emptyDefaults,
+      props.mode === 'edit'
+        ? valuesFromRecord(props.member, savedPrefValues)
+        : emptyDefaults,
   })
+
+  // Sync dietary_preferences into form state once the query resolves in edit mode.
+  // useEffect so the form only resets this field once, after the async query finishes.
+  const [prefsSynced, setPrefsSynced] = useState(false)
+  if (
+    props.mode === 'edit' &&
+    !prefsQuery.isLoading &&
+    prefsQuery.data &&
+    !prefsSynced
+  ) {
+    form.setValue('dietary_preferences', savedPrefValues)
+    setPrefsSynced(true)
+  }
 
   const dislikeArray = useFieldArray({
     control: form.control,
@@ -215,6 +249,11 @@ export const MemberForm = (props: MemberFormProps) => {
     memberId,
   })
   const setDislikes = useSetMemberIngredientDislikes({
+    supabase,
+    workspaceId: props.workspaceId,
+    memberId,
+  })
+  const setPreferences = useSetMemberDietaryPreferences({
     supabase,
     workspaceId: props.workspaceId,
     memberId,
@@ -253,6 +292,10 @@ export const MemberForm = (props: MemberFormProps) => {
           ingredientIds: values.ingredient_dislikes
             .map((d) => d.ingredient_id)
             .filter((id) => id.length > 0),
+        }),
+        setPreferences.mutateAsync({
+          kind: 'dietary_tag',
+          values: values.dietary_preferences,
         }),
       ])
       notifySuccess('Member updated', values.name)
@@ -526,6 +569,38 @@ export const MemberForm = (props: MemberFormProps) => {
               </FormItem>
             )}
           />
+
+          {/* v2.1 — Inclusive dietary preferences (soft bias) */}
+          <div className="rounded-xl border border-success/20 bg-success-tint/20 p-4">
+            <FormField
+              control={form.control}
+              name="dietary_preferences"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center gap-2">
+                    <FormLabel className="text-success">Food preferences</FormLabel>
+                    <span className="rounded-full border border-success/30 bg-success-tint px-1.5 py-0 text-[10px] font-medium text-success">
+                      Soft — never excludes
+                    </span>
+                  </div>
+                  <FormControl>
+                    <MultiLabelCombobox
+                      enumType="dietary_tag"
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Add a preference (fish, Mediterranean, spicy…)"
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Tags this member enjoys. The engine biases toward recipes matching
+                    these preferences but always falls back to valid options — nothing is
+                    excluded.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
         </section>
 
         <section className="flex flex-col gap-3">

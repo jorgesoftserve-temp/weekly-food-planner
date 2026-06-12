@@ -29,14 +29,15 @@
         "ageCategory": "adult",
         "dietaryRestrictions": [],
         "allergies": [],
-        "ingredientDislikes": []
+        "ingredientDislikes": [],
+        "dietaryPreferences": { "tags": [], "ingredients": [] }
       }
     ],
     "recipes": [
       {
         "id": "r-bf-1",
         "name": "Recipe r-bf-1",
-        "mealType": "breakfast",
+        "mealTypes": ["breakfast"],
         "difficulty": "easy",
         "servings": 2,
         "ingredients": [],
@@ -45,7 +46,7 @@
       {
         "id": "r-bf-2",
         "name": "Recipe r-bf-2",
-        "mealType": "breakfast",
+        "mealTypes": ["breakfast"],
         "difficulty": "easy",
         "servings": 2,
         "ingredients": [],
@@ -54,7 +55,7 @@
       {
         "id": "r-dn-1",
         "name": "Recipe r-dn-1",
-        "mealType": "dinner",
+        "mealTypes": ["dinner"],
         "difficulty": "easy",
         "servings": 2,
         "ingredients": [],
@@ -63,7 +64,7 @@
       {
         "id": "r-dn-2",
         "name": "Recipe r-dn-2",
-        "mealType": "dinner",
+        "mealTypes": ["dinner"],
         "difficulty": "easy",
         "servings": 2,
         "ingredients": [],

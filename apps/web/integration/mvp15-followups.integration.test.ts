@@ -36,11 +36,15 @@ const seedIngredients = async (
   const { data, error } = await fixture.supabase
     .from('ingredients')
     .insert([
-      { name: 'Oats', is_perishable: false, max_storage_days: null },
-      { name: 'Milk', is_perishable: true, max_storage_days: 7 },
-      { name: 'Pasta', is_perishable: false, max_storage_days: null },
-      { name: 'Tomato', is_perishable: true, max_storage_days: 7 },
-      { name: 'Apple', is_perishable: true, max_storage_days: 7 },
+      // Names are suffixed to stay globally unique — `ingredients.name` is a
+      // global UNIQUE column (not workspace-scoped) and integration files share
+      // a single DB, so unsuffixed staples collide across files (mvp15 ⇄
+      // end-to-end / menu-constraint-regression).
+      { name: 'Oats (mvp15)', is_perishable: false, max_storage_days: null },
+      { name: 'Milk (mvp15)', is_perishable: true, max_storage_days: 7 },
+      { name: 'Pasta (mvp15)', is_perishable: false, max_storage_days: null },
+      { name: 'Tomato (mvp15)', is_perishable: true, max_storage_days: 7 },
+      { name: 'Apple (mvp15)', is_perishable: true, max_storage_days: 7 },
     ])
     .select('id, name')
   if (error || !data) throw new Error(`seed ingredients failed: ${error?.message}`)
@@ -93,18 +97,18 @@ describe.skipIf(!INTEGRATION_ENABLED)('mvp1.5 follow-ups (integration)', () => {
     if (wsUpdateErr) throw new Error(`set shared_meal_frequency: ${wsUpdateErr.message}`)
 
     ingredients = await seedIngredients(fixture)
-    const oats = ingredients.find((i) => i.name === 'Oats')!
-    const milk = ingredients.find((i) => i.name === 'Milk')!
-    const pasta = ingredients.find((i) => i.name === 'Pasta')!
-    const tomato = ingredients.find((i) => i.name === 'Tomato')!
-    const apple = ingredients.find((i) => i.name === 'Apple')!
+    const oats = ingredients.find((i) => i.name === 'Oats (mvp15)')!
+    const milk = ingredients.find((i) => i.name === 'Milk (mvp15)')!
+    const pasta = ingredients.find((i) => i.name === 'Pasta (mvp15)')!
+    const tomato = ingredients.find((i) => i.name === 'Tomato (mvp15)')!
+    const apple = ingredients.find((i) => i.name === 'Apple (mvp15)')!
 
     const breakfast = await createRecipe({
       supabase: fixture.supabase,
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Oatmeal',
-        meal_type: 'breakfast',
+        meal_types: ['breakfast'],
         difficulty: 'easy',
         servings: 1,
         ingredients: [
@@ -120,7 +124,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('mvp1.5 follow-ups (integration)', () => {
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Tomato pasta',
-        meal_type: 'dinner',
+        meal_types: ['dinner'],
         difficulty: 'easy',
         servings: 2,
         ingredients: [
@@ -135,7 +139,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('mvp1.5 follow-ups (integration)', () => {
       workspaceId: fixture.workspaceId,
       payload: {
         name: 'Apple slice',
-        meal_type: 'snack',
+        meal_types: ['snack'],
         difficulty: 'easy',
         servings: 1,
         ingredients: [{ ingredient_id: apple.id, quantity: 1, unit: 'piece' }],

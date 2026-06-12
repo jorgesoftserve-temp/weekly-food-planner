@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2 } from 'lucide-react'
+import { Check, Package, Plus, Trash2, UtensilsCrossed } from 'lucide-react'
 import { useFieldArray, useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -10,15 +10,21 @@ import {
   useReplaceRecipeDietaryTags,
   useReplaceRecipeIngredients,
   useReplaceRecipeInstructions,
+  useReplaceRecipeMealTypes,
   useUpdateRecipe,
 } from '@weekly-food-planner/supabase/react'
 import type {
   CreateRecipePayload,
+  DbTypes,
   RecipeIngredientInput,
   RecipeInstructionInput,
   RecipeRecord,
 } from '@weekly-food-planner/supabase'
+
+type RecipeKind = DbTypes.RecipeKind
+type MealType = DbTypes.MealType
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -41,6 +47,7 @@ import { IngredientPicker } from '@/components/forms/ingredient-picker'
 import { MultiLabelCombobox } from '@/components/forms/multi-label-combobox'
 import { useSupabase } from '@/lib/hooks/use-supabase'
 import { notifyError, notifySuccess } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
@@ -91,38 +98,52 @@ const positiveNumberString = z.string().refine(
   { message: 'Must be greater than 0' },
 )
 
-const recipeFormSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required'),
-  description: z.string(),
-  meal_type: z.enum(MEAL_TYPES),
-  difficulty: z.enum(DIFFICULTIES),
-  servings: positiveIntString,
-  cuisine: z.string(),
-  prep_time_minutes: optionalPositiveIntString,
-  cook_time_minutes: optionalPositiveIntString,
-  dietary_tags: z.array(z.string()),
-  ingredients: z
-    .array(
+// v2.1: recipe_kind + meal_types replace scalar meal_type.
+// ≥1 meal type is required only when kind = 'meal'; addons may have zero.
+const recipeFormSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Name is required'),
+    description: z.string(),
+    recipe_kind: z.enum(['meal', 'addon'] as const),
+    meal_types: z.array(z.enum(MEAL_TYPES)),
+    difficulty: z.enum(DIFFICULTIES),
+    servings: positiveIntString,
+    cuisine: z.string(),
+    prep_time_minutes: optionalPositiveIntString,
+    cook_time_minutes: optionalPositiveIntString,
+    dietary_tags: z.array(z.string()),
+    ingredients: z
+      .array(
+        z.object({
+          ingredient_id: z.string().min(1, 'Pick an ingredient'),
+          quantity: positiveNumberString,
+          unit: z.enum(UNITS),
+        }),
+      )
+      .min(1, 'Add at least one ingredient'),
+    instructions: z.array(
       z.object({
-        ingredient_id: z.string().min(1, 'Pick an ingredient'),
-        quantity: positiveNumberString,
-        unit: z.enum(UNITS),
+        description: z.string().trim().min(1, 'Step cannot be empty'),
       }),
-    )
-    .min(1, 'Add at least one ingredient'),
-  instructions: z.array(
-    z.object({
-      description: z.string().trim().min(1, 'Step cannot be empty'),
-    }),
-  ),
-})
+    ),
+  })
+  .superRefine((data, ctx) => {
+    if (data.recipe_kind === 'meal' && data.meal_types.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least one meal type is required for meal recipes.',
+        path: ['meal_types'],
+      })
+    }
+  })
 
 type RecipeFormValues = z.infer<typeof recipeFormSchema>
 
 const emptyDefaults: RecipeFormValues = {
   name: '',
   description: '',
-  meal_type: 'dinner',
+  recipe_kind: 'meal',
+  meal_types: ['dinner'],
   difficulty: 'easy',
   servings: '1',
   cuisine: '',
@@ -136,7 +157,8 @@ const emptyDefaults: RecipeFormValues = {
 const valuesFromRecord = (record: RecipeRecord): RecipeFormValues => ({
   name: record.name,
   description: record.description ?? '',
-  meal_type: record.meal_type,
+  recipe_kind: record.recipe_kind,
+  meal_types: record.meal_types,
   difficulty: record.difficulty,
   servings: record.servings.toString(),
   cuisine: record.cuisine ?? '',
@@ -176,7 +198,8 @@ const optionalInt = (s: string): number | undefined => {
 const toCreatePayload = (values: RecipeFormValues): CreateRecipePayload => ({
   name: values.name,
   description: optionalTrim(values.description),
-  meal_type: values.meal_type,
+  recipe_kind: values.recipe_kind,
+  meal_types: values.recipe_kind === 'meal' ? values.meal_types : [],
   difficulty: values.difficulty,
   servings: Number.parseInt(values.servings, 10),
   cuisine: optionalTrim(values.cuisine),
@@ -226,6 +249,107 @@ const valuesToInstructionInputs = (
     description: step.description,
   }))
 
+// ── Meal-type multi-select (v2.1) ─────────────────────────────────────────────
+// Compact checkbox-pill group restricted to the four fixed meal-type values.
+// RO-RO callback. ≥1 required when recipe_kind = 'meal' — validated in schema.
+
+const MealTypeMultiSelect = ({
+  value,
+  onChange,
+  hasError,
+}: {
+  value: MealType[]
+  onChange: ({ value }: { value: MealType[] }) => void
+  hasError?: boolean
+}) => {
+  const toggle = (meal: MealType) => {
+    const next = value.includes(meal)
+      ? value.filter((m) => m !== meal)
+      : [...value, meal]
+    onChange({ value: next })
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Meal types">
+      {MEAL_TYPES.map((meal) => {
+        const selected = value.includes(meal)
+        const checkboxId = `meal-type-${meal}`
+        return (
+          <label
+            key={meal}
+            htmlFor={checkboxId}
+            className={cn(
+              'inline-flex cursor-pointer select-none items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition',
+              selected
+                ? 'border-transparent bg-accent-tint text-accent-strong'
+                : hasError
+                  ? 'border-destructive/50 text-muted-foreground hover:bg-muted'
+                  : 'border-border text-muted-foreground hover:bg-muted',
+            )}
+          >
+            <Checkbox
+              id={checkboxId}
+              checked={selected}
+              onCheckedChange={() => toggle(meal)}
+              className="sr-only"
+              aria-label={`Meal type: ${meal}`}
+            />
+            {selected ? <Check className="size-3 shrink-0" aria-hidden /> : null}
+            <span className="capitalize">{meal}</span>
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Kind toggle (v2.1) ────────────────────────────────────────────────────────
+// Two-button segmented pill toggle — 'meal' vs 'addon'. Switching to 'addon'
+// hides the meal-type multi-select (addons have no timeframe requirement).
+
+const KindToggle = ({
+  value,
+  onChange,
+}: {
+  value: RecipeKind
+  onChange: ({ kind }: { kind: RecipeKind }) => void
+}) => (
+  <div
+    className="flex items-center overflow-hidden rounded-full border border-border bg-muted/60 p-0.5"
+    role="group"
+    aria-label="Recipe kind"
+  >
+    <button
+      type="button"
+      onClick={() => onChange({ kind: 'meal' })}
+      aria-pressed={value === 'meal'}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition',
+        value === 'meal'
+          ? 'bg-background text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      <UtensilsCrossed className="size-3.5" aria-hidden />
+      Meal
+    </button>
+    <button
+      type="button"
+      onClick={() => onChange({ kind: 'addon' })}
+      aria-pressed={value === 'addon'}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition',
+        value === 'addon'
+          ? 'bg-background text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      <Package className="size-3.5" aria-hidden />
+      Addon
+    </button>
+  </div>
+)
+
 export const RecipeForm = (props: RecipeFormProps) => {
   const router = useRouter()
   const supabase = useSupabase()
@@ -235,6 +359,8 @@ export const RecipeForm = (props: RecipeFormProps) => {
     defaultValues:
       props.mode === 'edit' ? valuesFromRecord(props.recipe) : emptyDefaults,
   })
+
+  const watchedKind = form.watch('recipe_kind')
 
   const ingredientArray = useFieldArray({
     control: form.control,
@@ -271,13 +397,19 @@ export const RecipeForm = (props: RecipeFormProps) => {
     workspaceId: props.workspaceId,
     recipeId: recipeIdForEdit,
   })
+  const replaceMealTypes = useReplaceRecipeMealTypes({
+    supabase,
+    workspaceId: props.workspaceId,
+    recipeId: recipeIdForEdit,
+  })
 
   const isSubmitting =
     createMutation.isPending ||
     updateMutation.isPending ||
     replaceIngredients.isPending ||
     replaceInstructions.isPending ||
-    replaceDietaryTags.isPending
+    replaceDietaryTags.isPending ||
+    replaceMealTypes.isPending
 
   // Default the cancel/post-save navigation to /recipes when used as a
   // standalone page; the drawer host overrides this with onClose to close
@@ -306,12 +438,12 @@ export const RecipeForm = (props: RecipeFormProps) => {
         return
       }
       // Edit mode: scalars first so a downstream array failure doesn't leave
-      // the recipe row referencing a missing FK; then the three arrays in
+      // the recipe row referencing a missing FK; then the four arrays in
       // parallel since they touch different tables.
       await updateMutation.mutateAsync({
         name: values.name,
         description: optionalTrim(values.description) ?? null,
-        meal_type: values.meal_type,
+        recipe_kind: values.recipe_kind,
         difficulty: values.difficulty,
         servings: Number.parseInt(values.servings, 10),
         cuisine: optionalTrim(values.cuisine) ?? null,
@@ -326,6 +458,9 @@ export const RecipeForm = (props: RecipeFormProps) => {
           instructions: valuesToInstructionInputs(values),
         }),
         replaceDietaryTags.mutateAsync({ tags: values.dietary_tags }),
+        replaceMealTypes.mutateAsync({
+          mealTypes: values.recipe_kind === 'meal' ? values.meal_types : [],
+        }),
       ])
       notifySuccess('Recipe updated', values.name)
       dismiss()
@@ -366,30 +501,72 @@ export const RecipeForm = (props: RecipeFormProps) => {
                 </FormItem>
               )}
             />
+
+            {/* v2.1 — Recipe kind toggle */}
             <FormField
               control={form.control}
-              name="meal_type"
+              name="recipe_kind"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Meal type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pick a meal type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {MEAL_TYPES.map((meal) => (
-                        <SelectItem key={meal} value={meal}>
-                          {meal}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <FormItem className="sm:col-span-2">
+                  <FormLabel>Recipe kind</FormLabel>
+                  <FormControl>
+                    <KindToggle
+                      value={field.value}
+                      onChange={({ kind }) => {
+                        field.onChange(kind)
+                        // When switching to addon, clear meal_types so the
+                        // schema's superRefine doesn't fire for addon recipes.
+                        if (kind === 'addon') {
+                          form.setValue('meal_types', [])
+                        }
+                      }}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {field.value === 'meal'
+                      ? 'Meals fill weekly menu slots and are constraint-engine candidates.'
+                      : 'Addons (salsa, guac, desserts) accompany meals but are never scheduled by the engine.'}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            {/* v2.1 — Meal-type multi-select — hidden when kind = addon */}
+            {watchedKind === 'meal' ? (
+              <FormField
+                control={form.control}
+                name="meal_types"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>
+                      Meal type
+                      <span className="ml-1 text-destructive" aria-hidden>*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <MealTypeMultiSelect
+                        value={field.value as MealType[]}
+                        onChange={({ value }) => field.onChange(value)}
+                        hasError={!!form.formState.errors.meal_types}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Select every timeframe this recipe is suitable for.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <div className="sm:col-span-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Addon recipes</span>{' '}
+                  have no meal-type requirement. They appear in a dedicated
+                  &ldquo;Addons&rdquo; section in the grocery list.
+                </p>
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="difficulty"
@@ -725,7 +902,9 @@ export const RecipeForm = (props: RecipeFormProps) => {
                 ? 'Creating…'
                 : 'Saving…'
               : props.mode === 'create'
-                ? 'Create recipe'
+                ? watchedKind === 'meal'
+                  ? 'Create recipe'
+                  : 'Create addon'
                 : 'Save changes'}
           </Button>
         </div>

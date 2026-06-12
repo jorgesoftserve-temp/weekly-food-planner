@@ -151,7 +151,7 @@ const main = async () => {
   for (const r of [
     {
       name: 'Oatmeal',
-      meal_type: 'breakfast',
+      meal_types: ['breakfast'],
       difficulty: 'easy',
       servings: 1,
       ingredients: [
@@ -162,21 +162,21 @@ const main = async () => {
     },
     {
       name: 'Buttered toast',
-      meal_type: 'breakfast',
+      meal_types: ['breakfast'],
       difficulty: 'easy',
       servings: 1,
       ingredients: [{ ingredient_id: milk.id, quantity: 0.25, unit: 'cup' }],
     },
     {
       name: 'Tomato salad',
-      meal_type: 'lunch',
+      meal_types: ['lunch'],
       difficulty: 'easy',
       servings: 1,
       ingredients: [{ ingredient_id: tomato.id, quantity: 2, unit: 'piece' }],
     },
     {
       name: 'Tomato pasta',
-      meal_type: 'dinner',
+      meal_types: ['dinner'],
       difficulty: 'easy',
       servings: 2,
       cuisine: 'italian',

@@ -74,7 +74,8 @@ const SearchPage = () => {
     const keyword = filters.keyword.trim().toLowerCase()
     return recipes.filter((r) => {
       if (keyword && !r.name.toLowerCase().includes(keyword)) return false
-      if (filters.meal !== 'all' && r.meal_type !== filters.meal) return false
+      // v2.1: meal_types is now an array; match if any timeframe equals the filter.
+      if (filters.meal !== 'all' && !r.meal_types.includes(filters.meal)) return false
       if (filters.cuisine !== 'all' && r.cuisine !== filters.cuisine) return false
       if (filters.difficulty !== 'all' && r.difficulty !== filters.difficulty)
         return false

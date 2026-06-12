@@ -88,20 +88,25 @@ export const persistCustomMenu = async ({
   const recipeIds = Array.from(new Set(slots.map((s) => s.recipeId)))
   const { data: recipeRows, error: recErr } = await admin
     .from('recipes')
-    .select('id, meal_type')
+    .select('id, recipe_meal_types (meal_type)')
     .eq('workspace_id', workspaceId)
     .eq('is_deleted', false)
     .in('id', recipeIds)
   if (recErr) {
     return { ok: false, status: 500, code: 'db_error', detail: recErr.message }
   }
-  const recipeMealType = new Map<string, string>()
-  for (const row of (recipeRows ?? []) as Array<{ id: string; meal_type: string }>) {
-    recipeMealType.set(row.id, row.meal_type)
+  // (v2.1) A recipe declares a SET of meal timeframes via recipe_meal_types;
+  // slot eligibility is set membership, not scalar equality.
+  const recipeMealTypes = new Map<string, string[]>()
+  for (const row of (recipeRows ?? []) as Array<{
+    id: string
+    recipe_meal_types: Array<{ meal_type: string }>
+  }>) {
+    recipeMealTypes.set(row.id, row.recipe_meal_types.map((r) => r.meal_type))
   }
   for (const slot of slots) {
-    const expected = recipeMealType.get(slot.recipeId)
-    if (!expected) {
+    const covered = recipeMealTypes.get(slot.recipeId)
+    if (!covered) {
       return {
         ok: false,
         status: 400,
@@ -109,12 +114,12 @@ export const persistCustomMenu = async ({
         detail: `Recipe ${slot.recipeId} not found in this workspace.`,
       }
     }
-    if (expected !== slot.mealType) {
+    if (!covered.includes(slot.mealType)) {
       return {
         ok: false,
         status: 422,
         code: 'meal_type_mismatch',
-        detail: `Recipe ${slot.recipeId} is a ${expected} recipe; slot expected ${slot.mealType}.`,
+        detail: `Recipe ${slot.recipeId} covers ${covered.join(', ') || 'no'} timeframe(s); slot expected ${slot.mealType}.`,
       }
     }
   }

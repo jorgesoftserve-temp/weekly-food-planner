@@ -51,6 +51,14 @@ const config: Config = {
   				DEFAULT: 'hsl(var(--purchase))',
   				tint: 'hsl(var(--purchase-tint))'
   			},
+  			addon: {
+  				DEFAULT: 'hsl(var(--addon))',
+  				tint: 'hsl(var(--addon-tint))'
+  			},
+  			preference: {
+  				DEFAULT: 'hsl(var(--preference))',
+  				tint: 'hsl(var(--preference-tint))'
+  			},
   			'tag-neutral': {
   				DEFAULT: 'hsl(var(--tag-neutral))',
   				tint: 'hsl(var(--tag-neutral-tint))',

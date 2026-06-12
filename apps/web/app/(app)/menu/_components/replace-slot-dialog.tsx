@@ -4,9 +4,12 @@ import { useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useRecipesList } from '@weekly-food-planner/supabase/react'
 import type {
+  DbTypes,
   MenuSlotRecord,
   RecipeRecord,
 } from '@weekly-food-planner/supabase'
+
+type MealType = DbTypes.MealType
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -58,7 +61,7 @@ export const ReplaceSlotDialog = ({
     if (!slot) return []
     const term = search.trim().toLowerCase()
     return (recipesQuery.data ?? [])
-      .filter((r) => r.meal_type === slot.meal_type)
+      .filter((r) => r.recipe_kind === 'meal' && r.meal_types.includes(slot.meal_type as MealType))
       .filter((r) => r.id !== slot.recipe_id)
       .filter((r) => (term === '' ? true : r.name.toLowerCase().includes(term)))
       .sort((a, b) => a.name.localeCompare(b.name))

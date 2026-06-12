@@ -102,6 +102,12 @@ Recipes are workspace-scoped: every member of a workspace can view its recipes; 
 
 **Note (v2.0):** Per-menu ingredient substitution ([§20](#20-menu-level-ingredient-substitution-v20)) allows swapping an ingredient on an accepted menu for that menu only. The stored recipe is never altered by a substitution.
 
+**Notes (v2.1):**
+
+- A recipe carries a **kind** (`meal` | `addon`): `meal` recipes fill menu slots; `addon` recipes (salsa, guacamole, dessert) accompany meals but are never constraint-engine candidates — they are excluded at the input-builder boundary and are invisible to `accepted_seed` and the engine. See [§27](#27-addons--on-the-fly-cook-mode-v21).
+- A `meal` recipe is eligible for one **or more** meal timeframes (breakfast, lunch, dinner, snack). The recipe form's single meal-type Select becomes a multi-select (≥1 required for `kind='meal'`). Existing recipes keep their current meal type as a one-element set. See [§26](#26-multi-timeframe-recipes-v21).
+- Recipes can be created in **bulk** — many recipes plus their ingredients/instructions/dietary tags/meal-types saved in one transaction. The v2.1 primitive is the shared insert path for [v3](../../.claude/plans/v3.md) AI import and [v4.0](../../.claude/plans/v4.0.md) community import. See [§28](#28-bulk-recipe-creation-v21). Publish/import is documented in the community epic, [v4.0](../../.claude/plans/v4.0.md).
+
 ## Recipe CRUD
 Users with the right role must be able to:
 - Create recipes
@@ -421,6 +427,8 @@ Both views are designed with a print/PDF-friendly layout and typography. PDF exp
 
 Several user-facing fields use extensible label sets backed by autocomplete: `cuisine` on recipes, dietary restrictions and allergies on members, dietary tags on recipes, and **(v2.0)** `food_group` on ingredients. All five follow the same suggestion UX — see [DATABASE_PRD.md §5.2](./DATABASE_PRD.md).
 
+**(v2.1)** Inclusive-preference tags (see [§25](#25-inclusive-vs-exclusive-dietary-restrictions-v21)) draw from the **same `dietary_tag` and ingredient label sets** as exclusive restrictions and dietary tags. No new label set is needed for inclusive preferences.
+
 ## 11.1 Suggestion behavior
 
 - Suggestions appear on **debounced** user input (~300 ms).
@@ -687,7 +695,7 @@ An optional **collapse-fully-covered** toggle can hide lines where the on-hand q
 
 ---
 
-> **§21 — Community recipes** is authored in [v2.1](../../.claude/plans/v2.1.md) (addons + smarter generation). Not authored here.
+> **§21 — Community recipes** moved to the [v4 community epic](../../.claude/plans/v4.md). v2.1 feature sections (inclusive preferences, multi-timeframe, addons, bulk-create) are documented in [§25](#25-inclusive-vs-exclusive-dietary-restrictions-v21) – [§28](#28-bulk-recipe-creation-v21) below.
 
 ---
 
@@ -735,3 +743,128 @@ The weekly menu screen gains a **member/household toggle** mirroring the grocery
 - URL-param driven (`?menu_for=uuid` or absent for household), analogous to `?shop_for=` on the grocery page.
 - Implemented as a new `menu-member-picker.tsx` component under `apps/web/app/(app)/menu/_components/`, composed alongside the existing `menu-view.tsx`.
 - Pure read-side; no mutation of menu data.
+
+---
+
+# 25. Inclusive vs exclusive dietary restrictions **(v2.1)**
+
+> Status: planned (v2.1). Architecture: [ARCHITECTURE_PRD.md §20](./ARCHITECTURE_PRD.md). Schema: [DATABASE_PRD.md §6.22](./DATABASE_PRD.md).
+
+Two distinct modes govern how a member's dietary preferences shape the menu:
+
+- **Exclusive (hard restriction)** — the current behavior. A recipe violating an exclusive restriction or allergy is **never** assigned to that member's slot. Stored in `member_dietary_restrictions` and `member_allergies` (existing tables). These are the values the engine has always filtered on.
+- **Inclusive (soft preference)** — new in v2.1. A soft bias toward a liked tag or ingredient (e.g. "prefers fish", "likes Mediterranean"). Inclusive preferences do **not** exclude any recipe — a slot can still be filled by a recipe that doesn't match the preference. Stored in a new `member_dietary_preferences` table (see [DATABASE_PRD.md §6.22](./DATABASE_PRD.md)).
+
+## 25.1 Member profile
+
+A member profile holds **both**:
+
+- Exclusive restrictions: `member_dietary_restrictions` + `member_allergies` (unchanged, already persisted).
+- Inclusive preferences: one row per liked `dietary_tag` or `ingredient` in `member_dietary_preferences`.
+
+## 25.2 Generation-time overrides
+
+At menu-generation time the user can provide **per-generation overrides** that apply only to the current generation request and are captured in `inputs_hash`. Three kinds:
+
+| Override kind | Effect |
+|---|---|
+| **Add inclusive preference** | Adds an extra liked tag/ingredient for this generation (stacks with profile inclusive prefs) |
+| **Add extra exclusive restriction** | Adds an extra hard restriction beyond the member's profile (same as the existing `additionalDietaryRestrictions` overlay) |
+| **Relax a profile exclusive restriction** | *Subtracts* one of the member's profile exclusive restrictions for this generation only — useful for a one-off exception (e.g. "make the whole week have the cheese the lactose-intolerant member usually avoids, just for this party week") |
+
+All three are part of `GenerateMenuOptions` and flow into `inputs_hash`. A generation with relaxed/added preferences is a **legitimately different generation** — determinism is fully preserved; the same inputs + seed always produce the same output.
+
+## 25.3 Engine behavior
+
+- Inclusive preferences never produce a hard filter. The engine's `filter.ts` is **unchanged** for inclusive prefs.
+- `filter.ts` **does** apply `relaxedDietaryRestrictions` / `relaxedAllergies` by removing those values from the member's effective hard set **before** filtering.
+- The soft bias is applied in `assign.ts` during greedy assignment: among the **hard-valid** candidates for a slot, the engine partitions into "preferred" (matches an inclusive tag/ingredient) vs "rest"; the seeded RNG picks from "preferred" when non-empty, else "rest". Never excludes a valid recipe. Fully deterministic.
+
+## 25.4 UI
+
+- Inclusive preferences are surfaced on the member profile editor (alongside existing hard restrictions), using the same label pickers.
+- A per-generation override panel on the menu-generation form lets the user add inclusive prefs, add extra exclusive restrictions, and relax specific profile exclusive restrictions for the current run.
+
+---
+
+# 26. Multi-timeframe recipes **(v2.1)**
+
+> Status: planned (v2.1). Architecture: [ARCHITECTURE_PRD.md §21](./ARCHITECTURE_PRD.md). Schema: [DATABASE_PRD.md §6.7](./DATABASE_PRD.md) + [§6.23](./DATABASE_PRD.md).
+
+A recipe declares the **set** of meal timeframes it can fill instead of a single `meal_type`. A sandwich, for example, can be breakfast, snack, **and** dinner.
+
+## 26.1 Recipe form
+
+The single meal-type Select on the recipe form becomes a **multi-select** (checkbox group or `MultiLabelCombobox`-style). At least one timeframe is required for `kind='meal'` recipes (addons have no meal-type requirement — see [§27](#27-addons--on-the-fly-cook-mode-v21)).
+
+## 26.2 Engine behavior
+
+The engine's `filter.ts` meal-type check broadens from scalar equality to **set membership**: a recipe is a candidate for a slot when the slot's `mealType` is **in** the recipe's eligible set (`recipe.mealTypes.includes(slot.mealType)`). This is the **only** engine logic change for multi-timeframe; slot enumeration (`slots.ts`, driven by member `meal_frequency`) is untouched.
+
+## 26.3 Existing recipes
+
+All existing recipes are backfilled to a **one-element set** (their current `meal_type`). No behavior change until a recipe is broadened by an admin. A backfilled recipe with a one-element set produces byte-identical engine output to the pre-change snapshots — the determinism contract is preserved. See [ARCHITECTURE_PRD.md §21](./ARCHITECTURE_PRD.md) for the snapshot-regen implication.
+
+## 26.4 Substitution / cook-status / inventory
+
+Multi-timeframe affects only candidate selection. `menu_slots.meal_type` (the denormalized value on the placed slot) is unchanged — it still records the slot's `mealType`, not the recipe's full set. Cook-status, inventory, substitution, and grocery recompute are unaffected.
+
+---
+
+# 27. Addons & on-the-fly cook mode **(v2.1)**
+
+> Status: planned (v2.1). Architecture: [ARCHITECTURE_PRD.md §23](./ARCHITECTURE_PRD.md). Schema: [DATABASE_PRD.md §6.24](./DATABASE_PRD.md).
+
+## 27.1 Addon recipe kind
+
+An **addon** is a recipe whose `recipe_kind = 'addon'` (salsa, guacamole, a dessert). It has the same structure and cook-mode as a `meal` recipe, with two behavioral differences:
+
+- **Never a constraint-engine candidate.** Addons are filtered out in `menu-input-builder.ts` before the engine sees any recipes. They never enter a `RecipeSnapshot[]`, never touch `inputs_hash`, and never appear in a golden snapshot. This is an input-selection boundary, not an engine code change.
+- **No meal-type requirement.** The ≥1 `recipe_meal_types` rule (see [§26](#26-multi-timeframe-recipes-v21)) applies only to `kind='meal'` recipes (≥1 required for meals, zero allowed for addons).
+
+The recipe form gains a `kind` toggle (Meal / Addon) that hides the meal-type multi-select when `addon` is selected.
+
+## 27.2 Attaching addons to an accepted menu
+
+A user can **attach an addon** to an accepted menu in two scopes:
+
+- **Week-wide** — the addon accompanies the whole menu (e.g. guacamole to serve all week).
+- **Slot-specific** — the addon is tied to a particular slot (e.g. "guac with Tuesday lunch"). Stored as `menu_addons.target_slot_id` (NULL = week-wide; set = slot-specific).
+
+Attaching or detaching an addon via `menu_addons` **never changes the menu's identity or `accepted_seed`**. The seed hashes only slot recipe-tuples; `menu_addons` is post-accept menu state structurally invisible to the seed, exactly like `menu_slot_ingredient_overrides` (see [§23](#23-menu-level-ingredient-substitution-v20)).
+
+Endpoints: `POST|DELETE /api/workspaces/:id/menus/:menuId/addons`. An addon picker (read `GET /api/workspaces/:id/recipes?kind=addon`) surfaces workspace addon recipes for selection.
+
+## 27.3 Addons in the grocery list
+
+Attached addon ingredients appear in a dedicated **"Addons" section** of the grocery list — separate from the meal-derived lines. After an addon write on an accepted menu, `recomputeGroceryListsForMenu` is re-run; its new addon pass loads `menu_addons` → their `recipe_ingredients` → emits grocery lines tagged `grocery_items.source='addon'`. Meal lines stay `source='meal'`. The grocery UI groups by `source`. Meal-line totals are **unchanged** by addon attachment.
+
+## 27.4 On-the-fly cook mode
+
+A **"Cook now"** affordance on the recipe detail page opens Cook mode for **any** recipe — meal or addon — **standalone**, without the recipe needing to be on the active menu and **without affecting** the active menu or any slot.
+
+- The Cook Sheet UI (v1.9) is reused over the arbitrary recipe.
+- The flow is **ephemeral**: the checkable ingredient/step checklist is local state; no `menu_slots.cooked_at` write is made (distinct from v1.9 slot-based Cook mode, which does write `cooked_at`).
+- Optionally at the end, the user may save leftover entries into `inventory_items(source='leftover')`, reusing the v2.0 §16 (Leftovers) flow. This is the only write path; it does not trigger a grocery recompute.
+
+---
+
+# 28. Bulk recipe creation **(v2.1)**
+
+> Status: planned (v2.1). Architecture: [ARCHITECTURE_PRD.md §24](./ARCHITECTURE_PRD.md).
+
+A single operation creates **N recipes plus their ingredients, instructions, dietary tags, and meal-types in one transaction**, returning the created recipe ids. This is the substrate downstream features build on — it is not a user-facing bulk-import UI by itself.
+
+## 28.1 Behavior
+
+- Accepts an array of recipe payloads, each validated by the **same Zod schema** as the single-create form.
+- The entire array is wrapped in **one transaction**: if any payload is invalid or any insert fails, **nothing is written** (all-or-nothing rollback).
+- Returns the created recipe ids in the same order as the input array.
+- Engine-invisible: new recipes are ordinary catalog rows. Nothing here touches `inputs_hash`, the engine, or a golden snapshot.
+
+## 28.2 Consumers (later releases — not built in v2.1)
+
+- **[v3](../../.claude/plans/v3.md) — AI menu & recipe import:** AI-parsed recipe payloads are materialized into the catalog through this primitive.
+- **[v4.0](../../.claude/plans/v4.0.md) — Community deep-copy import:** community import = bulk-create + provenance metadata copy on top.
+
+The v2.1 bulk-create contract is owned here so both downstream consumers call a stable, tested endpoint rather than each inventing their own insert path.

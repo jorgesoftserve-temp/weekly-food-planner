@@ -6,8 +6,11 @@ import { useCallback, useMemo, useState } from 'react'
 import {
   AlertTriangle,
   CalendarRange,
+  ChevronDown,
+  ChevronUp,
   Download,
   Info,
+  Package,
   Refrigerator,
   ShoppingCart,
   Sparkles,
@@ -35,6 +38,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import {
@@ -143,6 +147,77 @@ const PantryInfoDot = ({
     </Popover>
   )
 }
+
+// ── Addon grocery group card ────────────────────────────────────────────────────
+// Renders one food-group bucket of addon-sourced grocery lines. Visually distinct
+// from meal-derived lines: uses text-addon / bg-addon-tint and a Package icon
+// per the v21-grocery-addons design mock.
+
+type AddonItemShape = {
+  id: string
+  ingredient_id: string
+  ingredientName: string
+  foodGroup: string
+  quantity: number
+  unit: string
+}
+
+type AddonGroceryGroupCardProps = {
+  group: { foodGroup: string; items: AddonItemShape[] }
+}
+
+const AddonGroceryGroupCard = ({ group }: AddonGroceryGroupCardProps) => {
+  const [open, setOpen] = useState(true)
+  const panelId = `addon-group-${group.foodGroup.toLowerCase().replace(/\s+/g, '-')}`
+  return (
+    <Card className="overflow-hidden border-addon/30 bg-addon-tint/10">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between px-4 py-3 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-label={`${open ? 'Collapse' : 'Expand'} ${group.foodGroup} addon group`}
+      >
+        <div className="flex items-center gap-2">
+          <Package className="size-3.5 text-addon" aria-hidden />
+          <span className="text-sm font-semibold text-addon">{group.foodGroup}</span>
+          <span className="rounded-full border border-addon/30 bg-addon-tint px-1.5 py-0 text-[10px] font-medium text-addon">
+            addon
+          </span>
+        </div>
+        {open ? (
+          <ChevronUp className="size-4 text-muted-foreground" aria-hidden />
+        ) : (
+          <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
+        )}
+      </button>
+      {open && (
+        <CardContent id={panelId} className="divide-y divide-border pt-0">
+          {group.items.map((item) => (
+            <div
+              key={item.id}
+              className="flex min-h-11 items-center gap-3 py-1.5"
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
+                <span className="truncate">{item.ingredientName}</span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-addon/20 bg-addon-tint px-2 py-0.5 text-[10px] font-medium text-addon">
+                  <Package className="size-2.5" aria-hidden />
+                  addon
+                </span>
+              </div>
+              <span className="shrink-0 text-sm font-medium tabular-nums text-foreground">
+                {Math.round(item.quantity * 1000) / 1000} {item.unit}
+              </span>
+            </div>
+          ))}
+        </CardContent>
+      )}
+    </Card>
+  )
+}
+
+// ── Page ────────────────────────────────────────────────────────────────────────
 
 const GroceryPage = () => {
   const supabase = useSupabase()
@@ -272,6 +347,71 @@ const GroceryPage = () => {
 
   const isLoading = workspaceLoading || groceryQuery.isLoading
   const grocery = groceryQuery.data
+
+  // (v2.1) Addon grocery items — source='addon' rows from all lists, deduplicated
+  // by (ingredient_id, unit) and summed across lists. Grouped by food_group for
+  // the section header. These are rendered in a separate visually distinct section
+  // using text-addon / bg-addon-tint tokens per the GroceryAddonsScreen design mock.
+  type AddonGroceryEntry = {
+    id: string
+    ingredient_id: string
+    ingredientName: string
+    foodGroup: string
+    quantity: number
+    unit: string
+  }
+  type AddonGroceryGroup = { foodGroup: string; items: AddonGroceryEntry[] }
+
+  const addonGroceryGroups = useMemo<AddonGroceryGroup[]>(() => {
+    if (!grocery) return []
+    // Aggregate addon items from all lists (avoid double-count: only use shared
+    // bucket when present, same rule as aggregateHouseholdGrocery).
+    const shared = grocery.lists.filter((l) => l.target_member_id === null)
+    const source = shared.length > 0 ? shared : grocery.lists
+    const byKey = new Map<string, { quantity: number; unit: string; id: string; ingredient_id: string }>()
+    for (const list of source) {
+      for (const item of list.grocery_items) {
+        if (item.source !== 'addon') continue
+        const key = `${item.ingredient_id}::${item.unit}`
+        const existing = byKey.get(key)
+        if (existing) {
+          existing.quantity += Number(item.quantity)
+        } else {
+          byKey.set(key, {
+            id: item.id,
+            ingredient_id: item.ingredient_id,
+            quantity: Number(item.quantity),
+            unit: item.unit,
+          })
+        }
+      }
+    }
+    if (byKey.size === 0) return []
+    // Group by food_group using the ingredients catalog.
+    const groupMap = new Map<string, AddonGroceryEntry[]>()
+    for (const [, item] of byKey) {
+      const ing = ingredientsById[item.ingredient_id]
+      const foodGroup = ing?.food_group ?? 'Other'
+      const name = ing?.name ?? `[unknown:${item.ingredient_id.slice(0, 6)}]`
+      const entry: AddonGroceryEntry = {
+        id: item.id,
+        ingredient_id: item.ingredient_id,
+        ingredientName: name,
+        foodGroup,
+        quantity: item.quantity,
+        unit: item.unit,
+      }
+      const list = groupMap.get(foodGroup) ?? []
+      list.push(entry)
+      groupMap.set(foodGroup, list)
+    }
+    return Array.from(groupMap.entries())
+      .map(([foodGroup, items]) => ({
+        foodGroup,
+        items: items.sort((a, b) => a.ingredientName.localeCompare(b.ingredientName)),
+      }))
+      .sort((a, b) => a.foodGroup.localeCompare(b.foodGroup))
+  }, [grocery, ingredientsById])
 
   // menu_participants is the head-count denominator for shared-list scaling.
   // Falls back to workspace_members when the active menu hasn't loaded yet
@@ -601,6 +741,26 @@ const GroceryPage = () => {
                 </Card>
               )
             })}
+
+            {/* ── v2.1 Addons section (source='addon') ──────────────────────── */}
+            {addonGroceryGroups.length > 0 && (
+              <>
+                <Separator />
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-addon">
+                      Addons
+                    </h3>
+                    <span className="text-xs text-muted-foreground">
+                      Ingredients from addon recipes attached to this menu
+                    </span>
+                  </div>
+                  {addonGroceryGroups.map((group) => (
+                    <AddonGroceryGroupCard key={group.foodGroup} group={group} />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </TooltipProvider>
       )}

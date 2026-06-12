@@ -142,7 +142,13 @@ export const CustomMenuBuilder = ({
       dinner: [],
       snack: [],
     }
-    for (const r of recipes) map[r.meal_type as MealType]?.push(r)
+    for (const r of recipes) {
+      if (r.recipe_kind !== 'meal') continue
+      for (const mt of r.meal_types) {
+        const bucket = map[mt as MealType]
+        if (bucket && !bucket.includes(r)) bucket.push(r)
+      }
+    }
     return map
   }, [recipes])
 

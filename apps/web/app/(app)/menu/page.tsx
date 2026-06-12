@@ -49,6 +49,7 @@ import { notifyError, notifySuccess } from '@/lib/toast'
 import { AddSlotDialog } from './_components/add-slot-dialog'
 import { CookSheet } from './_components/cook-sheet'
 import { GenerateMenuDialog } from './_components/generate-menu-dialog'
+import { MenuAddonsSection } from './_components/menu-addons-section'
 import { MenuMemberPicker } from './_components/menu-member-picker'
 import { MenuView } from './_components/menu-view'
 import { ReconcileSheet } from './_components/reconcile-sheet'
@@ -450,6 +451,15 @@ const MenuPage = () => {
             overrideCountBySlotId={overrideCountBySlotId}
             filterMemberId={memberFilter}
           />
+          {/* v2.1 — Addon attach control (accepted menu only) */}
+          {workspace && (
+            <MenuAddonsSection
+              workspaceId={workspace.id}
+              menuId={activeMenu.id}
+              slots={activeMenu.menu_slots}
+              recipeNamesById={recipeNamesById}
+            />
+          )}
         </div>
       ) : null}
 

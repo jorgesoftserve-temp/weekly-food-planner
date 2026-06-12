@@ -17,6 +17,7 @@ describe('public types are JSON-serializable', () => {
           dietaryRestrictions: ['vegan'],
           allergies: [],
           ingredientDislikes: [],
+          dietaryPreferences: { tags: ['high_protein'], ingredients: ['i-fish'] },
         },
       ],
       recipes: [],
@@ -28,6 +29,9 @@ describe('public types are JSON-serializable', () => {
         ingredientExclusions: ['mushroom'],
         additionalDietaryRestrictions: ['low_sodium'],
         additionalAllergies: ['sesame'],
+        additionalDietaryPreferences: { tags: ['pescatarian'], ingredients: ['i-salmon'] },
+        relaxedDietaryRestrictions: ['low_sodium'],
+        relaxedAllergies: ['sesame'],
       },
     }
     const roundTripped = JSON.parse(JSON.stringify(input)) as GenerateMenuInput

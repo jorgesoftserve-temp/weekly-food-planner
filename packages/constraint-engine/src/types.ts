@@ -60,6 +60,11 @@ export type MemberSnapshot = {
   dietaryRestrictions: string[]
   allergies: string[]
   ingredientDislikes: string[]
+  // Inclusive (soft) preferences — v2.1. NEVER hard-filter on these; they only
+  // bias greedy selection toward recipes the member likes. tags match against
+  // recipe.dietaryTags; ingredients match against recipe ingredient ids.
+  // See ARCHITECTURE_PRD §20.
+  dietaryPreferences: { tags: string[]; ingredients: string[] }
 }
 
 export type IngredientSubstitution = {
@@ -89,7 +94,11 @@ export type RecipeSnapshot = {
   id: string
   name: string
   description?: string
-  mealType: MealType
+  // v2.1: the SET of meal timeframes this recipe can fill. A recipe is
+  // meal-eligible for a slot when slot.mealType ∈ mealTypes. Backfilled recipes
+  // carry a one-element array, which reproduces the pre-v2.1 scalar-equality
+  // behaviour exactly. See ARCHITECTURE_PRD §21.
+  mealTypes: MealType[]
   cuisine?: string
   difficulty: Difficulty
   prepTimeMinutes?: number
@@ -117,6 +126,18 @@ export type GenerateMenuOptions = {
   ingredientExclusions?: string[]
   additionalDietaryRestrictions?: string[]
   additionalAllergies?: string[]
+  // Inclusive (soft) preferences added at generation time — v2.1. Unioned with
+  // each member's profile dietaryPreferences. NEVER hard-filters; only biases
+  // greedy selection. Omitted/empty is equivalent to "no preferences" and
+  // produces output byte-identical to the pre-v2.1 path. See ARCHITECTURE_PRD §20.3.
+  additionalDietaryPreferences?: { tags?: string[]; ingredients?: string[] }
+  // Subtractive per-generation overrides — v2.1. Temporarily lift a profile
+  // EXCLUSIVE restriction/allergy for this one generation. filter.ts removes
+  // these values from the member's effective hard sets BEFORE hard filtering.
+  // The member profile row is never modified. Omitted/empty is a no-op.
+  // See ARCHITECTURE_PRD §20.4.
+  relaxedDietaryRestrictions?: string[]
+  relaxedAllergies?: string[]
   // Per-menu frequency override (PRODUCT_PRD §4.3). When present, each entry
   // replaces the matching member's mealFrequency for this generation only.
   // memberId values not in input.members are ignored (defensive). Empty array

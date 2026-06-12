@@ -42,6 +42,12 @@ const memberSnapshot = z.object({
   dietaryRestrictions: z.array(z.string()),
   allergies: z.array(z.string()),
   ingredientDislikes: z.array(z.string()),
+  // (v2.1) Inclusive (soft) preferences — a deterministic generation-time
+  // soft-bias, distinct from the hard dietaryRestrictions/allergies above.
+  dietaryPreferences: z.object({
+    tags: z.array(z.string()),
+    ingredients: z.array(z.string()),
+  }),
 })
 
 const recipeIngredientSnapshot = z.object({
@@ -66,7 +72,10 @@ const recipeSnapshot = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().optional(),
-  mealType,
+  // (v2.1) Multi-timeframe: a recipe declares the SET of meal timeframes it can
+  // fill (was a single scalar mealType). Engine meal-eligibility is now set
+  // membership.
+  mealTypes: z.array(mealType),
   cuisine: z.string().optional(),
   difficulty,
   prepTimeMinutes: z.number().optional(),
@@ -84,6 +93,14 @@ const generateMenuOptions = z.object({
   ingredientExclusions: z.array(z.string()).optional(),
   additionalDietaryRestrictions: z.array(z.string()).optional(),
   additionalAllergies: z.array(z.string()).optional(),
+  // (v2.1) Generation-time overrides: add inclusive prefs (additive) and relax
+  // a profile exclusive restriction/allergy for this one generation
+  // (subtractive). All funnel into inputs_hash.
+  additionalDietaryPreferences: z
+    .object({ tags: z.array(z.string()).optional(), ingredients: z.array(z.string()).optional() })
+    .optional(),
+  relaxedDietaryRestrictions: z.array(z.string()).optional(),
+  relaxedAllergies: z.array(z.string()).optional(),
   memberFrequencyOverrides: z
     .array(z.object({ memberId: z.string(), mealFrequency: z.array(mealFrequencyEntry) }))
     .optional(),

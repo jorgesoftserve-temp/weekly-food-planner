@@ -118,7 +118,7 @@ const seedOverrideFixture = async ({
     .insert({
       workspace_id: workspaceId,
       name: `Override Test Recipe ${Date.now()}`,
-      meal_type: 'dinner',
+      recipe_kind: 'meal',
       difficulty: 'easy',
       servings: 4,
       is_deleted: false,
@@ -127,6 +127,8 @@ const seedOverrideFixture = async ({
     .single()
   if (recipeErr || !recipe) throw new Error(`recipe seed failed: ${recipeErr?.message ?? 'no row'}`)
   const recipeId = (recipe as { id: string }).id
+  // (v2.1) recipe_meal_types replaces the dropped scalar meal_type column.
+  await supabase.from('recipe_meal_types').insert({ recipe_id: recipeId, meal_type: 'dinner' })
 
   // 4. Insert an accepted menu (accepted_at non-null → accepted state).
   const { data: menu, error: menuErr } = await supabase

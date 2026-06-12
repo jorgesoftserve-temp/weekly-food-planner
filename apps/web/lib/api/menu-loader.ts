@@ -11,6 +11,7 @@ import type {
   WorkspaceRole,
   WorkspaceSnapshot,
 } from '@weekly-food-planner/constraint-engine'
+import { getMemberDietaryPreferences } from '@weekly-food-planner/supabase'
 
 // Local row types. Replace with generated database.types.ts once `supabase
 // gen types` has been run against the local instance.
@@ -34,11 +35,16 @@ type MemberRow = {
   member_ingredient_dislikes: Array<{ ingredient_id: string }>
 }
 
+// (v2.1) meal_type scalar dropped; timeframes come from the recipe_meal_types
+// junction. recipe_kind filters out addons at the input-builder boundary.
 type RecipeRow = {
   id: string
   name: string
   description: string | null
-  meal_type: MealType
+  recipe_kind: 'meal' | 'addon'
+  // PostgREST returns this as an array of { meal_type } objects; callers
+  // flatten it to MealType[] before building RecipeSnapshot.
+  recipe_meal_types: Array<{ meal_type: MealType }>
   cuisine: string | null
   difficulty: Difficulty
   prep_time_minutes: number | null
@@ -120,6 +126,29 @@ export const loadEngineSnapshot = async ({
     .eq('is_deleted', false)
   if (memErr) return { ok: false, reason: 'db_error', detail: memErr.message }
   const memberRows = (memberData ?? []) as unknown as MemberRow[]
+
+  // (v2.1 Track C) Load inclusive dietary preferences for every member in one
+  // pass so we avoid N+1 queries. getMemberDietaryPreferences throws on DB
+  // error — let it propagate to the caller's error boundary.
+  const memberPreferences = new Map<
+    string,
+    { tags: string[]; ingredients: string[] }
+  >()
+  for (const row of memberRows) {
+    const prefs = await getMemberDietaryPreferences({
+      supabase,
+      workspaceId,
+      memberId: row.id,
+    })
+    const tags: string[] = []
+    const ingredients: string[] = []
+    for (const p of prefs) {
+      if (p.kind === 'dietary_tag') tags.push(p.value)
+      else if (p.kind === 'ingredient') ingredients.push(p.value)
+    }
+    memberPreferences.set(row.id, { tags, ingredients })
+  }
+
   const members: MemberSnapshot[] = memberRows.map((row) => ({
     id: row.id,
     name: row.name,
@@ -130,18 +159,26 @@ export const loadEngineSnapshot = async ({
     dietaryRestrictions: row.member_dietary_restrictions.map((r) => r.restriction),
     allergies: row.member_allergies.map((a) => a.allergy),
     ingredientDislikes: row.member_ingredient_dislikes.map((d) => d.ingredient_id),
+    // v2.1: inclusive (soft-bias) preferences — never hard-filter on these
+    dietaryPreferences: memberPreferences.get(row.id) ?? { tags: [], ingredients: [] },
   }))
 
+  // (v2.1 Track D safety boundary) Filter to recipe_kind='meal' so addons
+  // NEVER enter the RecipeSnapshot[], inputs_hash, or a golden snapshot. This
+  // is the authoritative input-selection gate — the engine is untouched.
   const { data: recipeData, error: recErr } = await supabase
     .from('recipes')
     .select(
-      `id, name, description, meal_type, cuisine, difficulty,
+      `id, name, description, recipe_kind, cuisine, difficulty,
        prep_time_minutes, cook_time_minutes, servings, calories_per_serving,
+       recipe_meal_types (meal_type),
        recipe_ingredients (ingredient_id, quantity, unit, substitutions, is_perishable_override),
        recipe_dietary_tags (tag)`,
     )
     .eq('workspace_id', workspaceId)
     .eq('is_deleted', false)
+    // (v2.1) Addons never enter the engine — filter at the DB query level.
+    .eq('recipe_kind', 'meal')
   if (recErr) return { ok: false, reason: 'db_error', detail: recErr.message }
   const recipeRows = (recipeData ?? []) as unknown as RecipeRow[]
   if (recipeRows.length === 0) return { ok: false, reason: 'no_recipes' }
@@ -149,7 +186,10 @@ export const loadEngineSnapshot = async ({
     id: row.id,
     name: row.name,
     description: row.description ?? undefined,
-    mealType: row.meal_type,
+    // (v2.1) Flatten the junction rows into a MealType[] set. A backfilled
+    // recipe carries exactly one element, reproducing the pre-v2.1 scalar
+    // equality behaviour. See ARCHITECTURE_PRD §21.
+    mealTypes: row.recipe_meal_types.map((r) => r.meal_type),
     cuisine: row.cuisine ?? undefined,
     difficulty: row.difficulty,
     prepTimeMinutes: row.prep_time_minutes ?? undefined,

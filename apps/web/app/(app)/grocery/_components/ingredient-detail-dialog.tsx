@@ -224,7 +224,7 @@ export const IngredientDetailDialog = ({
                       >
                         <span className="font-medium">{r.name}</span>
                         <span className="ml-2 text-xs capitalize text-muted-foreground">
-                          {r.meal_type}
+                          {r.meal_types.join(', ')}
                         </span>
                       </li>
                     ))}

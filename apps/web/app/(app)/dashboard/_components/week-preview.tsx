@@ -52,7 +52,7 @@ export const WeekPreview = ({
     } else {
       // Prefer a higher-priority meal type.
       const currentMealPriority = MEAL_PRIORITY.indexOf(
-        (slot.meal_type ?? '').toLowerCase(),
+        (slot.meal_key ?? '').toLowerCase(),
       )
       // Find what meal type the current "best" slot has by scanning for it.
       const existingSlot = menu.menu_slots.find(
@@ -60,7 +60,7 @@ export const WeekPreview = ({
           s.day_of_week.toLowerCase() === day && s.recipe_id === existing,
       )
       const existingPriority = existingSlot
-        ? MEAL_PRIORITY.indexOf((existingSlot.meal_type ?? '').toLowerCase())
+        ? MEAL_PRIORITY.indexOf((existingSlot.meal_key ?? '').toLowerCase())
         : Infinity
       if (
         currentMealPriority !== -1 &&
@@ -104,7 +104,7 @@ export const WeekPreview = ({
                   name: recipe.name,
                   cuisine: recipe.cuisine,
                   tags: recipe.recipe_dietary_tags.map((t) => t.tag),
-                  meal: recipe.meal_type,
+                  meal: recipe.meal_types[0] ?? null,
                 })
               : '🍽️'
             const recipeName = recipe?.name ?? 'Recipe'
